@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible Worktree Studio or launcher failure.
+description: Report a reproducible Branchline or launcher failure.
 title: "bug: "
 labels: [bug]
 body:
@@ -10,7 +10,7 @@ body:
     id: versions
     attributes:
       label: Versions
-      description: DSH, Node.js, Git, and Worktree Studio versions.
+      description: DSH, Node.js, Git, and Branchline versions.
       placeholder: DSH 0.1.1-rc.2; Node 24.15.0; Git 2.51.0; plugin 0.1.1-fresh.1
     validations:
       required: true

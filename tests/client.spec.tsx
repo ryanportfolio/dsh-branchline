@@ -145,7 +145,7 @@ describe('WorktreeStudio', () => {
     render(<WorktreeStudio {...props({ createTask, startTaskSession })} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Worktree tasks' }))
-    await screen.findByRole('heading', { name: 'Worktree Studio' })
+    await screen.findByRole('heading', { name: 'DSH Branchline' })
     fireEvent.click(screen.getByRole('button', { name: 'New task' }))
     fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Improve checkout flow' } })
     fireEvent.change(screen.getByLabelText('Validation command'), { target: { value: 'pnpm test' } })

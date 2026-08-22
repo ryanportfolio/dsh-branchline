@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.2.0 - 2026-08-22
+
+### Changed
+
+- Renamed the standalone project, npm package, launcher, Web task board, and human command to DSH Branchline.
+- Moved plugin state defaults to `$DSH_HOME/plugins/dsh-branchline` and launcher settings to `%LOCALAPPDATA%\DSH Branchline`.
+- Detached public branding from the Worktree Studio fork while retaining upstream MIT credit and Git history.
+- Added a manual GitHub Actions trigger alongside push and pull-request checks.
+
+### Migration
+
+- Run `dsh plugin --profile web remove dsh-worktree-studio`, then rerun `setup.ps1` from this checkout.
+- Existing Worktree Studio task state stays in its old directory. Configure `managedRoot` and `statePath` explicitly if it must be reused.
+
 ## 0.1.1-fresh.1 - 2026-08-22
 
 ### Added

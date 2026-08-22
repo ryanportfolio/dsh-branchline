@@ -14,7 +14,7 @@ const clientExternals = [
   '@deepseek-ai/dsh-client-locale/client',
 ]
 
-const CSS_PREFIX = '\0worktree-studio-css:'
+const CSS_PREFIX = '\0branchline-css:'
 const CSS_SUFFIX = '.mjs'
 
 export default defineConfig([
@@ -39,7 +39,7 @@ export default defineConfig([
     deps: { neverBundle: clientExternals },
     sourcemap: false,
     plugins: [{
-      name: 'worktree-studio-css-modules',
+      name: 'branchline-css-modules',
       resolveId(source, importer) {
         if (!source.endsWith('.module.css') || importer === undefined) return null
         return `${CSS_PREFIX}${resolve(dirname(importer), source)}${CSS_SUFFIX}`
@@ -59,10 +59,10 @@ export default defineConfig([
         for (const [local, value] of Object.entries(compiled.exports ?? {})) classes[local] = value.name
         return [
           `const css = ${JSON.stringify(compiled.code.toString())};`,
-          'const id = "dsh-worktree-studio/worktree-studio";',
-          'if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=\\"dsh-worktree-studio/worktree-studio\\"]") === null) {',
+          'const id = "dsh-branchline/branchline";',
+          'if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=\\"dsh-branchline/branchline\\"]") === null) {',
           '  const style = document.createElement("style");',
-          '  style.dataset.plugin = "dsh-worktree-studio";',
+          '  style.dataset.plugin = "dsh-branchline";',
           '  style.dataset.pluginCss = id;',
           '  style.textContent = css;',
           '  document.head.appendChild(style);',
@@ -73,7 +73,7 @@ export default defineConfig([
     }],
     outputOptions: {
       entryFileNames: 'client.cjs',
-      banner: 'window.__ModuleLoader__.load({ id: "dsh-worktree-studio", factory: (require) => {',
+      banner: 'window.__ModuleLoader__.load({ id: "dsh-branchline", factory: (require) => {',
       intro: 'var module = { exports: {} }; var exports = module.exports;',
       footer: 'return module.exports; } });',
     },

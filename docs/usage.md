@@ -3,30 +3,30 @@
 ## Setup
 
 ```powershell
-git clone https://github.com/ryanportfolio/dsh-worktree-studio.git
-cd dsh-worktree-studio
+git clone https://github.com/ryanportfolio/dsh-branchline.git
+cd dsh-branchline
 .\setup.ps1
 ```
 
 Setup installs dependencies, builds the plugin, and links this checkout into the DSH Web profile. Re-run it after pulling plugin updates.
 
-Start with `Start-DSH.cmd`, or run:
+Start with `Start-Branchline.cmd`, or run:
 
 ```powershell
 .\start-dsh.ps1 -Workspace C:\path\to\repo
 ```
 
-The launcher remembers its last repository under `%LOCALAPPDATA%\DSH Worktree Studio`. Set `DSH_REPO_ROOT` or pass `-RepositoryRoot` to add discovery roots. Browse works without either.
+The launcher remembers its last repository under `%LOCALAPPDATA%\DSH Branchline`. Set `DSH_REPO_ROOT` or pass `-RepositoryRoot` to add discovery roots. Browse works without either.
 
 ## Fresh remote base
 
-Leave **Base ref** empty. Worktree Studio runs `git fetch origin --prune`, reads the branch advertised by `origin/HEAD`, resolves its remote-tracking commit, and records both the ref and commit.
+Leave **Base ref** empty. Branchline runs `git fetch origin --prune`, reads the branch advertised by `origin/HEAD`, resolves its remote-tracking commit, and records both the ref and commit.
 
 An explicit base such as `origin/release` skips the fetch and resolves that local ref instead.
 
 ## Isolated checkout
 
-Each task gets `dsh/<task>-<id>` under `$DSH_HOME/plugins/dsh-worktree-studio/worktrees`. Creation does not switch, reset, stash, clean, or rewrite the selected checkout.
+Each task gets `dsh/<task>-<id>` under `$DSH_HOME/plugins/dsh-branchline/worktrees`. Creation does not switch, reset, stash, clean, or rewrite the selected checkout.
 
 ## Native DSH session
 
@@ -41,21 +41,21 @@ After creation, the client registers the worktree as a DSH Workspace and opens a
 ## Commands
 
 ```text
-/worktree-studio list
-/worktree-studio create <title>
-/worktree-studio inspect <id>
-/worktree-studio validate <id> <command...>
-/worktree-studio preview <id>
-/worktree-studio archive <id>
-/worktree-studio recover
+/branchline list
+/branchline create <title>
+/branchline inspect <id>
+/branchline validate <id> <command...>
+/branchline preview <id>
+/branchline archive <id>
+/branchline recover
 ```
 
 ## Configuration
 
 | Field | Default | Purpose |
 | --- | --- | --- |
-| `managedRoot` | `$DSH_HOME/plugins/dsh-worktree-studio/worktrees` | Plugin-created worktrees |
-| `statePath` | `$DSH_HOME/plugins/dsh-worktree-studio/tasks.json` | Atomic task state |
+| `managedRoot` | `$DSH_HOME/plugins/dsh-branchline/worktrees` | Plugin-created worktrees |
+| `statePath` | `$DSH_HOME/plugins/dsh-branchline/tasks.json` | Atomic task state |
 | `gitTimeoutMs` | `60000` | Git operation deadline |
 | `validationTimeoutMs` | `600000` | Validation deadline |
 | `requireValidation` | `true` | Bind delivery checks to validated content |

@@ -1,15 +1,15 @@
 # Architecture
 
-This reference describes Worktree Studio's composition, persisted state, optimistic mutation token, delivery checks, and recovery behavior.
+This reference describes Branchline's composition, persisted state, optimistic mutation token, delivery checks, and recovery behavior.
 
 ## Composition
 
 The npm package is a DSH bundle whose `cordis.patch.yml` inserts two Host entries:
 
-- `dsh-worktree-studio` owns task state, Git operations, the loopback Web route, and the `ctx.worktreeStudio` service.
-- `dsh-worktree-studio/commands` exposes the human `/worktree-studio` command through the existing command registry.
+- `dsh-branchline` owns task state, Git operations, the loopback Web route, and the `ctx.worktreeStudio` service.
+- `dsh-branchline/commands` exposes the human `/branchline` command through the existing command registry.
 
-The package's `dsh.client` declaration loads `lib/client.cjs` in the Web surface. The client registers a localized sidebar footer action through public DSH Client Slots and calls the Host's `/api/dsh-worktree-studio` route. It uses the native Workspace service to register a created worktree and start a Session in that path.
+The package's `dsh.client` declaration loads `lib/client.cjs` in the Web surface. The client registers a localized sidebar footer action through public DSH Client Slots and calls the Host's `/api/dsh-branchline` route. It uses the native Workspace service to register a created worktree and start a Session in that path.
 
 The plugin does not register a model tool, prompt section, provider, or loop middleware.
 

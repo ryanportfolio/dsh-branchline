@@ -9,7 +9,7 @@ import type {
   TaskView,
 } from '../types.ts'
 
-const ROUTE = '/api/dsh-worktree-studio'
+const ROUTE = '/api/dsh-branchline'
 
 interface ErrorEnvelope {
   readonly ok: false
@@ -71,4 +71,3 @@ async function request<T>(url: string, init?: RequestInit, signal?: AbortSignal)
   }
   return envelope.value
 }
-

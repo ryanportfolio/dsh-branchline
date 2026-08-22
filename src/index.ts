@@ -10,7 +10,7 @@ import { LocalWorktreeStudioManager, type WorktreeStudioOptions } from './manage
 import { registerWorktreeStudioWeb } from './web.ts'
 import type { WorktreeStudioManager } from './types.ts'
 
-export const name = 'dsh-worktree-studio'
+export const name = 'dsh-branchline'
 export const inject = ['subprocess']
 
 /** User-configurable paths, limits, and delivery policy. */
@@ -27,7 +27,7 @@ export interface Config {
 }
 
 const dshHome = resolve(process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'))
-const stateRoot = join(dshHome, 'plugins', 'dsh-worktree-studio')
+const stateRoot = join(dshHome, 'plugins', 'dsh-branchline')
 
 /** Loader schema with every deployment-varying limit exposed. */
 export const Config: schema<Config> = schema.object({
@@ -54,7 +54,7 @@ function resolveOptions(config: Config): WorktreeStudioOptions {
   const managedRoot = absolutePath('managedRoot', config.managedRoot)
   const statePath = absolutePath('statePath', config.statePath)
   if (sameLocation(managedRoot, statePath) || statePath.startsWith(`${managedRoot}${separator()}`)) {
-    throw new TypeError('dsh-worktree-studio: statePath must not be inside managedRoot')
+    throw new TypeError('dsh-branchline: statePath must not be inside managedRoot')
   }
   return {
     managedRoot,
@@ -82,22 +82,22 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const manager = new LocalWorktreeStudioManager(resolveOptions(config), ctx.subprocess)
   ctx.provide('worktreeStudio', manager)
   const report = await manager.recover()
-  for (const problem of report.problems) ctx.logger.warn(`dsh-worktree-studio: ${problem}`)
+  for (const problem of report.problems) ctx.logger.warn(`dsh-branchline: ${problem}`)
   ctx.inject(['webServer'], webCtx => webCtx.effect(
     () => registerWorktreeStudioWeb(webCtx),
-    'dsh-worktree-studio.web',
+    'dsh-branchline.web',
   ))
-  ctx.effect(() => async () => manager.close(), 'dsh-worktree-studio.close')
+  ctx.effect(() => async () => manager.close(), 'dsh-branchline.close')
 }
 
 function absolutePath(label: string, value: string): string {
-  if (value.trim() === '') throw new TypeError(`dsh-worktree-studio: ${label} must not be empty`)
+  if (value.trim() === '') throw new TypeError(`dsh-branchline: ${label} must not be empty`)
   return resolve(value)
 }
 
 function positiveInteger(label: string, value: number): number {
   if (!Number.isSafeInteger(value) || value < 1) {
-    throw new TypeError(`dsh-worktree-studio: ${label} must be a positive safe integer`)
+    throw new TypeError(`dsh-branchline: ${label} must be a positive safe integer`)
   }
   return value
 }

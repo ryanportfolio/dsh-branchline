@@ -5,7 +5,7 @@ export type TaskId = string & { readonly __taskId: unique symbol }
 
 const TASK_ID_PATTERN = /^wt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 
-/** Test whether a string is a canonical Worktree Studio UUID. */
+/** Test whether a string is a canonical Branchline task UUID. */
 export function isTaskId(value: string): value is TaskId {
   return TASK_ID_PATTERN.test(value)
 }

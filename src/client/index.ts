@@ -26,7 +26,7 @@ export const inject = ['slots', 'locale', 'workspaces']
 
 /** Register localized callbacks and the sidebar footer contribution. */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-worktree-studio: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-branchline: dictionaries')
 
   const actions: StudioClientActions = {
     loadDashboard,
@@ -65,10 +65,9 @@ export function apply(ctx: ClientContext): void {
 
   ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
     name: 'sidebar.footer.action',
-    id: 'worktree-studio',
+    id: 'branchline',
     order: 20,
     locale: NS,
     inject: (): StudioClientActions => actions,
   }, WorktreeStudio))
 }
-

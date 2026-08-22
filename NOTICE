@@ -1,0 +1,9 @@
+DSH Branchline
+
+The Windows launcher and fresh-origin workflow were built for DSH Branchline.
+
+The task-board foundation derives from dsh-worktree-studio by Palaiologos1453:
+https://github.com/Palaiologos1453/dsh-worktree-studio
+
+That work is used under the MIT License. Its copyright notice and permission
+terms remain in LICENSE, and its Git history is retained in this repository.

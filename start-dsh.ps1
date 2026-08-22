@@ -2,7 +2,7 @@
 #
 # Double-click Start-DSH.cmd (no arguments)  ->  GUI:
 #   pick any local git repo, then launch DSH.
-#   Worktree Studio creates each task in a separate checkout based on the
+#   DSH Branchline creates each task in a separate checkout based on the
 #   freshly fetched remote default branch. This launcher never syncs, switches,
 #   resets, stashes, or cleans the selected repository.
 #   The window stays open as a mini control panel: Stop, browser reopen, log.
@@ -48,9 +48,9 @@ $Script:ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $settingsRoot = if ($env:DSH_LAUNCHER_HOME) {
     $env:DSH_LAUNCHER_HOME
 } elseif ($env:LOCALAPPDATA) {
-    Join-Path $env:LOCALAPPDATA 'DSH Worktree Studio'
+    Join-Path $env:LOCALAPPDATA 'DSH Branchline'
 } else {
-    Join-Path ([Environment]::GetFolderPath('UserProfile')) '.dsh-worktree-studio'
+    Join-Path ([Environment]::GetFolderPath('UserProfile')) '.dsh-branchline'
 }
 $Script:SettingsFile = Join-Path $settingsRoot 'launcher-settings.json'
 $Script:LogQueue = New-Object System.Collections.Concurrent.ConcurrentQueue[string]
@@ -446,7 +446,7 @@ function New-LauncherGui {
     [System.Windows.Forms.Application]::EnableVisualStyles()
 
     $form = New-Object System.Windows.Forms.Form
-    $form.Text = 'DSH Launcher'
+    $form.Text = 'DSH Branchline'
     $form.Size = New-Object System.Drawing.Size(720, 570)
     $form.StartPosition = 'CenterScreen'
     $form.FormBorderStyle = 'FixedSingle'
@@ -560,7 +560,7 @@ function New-LauncherGui {
             } else {
                 [System.Windows.Forms.MessageBox]::Show(
                     ($p + [Environment]::NewLine + 'is not a git repository (no .git entry).'),
-                    'DSH Launcher',
+                    'DSH Branchline',
                     [System.Windows.Forms.MessageBoxButtons]::OK,
                 [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
             }
@@ -588,7 +588,7 @@ function New-LauncherGui {
     $btnStart.Add_Click(({
         $sel = $combo.SelectedItem
         if (-not $sel) {
-            [System.Windows.Forms.MessageBox]::Show('Pick a repository first.', 'DSH Launcher') | Out-Null
+            [System.Windows.Forms.MessageBox]::Show('Pick a repository first.', 'DSH Branchline') | Out-Null
             return
         }
         Save-LauncherSettings -LastWorkspace $sel
@@ -661,7 +661,7 @@ function New-LauncherGui {
                  'Yes     - stop DSH, then close' + [Environment]::NewLine +
                  'No      - leave DSH running, close launcher' + [Environment]::NewLine +
                  'Cancel - stay here'),
-                'DSH Launcher',
+                'DSH Branchline',
                 [System.Windows.Forms.MessageBoxButtons]::YesNoCancel,
                 [System.Windows.Forms.MessageBoxIcon]::Warning)
             if ($answer -eq [System.Windows.Forms.DialogResult]::Cancel) { $e.Cancel = $true; return }

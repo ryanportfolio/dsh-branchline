@@ -4,27 +4,29 @@
 <source media="(max-width: 500px) and (prefers-color-scheme: dark)" srcset="assets/readme/masthead-narrow-dark.svg">
 <source media="(max-width: 500px)" srcset="assets/readme/masthead-narrow-light.svg">
 <source media="(prefers-color-scheme: dark)" srcset="assets/readme/masthead-dark.svg">
-<img alt="Worktree Studio routes the current remote default branch into isolated DSH tasks while the primary checkout stays untouched." src="assets/readme/masthead-light.svg" width="100%">
+<img alt="DSH Branchline routes the current remote default branch into isolated DSH tasks while the primary checkout stays untouched." src="assets/readme/masthead-light.svg" width="100%">
 </picture>
 
 <p align="center"><a href="README.zh.md">简体中文</a></p>
 
-Worktree Studio gives [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) a clean start for every task: fetch the remote default branch, pin its exact commit, then open an isolated worktree as a native DSH Workspace and Session.
+DSH Branchline gives [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) a clean start for every task: fetch the remote default branch, pin its exact commit, then open an isolated worktree as a native DSH Workspace and Session.
 
 ## Install
 
 ```powershell
-git clone https://github.com/ryanportfolio/dsh-worktree-studio.git
-cd dsh-worktree-studio
+git clone https://github.com/ryanportfolio/dsh-branchline.git
+cd dsh-branchline
 .\setup.ps1
-.\Start-DSH.cmd
+.\Start-Branchline.cmd
 ```
 
 Requires Windows, Git 2.38+, Node 22.19+, and DeepSeek Harness 0.1.x. The plugin itself remains portable; the bundled control-panel launcher targets Windows PowerShell 5.1 and PowerShell 7.
 
-## Why this fork exists
+## Why Branchline exists
 
-The unofficial [dsh-worktree](https://github.com/Eleven-is-cool/dsh-worktree) is useful for browsing worktrees and creating them from local branches. Upstream [Worktree Studio](https://github.com/Palaiologos1453/dsh-worktree-studio) adds task state, validation, review, and recovery. This fork keeps that base, then makes fresh origin/HEAD snapshots and review-only handoff the defaults so a dirty primary checkout never becomes the next task's starting point.
+DSH normally starts in the repository folder you select. A dirty or stale checkout is a poor base for a new coding task, so Branchline fetches `origin/HEAD`, pins its exact commit, and opens a separate linked worktree.
+
+The unofficial [dsh-worktree](https://github.com/Eleven-is-cool/dsh-worktree) creates worktrees from local branches. Branchline also needed durable task state, validation, review, and recovery. Its task-board foundation derives from [Palaiologos1453's MIT-licensed Worktree Studio](https://github.com/Palaiologos1453/dsh-worktree-studio); the launcher and fresh-origin workflow were built for Branchline.
 
 <picture>
 <source media="(max-width: 500px) and (prefers-color-scheme: dark)" srcset="assets/readme/route-narrow-dark.svg">
@@ -94,4 +96,4 @@ The unofficial [dsh-worktree](https://github.com/Eleven-is-cool/dsh-worktree) is
 
 ## Licence and credit
 
-[MIT](LICENSE). Built from [Palaiologos1453/dsh-worktree-studio](https://github.com/Palaiologos1453/dsh-worktree-studio); upstream copyright and licence retained.
+[MIT](LICENSE). See [NOTICE](NOTICE) for the exact upstream-derived boundary and retained credit.

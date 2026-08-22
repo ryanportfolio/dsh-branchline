@@ -1,5 +1,5 @@
 - insert:
-    - id: dsh-worktree-studio
-      name: "dsh-worktree-studio"
-    - id: dsh-worktree-studio-commands
-      name: "dsh-worktree-studio/commands"
+    - id: dsh-branchline
+      name: "dsh-branchline"
+    - id: dsh-branchline-commands
+      name: "dsh-branchline/commands"

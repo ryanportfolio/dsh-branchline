@@ -29,12 +29,12 @@ export async function createSubprocessFixture(): Promise<SubprocessFixture> {
 }
 
 export async function createRepositoryFixture(): Promise<RepositoryFixture> {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-worktree-studio-test-'))
+  const root = await mkdtemp(join(tmpdir(), 'dsh-branchline-test-'))
   const repository = join(root, 'repository')
   await mkdir(repository)
   git(repository, ['init', '--initial-branch=main'])
   git(repository, ['config', 'user.email', 'worktree-studio@example.invalid'])
-  git(repository, ['config', 'user.name', 'Worktree Studio Test'])
+  git(repository, ['config', 'user.name', 'Branchline Test'])
   git(repository, ['config', 'core.autocrlf', 'false'])
   await writeFile(join(repository, 'README.md'), '# fixture\n')
   git(repository, ['add', 'README.md'])
@@ -65,7 +65,7 @@ export function git(cwd: string, args: readonly string[]): string {
 export async function removeFixture(root: string): Promise<void> {
   const absolute = resolve(root)
   const temporary = `${resolve(tmpdir())}${sep}`
-  if (!absolute.startsWith(temporary) || !basename(absolute).startsWith('dsh-worktree-studio-test-')) {
+  if (!absolute.startsWith(temporary) || !basename(absolute).startsWith('dsh-branchline-test-')) {
     throw new Error(`refusing to remove non-fixture path ${absolute}`)
   }
   await rm(absolute, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 })

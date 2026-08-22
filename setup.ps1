@@ -23,7 +23,7 @@ try {
     & npx -y 'pnpm@11.7.0' install --frozen-lockfile
     if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed.' }
 
-    Write-Host 'Building Worktree Studio...'
+    Write-Host 'Building DSH Branchline...'
     & npx -y 'pnpm@11.7.0' run build
     if ($LASTEXITCODE -ne 0) { throw 'plugin build failed.' }
 
@@ -36,4 +36,4 @@ try {
 }
 
 Write-Host ''
-Write-Host 'Installed. Double-click Start-DSH.cmd or run .\start-dsh.ps1.'
+Write-Host 'Installed. Double-click Start-Branchline.cmd or run .\start-dsh.ps1.'

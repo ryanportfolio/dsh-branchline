@@ -1,7 +1,7 @@
 {
-  "name": "dsh-worktree-studio",
-  "version": "0.1.1-fresh.1",
-  "description": "Fresh GitHub worktrees for DeepSeek Harness, with a Windows launcher and review-only task board.",
+  "name": "dsh-branchline",
+  "version": "0.2.0",
+  "description": "Fresh, isolated worktrees for DeepSeek Harness, with a Windows launcher and review-only task board.",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -37,13 +37,16 @@
     "docs/usage.md",
     "start-dsh.ps1",
     "Start-DSH.cmd",
+    "Start-Branchline.cmd",
     "setup.ps1",
+    "NOTICE",
     "LICENSE"
   ],
   "keywords": [
     "deepseek-harness",
     "dsh-plugin",
     "git-worktree",
+    "branchline",
     "fresh-origin",
     "windows",
     "task-board",
@@ -51,12 +54,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ryanportfolio/dsh-worktree-studio.git"
+    "url": "git+https://github.com/ryanportfolio/dsh-branchline.git"
   },
   "bugs": {
-    "url": "https://github.com/ryanportfolio/dsh-worktree-studio/issues"
+    "url": "https://github.com/ryanportfolio/dsh-branchline/issues"
   },
-  "homepage": "https://github.com/ryanportfolio/dsh-worktree-studio#readme",
+  "homepage": "https://github.com/ryanportfolio/dsh-branchline#readme",
   "publishConfig": {
     "access": "public"
   },

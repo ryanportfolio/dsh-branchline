@@ -2,7 +2,7 @@
 
 export const en = {
   launcher: 'Worktree tasks',
-  title: 'Worktree Studio',
+  title: 'DSH Branchline',
   close: 'Close',
   refresh: 'Refresh',
   recover: 'Recover',
@@ -153,4 +153,3 @@ export const zh: Record<StudioLocaleKey, string> = {
   confirmDiscardAction: '丢弃改动',
   sessionError: '任务已创建，但无法打开对应的 DSH 工作区。',
 }
-

@@ -1,4 +1,4 @@
-/** Human command adapter for worktree-studio. */
+/** Human command adapter for Branchline. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
@@ -7,20 +7,20 @@ import { errorMessage } from './errors.ts'
 import { TaskId, isTaskId, type TaskView, type WorktreeStudioManager } from './types.ts'
 import type {} from './index.ts'
 
-export const name = 'dsh-worktree-studio-commands'
+export const name = 'dsh-branchline-commands'
 export const inject = ['commands', 'worktreeStudio']
 
-const USAGE = 'Usage: /worktree-studio list | create <title> | inspect <id> | validate <id> <command...> | preview <id> | deliver <id> | archive <id> | recover'
+const USAGE = 'Usage: /branchline list | create <title> | inspect <id> | validate <id> <command...> | preview <id> | deliver <id> | archive <id> | recover'
 
-/** Register the conflict-free `/worktree-studio` command. */
+/** Register the conflict-free `/branchline` command. */
 export function apply(ctx: Context): void {
   ctx.effect(() => ctx.commands.register({
-    name: 'worktree-studio',
+    name: 'branchline',
     description: 'manage isolated Git worktree tasks',
     input: { hint: 'list | create <title> | inspect <id> | validate <id> <command...> | preview <id> | deliver <id> | archive <id> | recover' },
     recordInput: false,
     handler: invocation => execute(ctx.worktreeStudio, invocation),
-  }), 'dsh-worktree-studio: command')
+  }), 'dsh-branchline: command')
 }
 
 /** Parse and execute one command without sending it to the model. */
@@ -35,7 +35,7 @@ async function execute(manager: WorktreeStudioManager, invocation: CommandInvoca
       return {
         kind: 'success',
         text: dashboard.tasks.length === 0
-          ? 'No worktree-studio tasks for this repository.'
+          ? 'No Branchline tasks for this repository.'
           : dashboard.tasks.map(formatTask).join('\n'),
       }
     }

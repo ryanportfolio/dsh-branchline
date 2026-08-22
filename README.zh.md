@@ -1,8 +1,8 @@
-# Worktree Studio
+# DSH Branchline
 
 [English](README.md) | 简体中文
 
-Worktree Studio 是面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的人工操作 Git worktree 任务工作台。这个版本会先 fetch `origin`，解析远程仓库当前的默认分支，再从该分支的精确 commit 创建任务。独立 checkout 随后会作为原生 DSH Workspace 与 Session 打开。
+DSH Branchline 是面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的人工操作 Git worktree 任务工作台。它会先 fetch `origin`，解析远程仓库当前的默认分支，再从该分支的精确 commit 创建任务。独立 checkout 随后会作为原生 DSH Workspace 与 Session 打开。
 
 插件不注册模型工具，不修改 System Prompt，也不增加工具 Schema。工作台和 `/worktree-studio` 命令都不进入模型上下文，因此安装后不会增加 Prompt token，也不会改变前缀缓存行为。
 
@@ -14,7 +14,7 @@ Worktree Studio 是面向 [DeepSeek Harness](https://github.com/deepseek-ai/deep
 
 ## 适用场景
 
-当用户希望同时打开并监督多个隔离编码会话，并由自己掌握最终交付决定时，可以使用 Worktree Studio。它不是子代理编排器：插件负责创建检出目录和 Session，具体工作由用户或已有 Agent 工作流决定。
+当用户希望同时打开并监督多个隔离编码会话，并由自己掌握最终交付决定时，可以使用 Branchline。它不是子代理编排器：插件负责创建检出目录和 Session，具体工作由用户或已有 Agent 工作流决定。
 
 - 一个任务对应一个分支、linked worktree、DSH Workspace 和 Session。
 - Base ref 留空时使用刚刚 fetch 的 `origin` 默认分支；特殊任务仍可显式指定 base ref。
@@ -39,14 +39,14 @@ Worktree Studio 是面向 [DeepSeek Harness](https://github.com/deepseek-ai/deep
 npm 包发布后安装预构建版本：
 
 ```sh
-dsh plugin --profile web add dsh-worktree-studio
+dsh plugin --profile web add dsh-branchline
 dsh web
 ```
 
 npm 发布前可以安装仓库构建：
 
 ```sh
-dsh plugin --profile web add github:ryanportfolio/dsh-worktree-studio
+dsh plugin --profile web add github:ryanportfolio/dsh-branchline
 dsh web
 ```
 
@@ -61,13 +61,13 @@ dsh plugin --profile web add .
 安装后，Web 侧边栏底部会出现 Worktree 任务入口。移除插件不会删除已管理的 worktree 或状态文件：
 
 ```sh
-dsh plugin --profile web remove dsh-worktree-studio
+dsh plugin --profile web remove dsh-branchline
 ```
 
 ## 工作流程
 
 1. 打开 **Worktree 任务**，选择已注册的仓库并新建任务。
-2. Worktree Studio 运行 `git fetch origin --prune`，读取远程仓库声明的默认分支，并记录对应的 remote-tracking commit。然后在 managed root 下从该 commit 创建 `dsh/<task>-<id>`。所选仓库的分支、index 和工作文件不会改变。
+2. Branchline 运行 `git fetch origin --prune`，读取远程仓库声明的默认分支，并记录对应的 remote-tracking commit。然后在 managed root 下从该 commit 创建 `dsh/<task>-<id>`。所选仓库的分支、index 和工作文件不会改变。
 3. 插件把新路径注册为 DSH Workspace，在其中启动 Session，然后关闭工作台。
 4. 在该 Session 中完成并提交改动。工作台会报告 committed、staged、unstaged 和 untracked 状态。
 5. 使用 **查看改动** 检查有界 diff。**合并检查** 仍可用于本地兼容性检查。
@@ -81,26 +81,26 @@ dsh plugin --profile web remove dsh-worktree-studio
 人工命令在本地处理，不会发给模型：
 
 ```text
-/worktree-studio list
-/worktree-studio create <title>
-/worktree-studio inspect <id>
-/worktree-studio validate <id> <command...>
-/worktree-studio preview <id>
-/worktree-studio deliver <id>
-/worktree-studio archive <id>
-/worktree-studio recover
+/branchline list
+/branchline create <title>
+/branchline inspect <id>
+/branchline validate <id> <command...>
+/branchline preview <id>
+/branchline deliver <id>
+/branchline archive <id>
+/branchline recover
 ```
 
 丢弃只在 Web 工作台提供，因为那里会展示风险确认。命令使用当前 Session workspace 作为仓库或交付目标。
 
 ## 配置
 
-Bundle 会插入使用 Schema 默认值的 Host 和命令条目。部署需要修改路径或限制时，在 Web profile 最后应用的 `cordis.patch.yml` 中覆盖 `dsh-worktree-studio` 条目。
+Bundle 会插入使用 Schema 默认值的 Host 和命令条目。部署需要修改路径或限制时，在 Web profile 最后应用的 `cordis.patch.yml` 中覆盖 `dsh-branchline` 条目。
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
-| `managedRoot` | `$DSH_HOME/plugins/dsh-worktree-studio/worktrees` | 插件创建 worktree 的父目录。 |
-| `statePath` | `$DSH_HOME/plugins/dsh-worktree-studio/tasks.json` | 原子 JSON 任务状态；不得位于 `managedRoot` 内。 |
+| `managedRoot` | `$DSH_HOME/plugins/dsh-branchline/worktrees` | 插件创建 worktree 的父目录。 |
+| `statePath` | `$DSH_HOME/plugins/dsh-branchline/tasks.json` | 原子 JSON 任务状态；不得位于 `managedRoot` 内。 |
 | `gitTimeoutMs` | `60000` | 单次 Git 操作的截止时间。 |
 | `terminationGraceMs` | `3000` | 受管进程树从 TERM 升级到 KILL 的等待时间。 |
 | `validationTimeoutMs` | `600000` | 单次验证命令的截止时间。 |
@@ -125,7 +125,7 @@ Git 和验证命令通过 DSH 的受管 subprocess 服务运行。插件只传�
 
 ## 当前限制
 
-- Worktree Studio 只管理本地仓库，不推送分支，也不创建 Pull Request。
+- Branchline 只管理本地仓库，不推送分支，也不创建 Pull Request。
 - 交付合并已提交改动，不会把未提交 working tree 复制到目标 checkout。
 - ignored 文件不进入 change token；验证可以生成普通 ignored 构建产物而不让自身结果失效。
 - Web 工作台默认以任务创建时记录的仓库 checkout 为目标；Manager API 和命令适配器可以指定同一 Git common directory 下的其他 checkout。
@@ -144,6 +144,6 @@ pnpm run pack:check
 
 测试使用真实临时 Git 仓库、真实 DSH Web server 和本地 subprocess provider，覆盖任务生命周期、内容 token 失效、验证、合并预检与交付、恢复、有界输出、凭据清理、Windows 命令 shim 和 loopback 请求信任。
 
-## 许可证
+## 许可证与署名
 
-[MIT](LICENSE)
+[MIT](LICENSE)。派生代码边界和保留的上游署名见 [NOTICE](NOTICE)。

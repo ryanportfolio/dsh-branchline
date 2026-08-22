@@ -10,7 +10,7 @@ const items = JSON.parse(fs.readFileSync(path.join(HERE, 'items.json'), 'utf8'))
 
 /*
 Constraint contract
-- Conceit: a Git switchyard routes origin/HEAD to isolated task sidings.
+- Conceit: Branchline routes origin/HEAD to isolated task sidings.
 - Orange marks the live remote commit and active route only.
 - Solid rails are verified Git paths; dashed rails are available task routes.
 - One monospace type system. No external requests, scripts, hover state, or opaque page background.
@@ -65,9 +65,9 @@ function metric(x, y, value, label, theme, width = 138) {
 
 function masthead(theme, narrow) {
   if (narrow) {
-    return svg(390, 470, 'Worktree Studio routes the latest remote default branch into an isolated DSH task while the primary checkout stays untouched.', theme, `
+    return svg(390, 470, 'DSH Branchline routes the latest remote default branch into an isolated DSH task while the primary checkout stays untouched.', theme, `
 <path class="rail-strong" d="M24 28h32l12 12h30"/><circle class="node-live" cx="24" cy="28" r="5"/>
-<text class="mute" x="112" y="33" font-size="10" letter-spacing="1.5">DSH / WORKTREE CONTROL</text>
+<text class="mute" x="112" y="33" font-size="10" letter-spacing="1.5">DSH BRANCHLINE / ${esc(facts.version)}</text>
 <text x="20" y="91" font-size="29" font-weight="800" letter-spacing="-1.1">FRESH TRACKS</text>
 <text x="20" y="124" font-size="29" font-weight="800" letter-spacing="-1.1">FOR EVERY TASK</text>
 <text class="mute" x="20" y="151" font-size="11">origin/HEAD -> exact commit -> isolated Session</text>
@@ -84,9 +84,9 @@ ${metric(278, 414, `${facts.dependencies}`, 'RUNTIME DEP', theme, 92)}
 `)
   }
 
-  return svg(880, 350, 'Worktree Studio routes the latest remote default branch into isolated DSH tasks while the primary checkout stays untouched.', theme, `
+  return svg(880, 350, 'DSH Branchline routes the latest remote default branch into isolated DSH tasks while the primary checkout stays untouched.', theme, `
 <path class="rail-strong" d="M28 28h34l12 12h34"/><circle class="node-live" cx="28" cy="28" r="5"/>
-<text class="mute" x="126" y="33" font-size="11" letter-spacing="1.8">DSH / WORKTREE CONTROL · ${esc(facts.version)}</text>
+<text class="mute" x="126" y="33" font-size="11" letter-spacing="1.8">DSH BRANCHLINE · ${esc(facts.version)}</text>
 <text x="28" y="94" font-size="42" font-weight="800" letter-spacing="-1.8">FRESH TRACKS FOR EVERY TASK</text>
 <text class="mute" x="30" y="123" font-size="14">Route GitHub's current default branch into an isolated DSH Workspace and Session.</text>
 

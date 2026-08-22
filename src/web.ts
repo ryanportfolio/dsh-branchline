@@ -8,7 +8,7 @@ import { StudioError, errorMessage } from './errors.ts'
 import { TaskId, isTaskId } from './types.ts'
 import type {} from './index.ts'
 
-export const WORKTREE_STUDIO_ROUTE = '/api/dsh-worktree-studio'
+export const WORKTREE_STUDIO_ROUTE = '/api/dsh-branchline'
 const BODY_LIMIT_BYTES = 256 * 1024
 
 /** Register the same-origin loopback route and return its disposer. */

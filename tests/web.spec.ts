@@ -63,7 +63,7 @@ describe('worktree-studio Web route', () => {
   it('serves the real loopback route and creates a task through its JSON API', async () => {
     const running = await start()
     const origin = running.baseUrl
-    const createdResponse = await fetch(`${running.baseUrl}/api/dsh-worktree-studio`, {
+    const createdResponse = await fetch(`${running.baseUrl}/api/dsh-branchline`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -89,7 +89,7 @@ describe('worktree-studio Web route', () => {
     })
 
     const dashboardResponse = await fetch(
-      `${running.baseUrl}/api/dsh-worktree-studio?repository=${encodeURIComponent(running.repository)}`,
+      `${running.baseUrl}/api/dsh-branchline?repository=${encodeURIComponent(running.repository)}`,
       { headers: { origin, 'sec-fetch-site': 'same-origin' } },
     )
     expect(dashboardResponse.status).toBe(200)
@@ -101,15 +101,15 @@ describe('worktree-studio Web route', () => {
 
   it('rejects cross-site, rebound-host, and unsupported-method requests', async () => {
     const running = await start()
-    const crossSite = await fetch(`${running.baseUrl}/api/dsh-worktree-studio`, {
+    const crossSite = await fetch(`${running.baseUrl}/api/dsh-branchline`, {
       headers: { origin: 'https://attacker.example', 'sec-fetch-site': 'cross-site' },
     })
     expect(crossSite.status).toBe(403)
 
-    const rebound = await requestWithHost(`${running.baseUrl}/api/dsh-worktree-studio`, 'attacker.example')
+    const rebound = await requestWithHost(`${running.baseUrl}/api/dsh-branchline`, 'attacker.example')
     expect(rebound).toBe(403)
 
-    const unsupported = await fetch(`${running.baseUrl}/api/dsh-worktree-studio`, {
+    const unsupported = await fetch(`${running.baseUrl}/api/dsh-branchline`, {
       method: 'DELETE',
       headers: { origin: running.baseUrl, 'sec-fetch-site': 'same-origin' },
     })
