@@ -30,6 +30,7 @@ async function start(): Promise<{ readonly baseUrl: string; readonly repository:
     maxOutputBytes: 128 * 1024,
     reviewMaxBytes: 64 * 1024,
     requireValidation: true,
+    allowDelivery: false,
   })
   return {
     baseUrl: `http://127.0.0.1:${String(context.webServer.port)}`,

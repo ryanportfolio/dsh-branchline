@@ -28,6 +28,14 @@ export interface RepositoryIdentity {
   readonly headCommit: string
 }
 
+/** Exact remote-default snapshot used as a new task's immutable base. */
+export interface RemoteBase {
+  readonly remote: string
+  readonly branch: string
+  readonly ref: string
+  readonly commit: string
+}
+
 /** Parsed `git worktree list --porcelain` record. */
 export interface LinkedWorktree {
   readonly path: string
@@ -53,6 +61,26 @@ interface ProcessOptions {
   readonly stdin?: string
   readonly signal?: AbortSignal
   readonly env?: NodeJS.ProcessEnv
+}
+
+/**
+ * Preserve only the host variables needed to locate executables and user-level
+ * Git configuration. The Harness subprocess provider may replace, rather than
+ * merge, a supplied environment, so omitting PATH makes later Git calls fail.
+ */
+function executableEnvironment(overrides: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  const allowed = process.platform === 'win32'
+    ? [
+        'PATH', 'PATHEXT', 'SystemRoot', 'WINDIR', 'COMSPEC', 'TEMP', 'TMP',
+        'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'APPDATA', 'LOCALAPPDATA',
+      ]
+    : ['PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'SSH_AUTH_SOCK']
+  for (const key of allowed) {
+    const value = process.env[key]
+    if (value !== undefined) env[key] = value
+  }
+  return { ...env, ...overrides }
 }
 
 const WINDOWS_ARGV_SCRIPT = Buffer.from([
@@ -228,6 +256,48 @@ export class GitClient {
       throw new StudioError('invalid-input', 'base ref must be non-empty and must not start with "-"')
     }
     return (await this.checked(repository, ['rev-parse', '--verify', `${ref}^{commit}`])).stdout.trim()
+  }
+
+  /** Fetch and resolve the remote's current default branch without touching a checkout. */
+  async fetchDefaultBase(repository: string, remote = 'origin'): Promise<RemoteBase> {
+    if (remote.length === 0 || remote.includes('\0') || /[\r\n]/u.test(remote) || remote.startsWith('-')) {
+      throw new StudioError('invalid-input', 'remote name must be non-empty and must not start with "-"')
+    }
+    await this.checked(repository, ['fetch', '--prune', remote])
+
+    const advertised = await this.raw(repository, ['ls-remote', '--symref', remote, 'HEAD'])
+    let branch = advertised.exitCode === 0 && !advertised.timedOut
+      ? parseAdvertisedHead(advertised.stdout)
+      : undefined
+    if (branch === undefined) {
+      const localHead = await this.raw(repository, [
+        'symbolic-ref', '--quiet', '--short', `refs/remotes/${remote}/HEAD`,
+      ])
+      const prefix = `${remote}/`
+      const value = localHead.exitCode === 0 && !localHead.timedOut ? localHead.stdout.trim() : ''
+      if (value.startsWith(prefix) && value.length > prefix.length) branch = value.slice(prefix.length)
+    }
+    if (branch === undefined) {
+      throw new StudioError(
+        'git-failure',
+        `remote ${remote} did not advertise a default branch and ${remote}/HEAD is not configured`,
+      )
+    }
+
+    await this.checked(repository, ['check-ref-format', `refs/heads/${branch}`])
+    const ref = `refs/remotes/${remote}/${branch}`
+    const local = await this.raw(repository, ['rev-parse', '--verify', `${ref}^{commit}`])
+    if (local.exitCode !== 0 || local.timedOut) {
+      await this.checked(repository, [
+        'fetch', remote, `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`,
+      ])
+    }
+    return {
+      remote,
+      branch,
+      ref,
+      commit: await this.resolveCommit(repository, ref),
+    }
   }
 
   /** Validate a branch with Git's own ref rules. */
@@ -486,7 +556,7 @@ export class GitClient {
       timeoutMs,
       terminationGraceMs: this.terminationGraceMs,
       maxOutputBytes,
-      env: { CI: process.env.CI ?? '1' },
+      env: executableEnvironment({ CI: process.env.CI ?? '1' }),
       ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
       ...(this.signal === undefined ? {} : { signal: this.signal }),
     })
@@ -511,11 +581,13 @@ export class GitClient {
       timeoutMs: this.timeoutMs,
       terminationGraceMs: this.terminationGraceMs,
       maxOutputBytes,
-      env: {
+      env: executableEnvironment({
+        GIT_CONFIG_COUNT: '0',
         GIT_TERMINAL_PROMPT: '0',
         GCM_INTERACTIVE: 'Never',
+        GIT_PAGER: 'cat',
         LC_ALL: 'C',
-      },
+      }),
       ...(this.signal === undefined ? {} : { signal: this.signal }),
     }).catch((error: unknown) => {
       if (error instanceof StudioError) throw error
@@ -530,6 +602,14 @@ export class GitClient {
     }
     return result
   }
+}
+
+function parseAdvertisedHead(output: string): string | undefined {
+  for (const line of output.split(/\r?\n/u)) {
+    const match = /^ref: refs\/heads\/(.+)\tHEAD$/u.exec(line)
+    if (match?.[1] !== undefined && match[1] !== '') return match[1]
+  }
+  return undefined
 }
 
 function validationInvocation(command: readonly string[]): {

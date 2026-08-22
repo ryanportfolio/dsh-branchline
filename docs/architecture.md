@@ -13,6 +13,12 @@ The package's `dsh.client` declaration loads `lib/client.cjs` in the Web surface
 
 The plugin does not register a model tool, prompt section, provider, or loop middleware.
 
+## Task base
+
+When a create request omits `baseRef`, the Host fetches `origin`, reads the default branch advertised by the remote, and resolves the corresponding remote-tracking commit. The new branch and linked worktree start from that immutable commit. Fetching updates shared Git refs but never checks out, resets, stashes, or cleans the selected repository.
+
+An explicit `baseRef` bypasses this fetch and resolves the supplied ref locally.
+
 ## Task state
 
 `TaskStore` owns a versioned JSON document with one `TaskRecord` per task. Writes use DSH atomic-write publication with owner-only file permissions. A second file lock covers each complete Git-plus-state mutation, so separate DSH processes cannot mutate the same task registry concurrently.
@@ -39,9 +45,11 @@ Every mutation receives the token shown to its caller and recomputes current Git
 
 Validation commands are stored as explicit argv. POSIX systems execute that argv directly. Windows uses a fixed encoded PowerShell program that reads `{program,args}` JSON from stdin, resolves only an `Application`, and invokes it with PowerShell's argument splatting; this supports `.cmd` package-manager shims without evaluating user text as PowerShell source.
 
-All Git and validation processes run through `ctx.subprocess`. The configured timeout aborts the managed process tree, the provider escalates termination after `terminationGraceMs`, and the caller waits for complete tree exit. The provider supplies its credential-scrubbed parent environment; the plugin explicitly adds only Git non-interactive variables or `CI` for validation.
+All Git and validation processes run through `ctx.subprocess`. The configured timeout aborts the managed process tree, the provider escalates termination after `terminationGraceMs`, and the caller waits for complete tree exit. The plugin builds a small allowlisted executable environment, then adds only Git non-interactive variables or `CI` for validation. Token and secret variables are not forwarded; POSIX keeps `SSH_AUTH_SOCK` so Git can use the user's configured agent.
 
 ## Delivery
+
+Delivery is disabled unless `allowDelivery` is true. The Web client hides the action and the Host rejects direct route or command calls while review-only mode is active.
 
 Delivery is one serialized mutation with these checks:
 

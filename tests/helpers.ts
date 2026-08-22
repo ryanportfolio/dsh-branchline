@@ -9,6 +9,7 @@ import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 export interface RepositoryFixture {
   readonly root: string
   readonly repository: string
+  readonly origin: string
   readonly managedRoot: string
   readonly statePath: string
 }
@@ -38,9 +39,15 @@ export async function createRepositoryFixture(): Promise<RepositoryFixture> {
   await writeFile(join(repository, 'README.md'), '# fixture\n')
   git(repository, ['add', 'README.md'])
   git(repository, ['commit', '-m', 'initial'])
+  const origin = join(root, 'origin.git')
+  git(root, ['init', '--bare', '--initial-branch=main', origin])
+  git(repository, ['remote', 'add', 'origin', origin])
+  git(repository, ['push', '--set-upstream', 'origin', 'main'])
+  git(repository, ['remote', 'set-head', 'origin', 'main'])
   return {
     root,
     repository,
+    origin,
     managedRoot: join(root, 'managed'),
     statePath: join(root, 'state', 'tasks.json'),
   }

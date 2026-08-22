@@ -23,6 +23,7 @@ export interface Config {
   readonly maxOutputBytes: number
   readonly reviewMaxBytes: number
   readonly requireValidation: boolean
+  readonly allowDelivery: boolean
 }
 
 const dshHome = resolve(process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'))
@@ -38,6 +39,7 @@ export const Config: schema<Config> = schema.object({
   maxOutputBytes: schema.number().step(1).min(16_384).default(1_048_576),
   reviewMaxBytes: schema.number().step(1).min(16_384).default(524_288),
   requireValidation: schema.boolean().default(true),
+  allowDelivery: schema.boolean().default(false),
 })
 
 declare module '@deepseek-ai/cordis' {
@@ -63,6 +65,7 @@ function resolveOptions(config: Config): WorktreeStudioOptions {
     maxOutputBytes: positiveInteger('maxOutputBytes', config.maxOutputBytes),
     reviewMaxBytes: positiveInteger('reviewMaxBytes', config.reviewMaxBytes),
     requireValidation: config.requireValidation,
+    allowDelivery: config.allowDelivery,
   }
 }
 

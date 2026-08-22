@@ -7,6 +7,7 @@ export type StudioErrorCode =
   | 'git-failure'
   | 'validation-failed'
   | 'merge-conflict'
+  | 'delivery-disabled'
   | 'unsafe-path'
   | 'recovery-required'
   | 'busy'
@@ -38,6 +39,8 @@ function defaultStatus(code: StudioErrorCode): number {
       return 400
     case 'not-found':
       return 404
+    case 'delivery-disabled':
+      return 403
     case 'state-conflict':
     case 'merge-conflict':
     case 'validation-failed':

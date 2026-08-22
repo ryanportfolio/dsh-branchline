@@ -23,7 +23,7 @@ afterEach(async () => {
   await Promise.all(fixtures.splice(0).map(fixture => removeFixture(fixture.root)))
 })
 
-function options(fixture: RepositoryFixture, requireValidation = true): WorktreeStudioOptions {
+function options(fixture: RepositoryFixture, requireValidation = true, allowDelivery = true): WorktreeStudioOptions {
   return {
     managedRoot: fixture.managedRoot,
     statePath: fixture.statePath,
@@ -33,10 +33,11 @@ function options(fixture: RepositoryFixture, requireValidation = true): Worktree
     maxOutputBytes: 128 * 1024,
     reviewMaxBytes: 64 * 1024,
     requireValidation,
+    allowDelivery,
   }
 }
 
-async function setup(requireValidation = true): Promise<{
+async function setup(requireValidation = true, allowDelivery = true): Promise<{
   readonly fixture: RepositoryFixture
   readonly manager: LocalWorktreeStudioManager
 }> {
@@ -44,12 +45,55 @@ async function setup(requireValidation = true): Promise<{
   fixtures.push(fixture)
   const subprocess = await createSubprocessFixture()
   subprocesses.push(subprocess)
-  const manager = new LocalWorktreeStudioManager(options(fixture, requireValidation), subprocess.subprocess)
+  const manager = new LocalWorktreeStudioManager(options(fixture, requireValidation, allowDelivery), subprocess.subprocess)
   managers.push(manager)
   return { fixture, manager }
 }
 
 describe('LocalWorktreeStudioManager', () => {
+  it('creates from freshly fetched origin default without touching a dirty primary checkout', async () => {
+    const { fixture, manager } = await setup(false)
+    await writeFile(join(fixture.repository, 'README.md'), 'dirty primary\n')
+    const beforeStatus = git(fixture.repository, ['status', '--porcelain=v1'])
+
+    const first = await manager.create({ repository: fixture.repository, title: 'Fresh remote task' })
+
+    expect(first.baseRef).toBe('origin/main')
+    expect(first.baseCommit).toBe(git(fixture.repository, ['rev-parse', 'origin/main']))
+    expect(await readFile(join(fixture.repository, 'README.md'), 'utf8')).toBe('dirty primary\n')
+    expect(git(fixture.repository, ['status', '--porcelain=v1'])).toBe(beforeStatus)
+    expect(git(first.path, ['status', '--porcelain=v1'])).toBe('')
+
+    const publisher = join(fixture.root, 'publisher')
+    git(fixture.root, ['clone', fixture.origin, publisher])
+    git(publisher, ['config', 'user.email', 'publisher@example.invalid'])
+    git(publisher, ['config', 'user.name', 'Publisher'])
+    await writeFile(join(publisher, 'remote.txt'), 'new remote commit\n')
+    git(publisher, ['add', 'remote.txt'])
+    git(publisher, ['commit', '-m', 'advance remote'])
+    git(publisher, ['push', 'origin', 'main'])
+    const remoteHead = git(publisher, ['rev-parse', 'HEAD'])
+
+    const second = await manager.create({ repository: fixture.repository, title: 'Second fresh task' })
+    expect(second.baseCommit).toBe(remoteHead)
+    expect(git(second.path, ['rev-parse', 'HEAD'])).toBe(remoteHead)
+    expect(git(fixture.repository, ['status', '--porcelain=v1'])).toBe(beforeStatus)
+  })
+
+  it('disables local merge delivery in review-only mode', async () => {
+    const { fixture, manager } = await setup(false, false)
+    let task = await manager.create({ repository: fixture.repository, title: 'Review only task' })
+    await writeFile(join(task.path, 'review.txt'), 'review me\n')
+    git(task.path, ['add', 'review.txt'])
+    git(task.path, ['commit', '-m', 'review-only change'])
+    const dashboard = await manager.dashboard(fixture.repository)
+    task = dashboard.tasks[0] as typeof task
+
+    expect(dashboard.deliveryEnabled).toBe(false)
+    await expect(manager.deliver(task.id, task.changeToken, fixture.repository))
+      .rejects.toMatchObject({ code: 'delivery-disabled' })
+  })
+
   it('creates, validates, previews, delivers, and archives one task', async () => {
     const { fixture, manager } = await setup()
     let task = await manager.create({

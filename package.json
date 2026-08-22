@@ -1,7 +1,7 @@
 {
   "name": "dsh-worktree-studio",
-  "version": "0.1.1",
-  "description": "Session-linked Git worktree task board and guarded delivery workflow for DeepSeek Harness",
+  "version": "0.1.1-fresh.1",
+  "description": "Fresh GitHub worktrees for DeepSeek Harness, with a Windows launcher and review-only task board.",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -32,24 +32,31 @@
     "CHANGELOG.md",
     "SECURITY.md",
     "assets/**/*.png",
+    "assets/readme/**/*.svg",
     "docs/architecture.md",
+    "docs/usage.md",
+    "start-dsh.ps1",
+    "Start-DSH.cmd",
+    "setup.ps1",
     "LICENSE"
   ],
   "keywords": [
     "deepseek-harness",
     "dsh-plugin",
     "git-worktree",
+    "fresh-origin",
+    "windows",
     "task-board",
     "agent"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Palaiologos1453/dsh-worktree-studio.git"
+    "url": "git+https://github.com/ryanportfolio/dsh-worktree-studio.git"
   },
   "bugs": {
-    "url": "https://github.com/Palaiologos1453/dsh-worktree-studio/issues"
+    "url": "https://github.com/ryanportfolio/dsh-worktree-studio/issues"
   },
-  "homepage": "https://github.com/Palaiologos1453/dsh-worktree-studio#readme",
+  "homepage": "https://github.com/ryanportfolio/dsh-worktree-studio#readme",
   "publishConfig": {
     "access": "public"
   },
@@ -77,6 +84,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "readme:build": "node scripts/readme/build.mjs",
     "prepack": "pnpm run build",
     "pack:check": "pnpm pack --dry-run",
     "publint": "publint"

@@ -96,6 +96,9 @@ function parseTask(value: unknown): TaskRecord {
     commonDirectory: stringField(value, 'commonDirectory'),
     path: stringField(value, 'path'),
     branch: nullableString(value, 'branch'),
+    ...(optionalString(value, 'baseRef') === undefined
+      ? {}
+      : { baseRef: optionalString(value, 'baseRef') as string }),
     baseCommit: stringField(value, 'baseCommit'),
     createdAt: stringField(value, 'createdAt'),
     updatedAt: stringField(value, 'updatedAt'),

@@ -61,6 +61,7 @@ export interface TaskRecord {
   readonly commonDirectory: string
   readonly path: string
   readonly branch: string | null
+  readonly baseRef?: string
   readonly baseCommit: string
   readonly createdAt: string
   readonly updatedAt: string
@@ -107,6 +108,7 @@ export interface DashboardView {
   readonly repository?: string
   readonly tasks: readonly TaskView[]
   readonly repositories: readonly string[]
+  readonly deliveryEnabled: boolean
 }
 
 /** Health report for durable state and pending operations. */

@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.1.1-fresh.1 - 2026-08-22
+
+### Added
+
+- Fresh `origin` default-branch discovery for tasks created without an explicit base ref.
+- Review-only mode, enabled by default, with Host enforcement and matching Web controls.
+- Recorded base refs in task state and dashboard responses.
+- Generic Windows repository launcher and one-command local setup.
+
+### Fixed
+
+- Reset inherited `GIT_CONFIG_COUNT` inside managed Git subprocesses so filtered Harness environments cannot leave Git with an incomplete command-line config.
+- Keep the Web board's **All repositories** filter selected after its initial default workspace is applied.
+- Preserve executable search paths in scrubbed Git and validation subprocess environments.
+- Keep asynchronous launcher output callbacks outside PowerShell runspaces.
+
 ## 0.1.1 - 2026-08-19
 
 ### Fixed

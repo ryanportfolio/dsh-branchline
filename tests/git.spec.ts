@@ -88,6 +88,26 @@ describe('GitClient', () => {
     expect(Buffer.byteLength(review.diff, 'utf8')).toBeLessThanOrEqual(1024)
   })
 
+  it('fetches and resolves the remote default branch', async () => {
+    const fixture = await createRepositoryFixture()
+    fixtures.push(fixture)
+    const subprocess = await createSubprocessFixture()
+    subprocesses.push(subprocess)
+    const client = new GitClient(subprocess.subprocess, 10_000, 200, 128 * 1024)
+    runGit(fixture.repository, [
+      'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/stale-local-default',
+    ])
+
+    const base = await client.fetchDefaultBase(fixture.repository)
+
+    expect(base).toEqual({
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      commit: runGit(fixture.repository, ['rev-parse', 'origin/main']),
+    })
+  })
+
   it('rejects a managed path that escapes its configured root', () => {
     expect(() => assertPathInside(join(tmpdir(), 'managed'), join(tmpdir(), 'outside'))).toThrow()
   })

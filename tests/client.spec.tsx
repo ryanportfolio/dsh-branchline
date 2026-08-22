@@ -88,8 +88,8 @@ const task = (): TaskView => ({
   changeToken: 'c'.repeat(64),
 })
 
-function dashboard(tasks: readonly TaskView[]): DashboardView {
-  return { repository: 'C:\\repo', repositories: ['C:\\repo'], tasks }
+function dashboard(tasks: readonly TaskView[], deliveryEnabled = true): DashboardView {
+  return { repository: 'C:\\repo', repositories: ['C:\\repo'], tasks, deliveryEnabled }
 }
 
 function props(overrides: Partial<WorktreeStudioProps> = {}): WorktreeStudioProps {
@@ -152,13 +152,39 @@ describe('WorktreeStudio', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create and open session' }))
 
     await waitFor(() => {
-      expect(createTask).toHaveBeenCalledWith(expect.objectContaining({
+      expect(createTask).toHaveBeenCalledWith({
         repository: 'C:\\repo',
         title: 'Improve checkout flow',
         validationCommand: 'pnpm test',
-      }))
+      })
       expect(startTaskSession).toHaveBeenCalledWith(created.workspacePath)
     })
+  })
+
+  it('does not offer local merge delivery in review-only mode', async () => {
+    const selected = task()
+    const loadDashboard = vi.fn().mockResolvedValue(dashboard([selected], false))
+    render(<WorktreeStudio {...props({ loadDashboard })} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Worktree tasks' }))
+    await screen.findByText(selected.title)
+    expect(screen.queryByRole('button', { name: 'Deliver' })).toBeNull()
+    expect(screen.getByText('Review only: branch remains intact')).toBeTruthy()
+  })
+
+  it('keeps the all-repositories filter selected', async () => {
+    const selected = task()
+    const loadDashboard = vi.fn((repository?: string) => Promise.resolve(
+      repository === undefined ? dashboard([selected]) : dashboard([]),
+    ))
+    render(<WorktreeStudio {...props({ loadDashboard })} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Worktree tasks' }))
+    const repository = await screen.findByLabelText('Repository') as HTMLSelectElement
+    fireEvent.change(repository, { target: { value: '' } })
+
+    await screen.findByText(selected.title)
+    expect(repository.value).toBe('')
   })
 
   it('requires a passing merge check and explicit acknowledgement before delivery', async () => {

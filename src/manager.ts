@@ -31,6 +31,7 @@ export interface WorktreeStudioOptions {
   readonly maxOutputBytes: number
   readonly reviewMaxBytes: number
   readonly requireValidation: boolean
+  readonly allowDelivery: boolean
 }
 
 const EMPTY_CHANGES = Object.freeze({
@@ -76,7 +77,17 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
     return this.mutate(async () => {
       const title = normalizeTitle(request.title)
       const identity = await this.git.identify(request.repository)
-      const baseCommit = await this.git.resolveCommit(identity.topLevel, request.baseRef ?? 'HEAD')
+      const requestedBase = request.baseRef?.trim()
+      let baseRef: string
+      let baseCommit: string
+      if (requestedBase === undefined || requestedBase === '') {
+        const remoteBase = await this.git.fetchDefaultBase(identity.topLevel)
+        baseRef = `${remoteBase.remote}/${remoteBase.branch}`
+        baseCommit = remoteBase.commit
+      } else {
+        baseRef = requestedBase
+        baseCommit = await this.git.resolveCommit(identity.topLevel, requestedBase)
+      }
       const id = TaskId(`wt-${randomUUID()}`)
       const shortId = String(id).slice(3, 11)
       const branch = request.branch === undefined || request.branch.trim() === ''
@@ -100,6 +111,7 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
         commonDirectory: identity.commonDirectory,
         path,
         branch,
+        baseRef,
         baseCommit,
         createdAt: now,
         updatedAt: now,
@@ -148,6 +160,7 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
       ...(selectedRepository === undefined ? {} : { repository: selectedRepository }),
       tasks,
       repositories,
+      deliveryEnabled: this.options.allowDelivery,
     }
   }
 
@@ -225,6 +238,12 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
   /** Recheck token, validation, target cleanliness, and merge preview before delivery. */
   deliver(id: TaskId, changeToken: string, targetPath?: string): Promise<TaskView> {
     return this.mutate(async () => {
+      if (!this.options.allowDelivery) {
+        throw new StudioError(
+          'delivery-disabled',
+          'local merge delivery is disabled; review and integrate the task branch externally',
+        )
+      }
       const task = this.requireTask(await this.store.read(), id)
       const current = await this.assertToken(task, changeToken)
       if (current.changes.dirty) throw new StudioError('state-conflict', 'commit or discard task changes before delivery')

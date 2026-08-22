@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
@@ -91,6 +91,7 @@ function TaskBoard({
   const workspaces = useWorkspaces(state => state.items)
   const currentSession = useSessions(state => state.current)
   const currentCwd = useSessions(state => currentSession === undefined ? undefined : state.byId[currentSession]?.cwd)
+  const defaultRepositoryApplied = useRef(false)
   const [repository, setRepository] = useState<string>()
   const [dashboard, setDashboard] = useState<DashboardView>()
   const [loading, setLoading] = useState(false)
@@ -108,9 +109,14 @@ function TaskBoard({
   const [acknowledged, setAcknowledged] = useState(false)
 
   useEffect(() => {
-    if (!open || repository !== undefined) return
+    if (!open) {
+      defaultRepositoryApplied.current = false
+      return
+    }
+    if (defaultRepositoryApplied.current) return
+    defaultRepositoryApplied.current = true
     setRepository(currentCwd ?? workspaces[0]?.path)
-  }, [currentCwd, open, repository, workspaces])
+  }, [currentCwd, open, workspaces])
 
   useEffect(() => {
     if (!open) return
@@ -307,6 +313,7 @@ function TaskBoard({
           ) : (
             <TaskDetails
               task={selected}
+              deliveryEnabled={dashboard?.deliveryEnabled ?? false}
               review={review?.id === selected.id ? review.value : undefined}
               preview={preview?.id === selected.id ? preview.value : undefined}
               validationDraft={validationDraft}
@@ -402,7 +409,7 @@ function CreateTaskForm({
 }): ReactNode {
   const [title, setTitle] = useState('')
   const [branch, setBranch] = useState('')
-  const [baseRef, setBaseRef] = useState('HEAD')
+  const [baseRef, setBaseRef] = useState('')
   const [validationCommand, setValidationCommand] = useState('')
   const submit = (event: FormEvent): void => {
     event.preventDefault()
@@ -432,7 +439,7 @@ function CreateTaskForm({
         </label>
         <label>
           <span>{t('baseRef')}</span>
-          <input value={baseRef} onChange={event => { setBaseRef(event.currentTarget.value) }} />
+          <input value={baseRef} placeholder={t('baseRefPlaceholder')} onChange={event => { setBaseRef(event.currentTarget.value) }} />
         </label>
       </div>
       <label>
@@ -457,6 +464,7 @@ function CreateTaskForm({
 
 function TaskDetails({
   task,
+  deliveryEnabled,
   review,
   preview,
   validationDraft,
@@ -473,6 +481,7 @@ function TaskDetails({
   onFolder,
 }: {
   readonly task: TaskView
+  readonly deliveryEnabled: boolean
   readonly review: ReviewView | undefined
   readonly preview: MergePreview | undefined
   readonly validationDraft: string
@@ -536,9 +545,11 @@ function TaskDetails({
         <Button size="sm" variant="outline" icon={<IconBranchOutline16 size={14} />} disabled={busy !== undefined || !task.exists || task.changes.dirty || task.changes.commitsAhead === 0} onClick={onPreview}>
           {t('preview')}
         </Button>
-        <Button size="sm" variant="primary" icon={<IconBranchOutline16 size={14} />} disabled={busy !== undefined || !mergeReady || !validated} onClick={onDeliver}>
-          {t('deliver')}
-        </Button>
+        {deliveryEnabled ? (
+          <Button size="sm" variant="primary" icon={<IconBranchOutline16 size={14} />} disabled={busy !== undefined || !mergeReady || !validated} onClick={onDeliver}>
+            {t('deliver')}
+          </Button>
+        ) : <span>{t('reviewOnly')}</span>}
         <span className={css.workflowSpacer} />
         <Tooltip label={t('archive')} side="bottom">
           <button type="button" className={css.iconButton} aria-label={t('archive')} disabled={busy !== undefined || pending > 0 || !task.exists} onClick={onArchive}>
