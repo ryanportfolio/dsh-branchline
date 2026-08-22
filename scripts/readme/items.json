@@ -1,0 +1,38 @@
+[
+  {
+    "id": "fresh-base",
+    "index": "01",
+    "signal": "FETCH",
+    "title": "Fresh remote base",
+    "copy": "Fetch origin, resolve origin/HEAD, and pin its exact commit.",
+    "code": "origin/HEAD -> <sha>",
+    "url": "docs/usage.md#fresh-remote-base"
+  },
+  {
+    "id": "isolated-checkout",
+    "index": "02",
+    "signal": "ROUTE",
+    "title": "Isolated checkout",
+    "copy": "Create a dsh/* branch and linked worktree without changing the primary checkout.",
+    "code": "git worktree add",
+    "url": "docs/usage.md#isolated-checkout"
+  },
+  {
+    "id": "native-session",
+    "index": "03",
+    "signal": "OPEN",
+    "title": "Native DSH session",
+    "copy": "Register the new path as a DSH Workspace and open a Session there.",
+    "code": "worktree -> workspace",
+    "url": "docs/usage.md#native-dsh-session"
+  },
+  {
+    "id": "review-only",
+    "index": "04",
+    "signal": "HOLD",
+    "title": "Review-only finish",
+    "copy": "Keep the task branch intact for review, push, or pull request.",
+    "code": "allowDelivery: false",
+    "url": "docs/usage.md#review-only-finish"
+  }
+]

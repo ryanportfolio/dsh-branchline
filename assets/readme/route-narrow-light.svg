@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 420" width="390" height="420" role="img" aria-label="Four-step route: fetch the remote default, create an isolated checkout, open a native DSH session, and keep the branch for review.">
+<style>
+text{font-family:ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,'Liberation Mono',monospace;fill:#1f2328}
+.mute{fill:#59636e}.accent{fill:#bc4c00}
+.rail{fill:none;stroke:#d1d9e0;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.rail-strong{fill:none;stroke:#1f2328;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.route{fill:none;stroke:#bc4c00;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:9 8;animation:flow 4.8s linear infinite}
+.node{fill:#f6f8fa;stroke:#d1d9e0;stroke-width:2}.node-live{fill:#fff1e5;stroke:#bc4c00;stroke-width:2.5;animation:pulse 2.4s ease-in-out infinite}
+.tag{fill:#f6f8fa;stroke:#d1d9e0}.tag-live{fill:#fff1e5;stroke:#bc4c00}
+@keyframes flow{to{stroke-dashoffset:-68}}@keyframes pulse{0%,100%{opacity:.62}50%{opacity:1}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}.route{stroke-dashoffset:0}.node-live{opacity:1}}
+</style>
+
+<text x="20" y="24" font-size="11" font-weight="700" letter-spacing="1.4">THE ROUTE</text>
+<path class="rail" d="M44 52v276"/><path class="route" d="M44 52v276"/>
+<circle class="node-live" cx="44" cy="52" r="10"/>
+<text class="accent" x="70" y="43" font-size="9" font-weight="700" letter-spacing="1.2">01 / FETCH</text>
+<text x="70" y="65" font-size="16" font-weight="700">FRESH REMOTE BASE</text>
+<text class="mute" x="70" y="84" font-size="10">origin/HEAD -&gt; &lt;sha&gt;</text>
+<circle class="node" cx="44" cy="144" r="10"/>
+<text class="accent" x="70" y="135" font-size="9" font-weight="700" letter-spacing="1.2">02 / ROUTE</text>
+<text x="70" y="157" font-size="16" font-weight="700">ISOLATED CHECKOUT</text>
+<text class="mute" x="70" y="176" font-size="10">git worktree add</text>
+<circle class="node" cx="44" cy="236" r="10"/>
+<text class="accent" x="70" y="227" font-size="9" font-weight="700" letter-spacing="1.2">03 / OPEN</text>
+<text x="70" y="249" font-size="16" font-weight="700">NATIVE DSH SESSION</text>
+<text class="mute" x="70" y="268" font-size="10">worktree -&gt; workspace</text>
+<circle class="node" cx="44" cy="328" r="10"/>
+<text class="accent" x="70" y="319" font-size="9" font-weight="700" letter-spacing="1.2">04 / HOLD</text>
+<text x="70" y="341" font-size="16" font-weight="700">REVIEW-ONLY FINISH</text>
+<text class="mute" x="70" y="360" font-size="10">allowDelivery: false</text>
+<rect class="tag-live" x="20" y="370" width="350" height="34" rx="4"/>
+<text class="accent" x="34" y="392" font-size="11" font-weight="700">PRIMARY CHECKOUT: NO SWITCH / RESET / STASH / CLEAN</text>
+
+</svg>

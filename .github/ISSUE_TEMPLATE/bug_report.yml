@@ -1,0 +1,41 @@
+name: Bug report
+description: Report a reproducible Worktree Studio or launcher failure.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Remove repository names, user paths, tokens, and private source before attaching logs.
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: DSH, Node.js, Git, and Worktree Studio versions.
+      placeholder: DSH 0.1.1-rc.2; Node 24.15.0; Git 2.51.0; plugin 0.1.1-fresh.1
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Operating system
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction
+      description: Exact steps, starting with the selected repository state.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs
+      render: text

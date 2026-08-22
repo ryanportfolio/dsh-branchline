@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 410 165" width="410" height="165" role="img" aria-label="04. Review-only finish. Keep the task branch intact for review, push, or pull request.">
+<style>
+text{font-family:ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,'Liberation Mono',monospace;fill:#f0f6fc}.mute{fill:#9198a1}.accent{fill:#f0883e}
+.rule{stroke:#3d444d;stroke-width:1.5}.signal{fill:#f0883e;animation:pulse 2.4s ease-in-out infinite}
+.code{fill:#161b22;stroke:#3d444d}@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}.signal{opacity:1}}
+</style>
+<line class="rule" x1="18" y1="34" x2="392" y2="34"/>
+<circle class="signal" cx="18" cy="34" r="4"/>
+<text class="accent" x="30" y="20" font-size="9" font-weight="700" letter-spacing="1.2">04 / HOLD</text>
+<text x="18" y="67" font-size="19" font-weight="800">REVIEW-ONLY FINISH</text>
+<text class="mute" x="18" y="92" font-size="11">Keep the task branch intact for review, push, or</text>
+<text class="mute" x="18" y="110" font-size="11">pull request.</text>
+<rect class="code" x="18" y="122" width="374" height="29" rx="3"/>
+<text x="29" y="141" font-size="10">allowDelivery: false</text>
+</svg>

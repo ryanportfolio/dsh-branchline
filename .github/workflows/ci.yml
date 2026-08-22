@@ -34,3 +34,14 @@ jobs:
       - run: pnpm test
       - run: pnpm run build
       - run: pnpm run pack:check
+      - name: Verify generated README
+        if: runner.os == 'Linux'
+        run: |
+          pnpm run readme:build
+          git diff --exit-code -- README.md assets/readme
+      - name: Verify Windows launcher
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-dsh.ps1 -SelfTest
+          pwsh.exe -NoProfile -File .\start-dsh.ps1 -SelfTest

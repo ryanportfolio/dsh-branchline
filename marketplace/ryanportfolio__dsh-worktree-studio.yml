@@ -1,0 +1,7 @@
+url: https://github.com/ryanportfolio/dsh-worktree-studio
+name: ryanportfolio/dsh-worktree-studio
+tarball: https://github.com/ryanportfolio/dsh-worktree-studio/releases/download/v0.1.1-fresh.1/dsh-worktree-studio-0.1.1-fresh.1.tgz
+category: git
+description:
+  en: Fresh remote-default worktrees and review-only task handoff for DeepSeek Harness, with a generic Windows launcher.
+  zh: 为 DeepSeek Harness 提供基于远程默认分支最新提交的隔离 worktree、仅审阅交接流程和通用 Windows 启动器。
