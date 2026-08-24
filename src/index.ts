@@ -6,6 +6,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import schema from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import { GitHubClient } from './github.ts'
 import { LocalWorktreeStudioManager, type WorktreeStudioOptions } from './manager.ts'
 import { registerWorktreeStudioWeb } from './web.ts'
 import type { WorktreeStudioManager } from './types.ts'
@@ -24,6 +25,8 @@ export interface Config {
   readonly reviewMaxBytes: number
   readonly requireValidation: boolean
   readonly allowDelivery: boolean
+  readonly cloneRoot: string
+  readonly cloneTimeoutMs: number
 }
 
 const dshHome = resolve(process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'))
@@ -40,6 +43,8 @@ export const Config: schema<Config> = schema.object({
   reviewMaxBytes: schema.number().step(1).min(16_384).default(524_288),
   requireValidation: schema.boolean().default(true),
   allowDelivery: schema.boolean().default(false),
+  cloneRoot: schema.string().default(join(homedir(), 'CoreWise')),
+  cloneTimeoutMs: schema.number().step(1).min(1_000).default(600_000),
 })
 
 declare module '@deepseek-ai/cordis' {
@@ -53,6 +58,7 @@ declare module '@deepseek-ai/cordis' {
 function resolveOptions(config: Config): WorktreeStudioOptions {
   const managedRoot = absolutePath('managedRoot', config.managedRoot)
   const statePath = absolutePath('statePath', config.statePath)
+  const cloneRoot = absolutePath('cloneRoot', config.cloneRoot)
   if (sameLocation(managedRoot, statePath) || statePath.startsWith(`${managedRoot}${separator()}`)) {
     throw new TypeError('dsh-branchline: statePath must not be inside managedRoot')
   }
@@ -66,6 +72,8 @@ function resolveOptions(config: Config): WorktreeStudioOptions {
     reviewMaxBytes: positiveInteger('reviewMaxBytes', config.reviewMaxBytes),
     requireValidation: config.requireValidation,
     allowDelivery: config.allowDelivery,
+    cloneRoot,
+    cloneTimeoutMs: positiveInteger('cloneTimeoutMs', config.cloneTimeoutMs),
   }
 }
 
@@ -79,12 +87,23 @@ export function createWorktreeStudioManager(
 
 /** Register the manager, recover interrupted state, and attach Web when available. */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const manager = new LocalWorktreeStudioManager(resolveOptions(config), ctx.subprocess)
+  const options = resolveOptions(config)
+  const manager = new LocalWorktreeStudioManager(options, ctx.subprocess)
   ctx.provide('worktreeStudio', manager)
+  const github = new GitHubClient(
+    {
+      cloneRoot: options.cloneRoot,
+      listTimeoutMs: options.gitTimeoutMs,
+      cloneTimeoutMs: options.cloneTimeoutMs,
+      terminationGraceMs: options.terminationGraceMs,
+      maxOutputBytes: options.maxOutputBytes,
+    },
+    ctx.subprocess,
+  )
   const report = await manager.recover()
   for (const problem of report.problems) ctx.logger.warn(`dsh-branchline: ${problem}`)
   ctx.inject(['webServer'], webCtx => webCtx.effect(
-    () => registerWorktreeStudioWeb(webCtx),
+    () => registerWorktreeStudioWeb(webCtx, github),
     'dsh-branchline.web',
   ))
   ctx.effect(() => async () => manager.close(), 'dsh-branchline.close')

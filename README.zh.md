@@ -66,9 +66,9 @@ dsh plugin --profile web remove dsh-branchline
 
 ## 工作流程
 
-1. 打开 **Worktree 任务**，选择已注册的仓库并新建任务。
+1. 打开 **Worktree 任务**，选择已注册的仓库并新建任务——或在创建表单中把来源切换为 **GitHub**，从 `gh` 账号的仓库列表中挑选（或粘贴 `owner/name` 与 URL）：Branchline 会在缺失时克隆仓库，已存在时复用本地检出。
 2. Branchline 运行 `git fetch origin --prune`，读取远程仓库声明的默认分支，并记录对应的 remote-tracking commit。然后在 managed root 下从该 commit 创建 `dsh/<task>-<id>`。所选仓库的分支、index 和工作文件不会改变。
-3. 插件把新路径注册为 DSH Workspace，在其中启动 Session，然后关闭工作台。
+3. 插件把新路径注册为 DSH Workspace，在其中启动 Session，然后关闭工作台。在任何以仓库为工作区的 Session 里，composer 工具行的 **worktree** 按钮可以一键重复第 2–3 步。
 4. 在该 Session 中完成并提交改动。工作台会报告 committed、staged、unstaged 和 untracked 状态。
 5. 使用 **查看改动** 检查有界 diff。**合并检查** 仍可用于本地兼容性检查。
 6. Review-only 模式保留分支和 worktree。通过常用 GitHub 流程推送或集成该分支。

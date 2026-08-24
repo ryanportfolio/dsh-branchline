@@ -5,6 +5,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import stringArgv from 'string-argv'
 import { StudioError, errorMessage } from './errors.ts'
+import type { GitHubClient } from './github.ts'
 import { TaskId, isTaskId } from './types.ts'
 import type {} from './index.ts'
 
@@ -12,7 +13,7 @@ export const WORKTREE_STUDIO_ROUTE = '/api/dsh-branchline'
 const BODY_LIMIT_BYTES = 256 * 1024
 
 /** Register the same-origin loopback route and return its disposer. */
-export function registerWorktreeStudioWeb(ctx: Context): () => void {
+export function registerWorktreeStudioWeb(ctx: Context, github: GitHubClient): () => void {
   return ctx.webServer.register({
     kind: 'exact',
     path: WORKTREE_STUDIO_ROUTE,
@@ -32,7 +33,7 @@ export function registerWorktreeStudioWeb(ctx: Context): () => void {
           send(response, 405, { ok: false, error: { code: 'method-not-allowed', message: 'GET or POST is required' } })
           return
         }
-        const value = await dispatch(ctx, await readBody(request))
+        const value = await dispatch(ctx, github, await readBody(request))
         send(response, 200, { ok: true, value })
       } catch (error) {
         const domain = error instanceof StudioError
@@ -45,20 +46,30 @@ export function registerWorktreeStudioWeb(ctx: Context): () => void {
 }
 
 /** Dispatch one validated Web operation to the manager. */
-async function dispatch(ctx: Context, input: Record<string, unknown>): Promise<unknown> {
+async function dispatch(ctx: Context, github: GitHubClient, input: Record<string, unknown>): Promise<unknown> {
   const operation = requiredString(input, 'operation')
   if (operation === 'create') {
     const commandLine = optionalString(input, 'validationCommand')
     const validationCommand = commandLine === undefined || commandLine.trim() === ''
       ? undefined
       : parseCommandLine(commandLine)
+    const cloneFrom = optionalString(input, 'cloneFrom')
+    if (cloneFrom !== undefined && optionalString(input, 'repository') !== undefined) {
+      throw new StudioError('invalid-input', 'create accepts either repository or cloneFrom, not both')
+    }
+    const repository = cloneFrom === undefined
+      ? requiredString(input, 'repository')
+      : (await github.ensureClone(cloneFrom)).path
     return await ctx.worktreeStudio.create({
-      repository: requiredString(input, 'repository'),
+      repository,
       title: requiredString(input, 'title'),
       ...(optionalString(input, 'branch') === undefined ? {} : { branch: optionalString(input, 'branch') as string }),
       ...(optionalString(input, 'baseRef') === undefined ? {} : { baseRef: optionalString(input, 'baseRef') as string }),
       ...(validationCommand === undefined ? {} : { validationCommand }),
     })
+  }
+  if (operation === 'github.list') {
+    return { repositories: await github.listRepositories() }
   }
   if (operation === 'recover') return await ctx.worktreeStudio.recover()
   if (operation === 'doctor') return await ctx.worktreeStudio.doctor()
@@ -172,7 +183,7 @@ function optionalString(input: Record<string, unknown>, key: string): string | u
 
 function taskId(input: Record<string, unknown>): ReturnType<typeof TaskId> {
   const value = requiredString(input, 'id')
-  if (!isTaskId(value)) throw new StudioError('invalid-input', 'id is not a worktree-studio task id')
+  if (!isTaskId(value)) throw new StudioError('invalid-input', 'id is not a branchline task id')
   return TaskId(value)
 }
 

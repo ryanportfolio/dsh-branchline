@@ -51,6 +51,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
 })
 
 import { WorktreeStudio, type WorktreeStudioProps } from '../src/client/WorktreeStudio.tsx'
+import { WorktreeQuickAction, type WorktreeQuickActionProps } from '../src/client/WorktreeQuickAction.tsx'
 import { en, type StudioLocaleKey } from '../src/client/locales.ts'
 import { TaskId, type DashboardView, type TaskView } from '../src/types.ts'
 import type { SessionListState, WorkspaceListState } from '@deepseek-ai/dsh-client-runtime/client'
@@ -213,5 +214,91 @@ describe('WorktreeStudio', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Merge task' }))
 
     await waitFor(() => { expect(deliverTask).toHaveBeenCalledWith(selected) })
+  })
+})
+
+describe('WorktreeQuickAction', () => {
+  const SESSION = 'session-1' as WorktreeQuickActionProps['sessionId']
+
+  function workspaceState(sessionIds: readonly string[]): WorkspaceListState {
+    return {
+      items: [{
+        workspaceId: 'workspace-1',
+        path: 'C:\\repo',
+        title: 'repo',
+        sessionIds: [...sessionIds],
+        createdAt: '2026-08-19T00:00:00.000Z',
+        updatedAt: '2026-08-19T00:00:00.000Z',
+      }],
+      archivedSessionIds: [],
+      state: 'idle',
+      phase: 'ready',
+      error: null,
+      baselinesReady: true,
+      recentWorkspaceId: 'workspace-1',
+    } as unknown as WorkspaceListState
+  }
+
+  function sessionState(byId: Record<string, { readonly cwd?: string }>): SessionListState {
+    return {
+      ids: [],
+      byId,
+      current: undefined,
+      phase: 'ready',
+      error: null,
+    } as unknown as SessionListState
+  }
+
+  function quickProps(overrides: Partial<WorktreeQuickActionProps> = {}): WorktreeQuickActionProps {
+    return {
+      sessionId: SESSION,
+      t: ((key: StudioLocaleKey) => en[key]) as WorktreeQuickActionProps['t'],
+      useWorkspaces: ((selector: (state: WorkspaceListState) => unknown) => selector(workspaceState([SESSION]))) as WorktreeQuickActionProps['useWorkspaces'],
+      useSessions: ((selector: (state: SessionListState) => unknown) => selector(sessionState({}))) as WorktreeQuickActionProps['useSessions'],
+      createTask: vi.fn(),
+      startTaskSession: vi.fn(),
+      ...overrides,
+    } as unknown as WorktreeQuickActionProps
+  }
+
+  it('creates a fresh-origin task for the session workspace and opens its session', async () => {
+    const created = task()
+    const createTask = vi.fn().mockResolvedValue(created)
+    const startTaskSession = vi.fn().mockResolvedValue(undefined)
+    render(<WorktreeQuickAction {...quickProps({ createTask, startTaskSession })} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New session on a fresh worktree off origin/main' }))
+
+    await waitFor(() => {
+      expect(createTask).toHaveBeenCalledWith({
+        repository: 'C:\\repo',
+        title: 'repo worktree',
+      })
+      expect(startTaskSession).toHaveBeenCalledWith(created.workspacePath, expect.stringMatching(/^repo wt \d{2}:\d{2}$/u))
+    })
+  })
+
+  it('renders nothing when the session has no repository workspace', () => {
+    const { container } = render(<WorktreeQuickAction {...quickProps({
+      useWorkspaces: ((selector: (state: WorkspaceListState) => unknown) => selector(workspaceState([]))) as WorktreeQuickActionProps['useWorkspaces'],
+      useSessions: ((selector: (state: SessionListState) => unknown) => selector(sessionState({}))) as WorktreeQuickActionProps['useSessions'],
+    })} />)
+    expect(container.childElementCount).toBe(0)
+  })
+
+  it('falls back to the session cwd when no workspace accounts the session', () => {
+    render(<WorktreeQuickAction {...quickProps({
+      useWorkspaces: ((selector: (state: WorkspaceListState) => unknown) => selector(workspaceState([]))) as WorktreeQuickActionProps['useWorkspaces'],
+      useSessions: ((selector: (state: SessionListState) => unknown) => selector(sessionState({ [SESSION]: { cwd: 'C:\\repo' } }))) as WorktreeQuickActionProps['useSessions'],
+    })} />)
+    expect(screen.getByRole('button', { name: 'New session on a fresh worktree off origin/main' })).toBeTruthy()
+  })
+
+  it('surfaces creation failure as a retryable warning state', async () => {
+    const createTask = vi.fn().mockRejectedValue(new Error('git fetch failed'))
+    render(<WorktreeQuickAction {...quickProps({ createTask })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'New session on a fresh worktree off origin/main' }))
+
+    await screen.findByRole('button', { name: 'Worktree creation failed: git fetch failed' })
   })
 })

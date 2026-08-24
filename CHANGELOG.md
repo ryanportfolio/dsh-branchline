@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.3.0 - 2026-08-24
+
+### Added
+
+- Composer tool-row **worktree** quick action: one click creates a task from the current session's repository at the freshly fetched origin default branch and opens the new session on it. Task, branch, and workspace naming lead with the source repository's name (workspace titled `<repo> wt HH:MM`).
+- **GitHub** source in the create-task form: searchable list of the authenticated `gh` account's repositories, with `owner/name` and URL paste support, local-clone markers, and idempotent cloning into the configured clone root before task creation. Picking a repository prefills the task title with its name.
+- `cloneRoot` (default `~/CoreWise`) and `cloneTimeoutMs` configuration.
+
 ## 0.2.0 - 2026-08-22
 
 ### Changed

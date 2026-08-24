@@ -68,7 +68,7 @@ interface ProcessOptions {
  * Git configuration. The Harness subprocess provider may replace, rather than
  * merge, a supplied environment, so omitting PATH makes later Git calls fail.
  */
-function executableEnvironment(overrides: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+export function executableEnvironment(overrides: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {}
   const allowed = process.platform === 'win32'
     ? [

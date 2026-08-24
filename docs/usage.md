@@ -60,6 +60,10 @@ After creation, the client registers the worktree as a DSH Workspace and opens a
 | `validationTimeoutMs` | `600000` | Validation deadline |
 | `requireValidation` | `true` | Bind delivery checks to validated content |
 | `allowDelivery` | `false` | Enable guarded local merge delivery |
+| `cloneRoot` | `~/CoreWise` | Directory that GitHub-sourced repositories clone into, one child per repository |
+| `cloneTimeoutMs` | `600000` | Deadline for one `gh repo clone` operation |
+
+GitHub sourcing requires the GitHub CLI (`gh`) on the Host `PATH` with an authenticated account; listing and cloning run through it, while all Git operations stay under the managed subprocess boundary.
 
 See [architecture.md](architecture.md) for mutation tokens, process isolation, Web request trust, and recovery rules.
 

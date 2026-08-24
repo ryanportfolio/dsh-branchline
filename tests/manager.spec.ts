@@ -34,6 +34,8 @@ function options(fixture: RepositoryFixture, requireValidation = true, allowDeli
     reviewMaxBytes: 64 * 1024,
     requireValidation,
     allowDelivery,
+    cloneRoot: join(fixture.root, 'clone'),
+    cloneTimeoutMs: 10_000,
   }
 }
 

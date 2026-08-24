@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { request as httpRequest } from 'node:http'
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import HttpServer from '@deepseek-ai/dsh-host-webserver'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
@@ -31,6 +32,8 @@ async function start(): Promise<{ readonly baseUrl: string; readonly repository:
     reviewMaxBytes: 64 * 1024,
     requireValidation: true,
     allowDelivery: false,
+    cloneRoot: join(fixture.root, 'clone'),
+    cloneTimeoutMs: 10_000,
   })
   return {
     baseUrl: `http://127.0.0.1:${String(context.webServer.port)}`,
@@ -59,7 +62,7 @@ async function requestWithHost(url: string, host: string): Promise<number | unde
   })
 }
 
-describe('worktree-studio Web route', () => {
+describe('branchline Web route', () => {
   it('serves the real loopback route and creates a task through its JSON API', async () => {
     const running = await start()
     const origin = running.baseUrl
@@ -114,5 +117,36 @@ describe('worktree-studio Web route', () => {
       headers: { origin: running.baseUrl, 'sec-fetch-site': 'same-origin' },
     })
     expect(unsupported.status).toBe(405)
+  })
+
+  it('rejects create requests that mix or misuse repository sources', async () => {
+    const running = await start()
+    const origin = running.baseUrl
+    const post = (body: Record<string, unknown>): Promise<Response> => fetch(`${running.baseUrl}/api/dsh-branchline`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin, 'sec-fetch-site': 'same-origin' },
+      body: JSON.stringify(body),
+    })
+
+    const mixed = await post({
+      operation: 'create',
+      repository: running.repository,
+      cloneFrom: 'owner/repo',
+      title: 'mixed sources',
+    })
+    expect(mixed.status).toBe(400)
+    expect(await json(mixed)).toMatchObject({ ok: false, error: { code: 'invalid-input' } })
+
+    const invalidSource = await post({
+      operation: 'create',
+      cloneFrom: 'not a source',
+      title: 'invalid clone source',
+    })
+    expect(invalidSource.status).toBe(400)
+    expect(await json(invalidSource)).toMatchObject({ ok: false, error: { code: 'invalid-input' } })
+
+    const missingSource = await post({ operation: 'create', title: 'no source' })
+    expect(missingSource.status).toBe(400)
+    expect(await json(missingSource)).toMatchObject({ ok: false, error: { code: 'invalid-input' } })
   })
 })

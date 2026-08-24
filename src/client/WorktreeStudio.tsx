@@ -19,7 +19,7 @@ import {
   RiskConfirmation,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { DashboardView, MergePreview, ReviewView, TaskId, TaskView } from '../types.ts'
+import type { DashboardView, GitHubRepoView, MergePreview, ReviewView, TaskId, TaskView } from '../types.ts'
 import type { StudioClientActions } from './api.ts'
 import type { StudioLocaleKey } from './locales.ts'
 import css from './WorktreeStudio.module.css'
@@ -34,7 +34,8 @@ type Filter = 'active' | 'archived' | 'all'
 type Confirmation = 'deliver' | 'archive' | 'discard'
 
 interface CreateInput {
-  readonly repository: string
+  readonly repository?: string
+  readonly cloneFrom?: string
   readonly title: string
   readonly branch?: string
   readonly baseRef?: string
@@ -78,6 +79,7 @@ function TaskBoard({
   useWorkspaces,
   loadDashboard,
   createTask,
+  listGitHubRepositories,
   inspectTask,
   validateTask,
   previewTask,
@@ -305,6 +307,7 @@ function TaskBoard({
               repository={repository ?? workspaces[0]?.path}
               busy={busy === 'create'}
               t={t}
+              listGitHubRepositories={listGitHubRepositories}
               onCancel={() => { setCreateOpen(false) }}
               onCreate={(input) => { void create(input) }}
             />
@@ -394,43 +397,159 @@ function TaskRow({
   )
 }
 
+type CreateSource = 'workspace' | 'github'
+
+const PASTE_SOURCE = /^(?:[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+|https:\/\/\S+\/\S+\/\S+|git@\S+:\S+\/\S+)$/u
+
 function CreateTaskForm({
   repository,
   busy,
   t,
+  listGitHubRepositories,
   onCancel,
   onCreate,
 }: {
   readonly repository: string | undefined
   readonly busy: boolean
   readonly t: WorktreeStudioProps['t']
+  readonly listGitHubRepositories: () => Promise<readonly GitHubRepoView[]>
   readonly onCancel: () => void
   readonly onCreate: (input: CreateInput) => void
 }): ReactNode {
+  const [source, setSource] = useState<CreateSource>('workspace')
   const [title, setTitle] = useState('')
   const [branch, setBranch] = useState('')
   const [baseRef, setBaseRef] = useState('')
   const [validationCommand, setValidationCommand] = useState('')
+  const [repos, setRepos] = useState<readonly GitHubRepoView[]>()
+  const [reposLoading, setReposLoading] = useState(false)
+  const [reposError, setReposError] = useState<string>()
+  const [filter, setFilter] = useState('')
+  const [picked, setPicked] = useState<string>()
+
+  useEffect(() => {
+    if (source !== 'github' || repos !== undefined || reposLoading || reposError !== undefined) return
+    let cancelled = false
+    setReposLoading(true)
+    listGitHubRepositories().then(
+      (value) => {
+        if (cancelled) return
+        setRepos(value)
+        setReposLoading(false)
+      },
+      (reason: unknown) => {
+        if (cancelled) return
+        setRepos([])
+        setReposError(reason instanceof Error ? reason.message : String(reason))
+        setReposLoading(false)
+      },
+    )
+    return () => { cancelled = true }
+  }, [listGitHubRepositories, repos, reposError, reposLoading, source])
+
+  const query = filter.trim()
+  const pasteSource = query !== '' && PASTE_SOURCE.test(query) ? query : undefined
+  const needle = query.toLowerCase()
+  const filtered = (repos ?? []).filter(repo =>
+    needle === ''
+    || repo.nameWithOwner.toLowerCase().includes(needle)
+    || repo.description.toLowerCase().includes(needle))
+  const cloneFrom = source === 'github' ? (picked ?? pasteSource) : undefined
+
+  const reloadRepos = (): void => {
+    setRepos(undefined)
+    setReposError(undefined)
+  }
+
   const submit = (event: FormEvent): void => {
     event.preventDefault()
-    if (repository === undefined || title.trim() === '') return
+    if (title.trim() === '') return
+    if (source === 'workspace' && repository === undefined) return
+    if (source === 'github' && cloneFrom === undefined) return
     onCreate({
-      repository,
+      ...(source === 'workspace' ? { repository: repository as string } : { cloneFrom: cloneFrom as string }),
       title: title.trim(),
       ...(branch.trim() === '' ? {} : { branch: branch.trim() }),
       ...(baseRef.trim() === '' ? {} : { baseRef: baseRef.trim() }),
       ...(validationCommand.trim() === '' ? {} : { validationCommand: validationCommand.trim() }),
     })
   }
+
   return (
     <form className={css.createForm} onSubmit={submit}>
       <div className={css.sectionHeading}>
         <IconPlusOutline16 size={16} />
         <h3>{t('createTask')}</h3>
       </div>
+      <div className={css.filters} role="group" aria-label={t('repository')}>
+        {(['workspace', 'github'] as const).map(value => (
+          <button
+            type="button"
+            key={value}
+            data-selected={source === value ? 'true' : undefined}
+            onClick={() => {
+              setSource(value)
+              setPicked(undefined)
+            }}
+          >
+            {t(value === 'workspace' ? 'sourceWorkspace' : 'sourceGithub')}
+          </button>
+        ))}
+      </div>
+      {source === 'github' ? (
+        <div className={css.repoPicker}>
+          <label>
+            <span>{t('sourceGithub')}</span>
+            <input
+              autoFocus
+              value={filter}
+              placeholder={t('githubFilterPlaceholder')}
+              onChange={event => {
+                setFilter(event.currentTarget.value)
+                setPicked(undefined)
+              }}
+            />
+          </label>
+          {reposError !== undefined ? (
+            <div className={css.repoState} role="alert">
+              <span>{reposError}</span>
+              <button type="button" onClick={reloadRepos}>{t('githubReload')}</button>
+            </div>
+          ) : null}
+          {reposLoading && reposError === undefined ? <p className={css.repoState}>{t('githubLoading')}</p> : null}
+          {!reposLoading && reposError === undefined && filtered.length === 0 && pasteSource === undefined ? (
+            <p className={css.repoState}>{t('githubEmpty')}</p>
+          ) : null}
+          {filtered.length > 0 ? (
+            <div className={css.repoList} role="listbox" aria-label={t('sourceGithub')}>
+              {filtered.map(repo => (
+                <button
+                  type="button"
+                  key={repo.nameWithOwner}
+                  role="option"
+                  aria-selected={picked === repo.nameWithOwner ? 'true' : 'false'}
+                  data-selected={picked === repo.nameWithOwner ? 'true' : undefined}
+                  onClick={() => {
+                    setPicked(repo.nameWithOwner)
+                    setFilter(repo.nameWithOwner)
+                    if (title.trim() === '') setTitle(repo.nameWithOwner.split('/')[1] ?? repo.nameWithOwner)
+                  }}
+                >
+                  <span className={css.repoName}>
+                    <strong>{repo.nameWithOwner}</strong>
+                    {repo.cloned ? <small className={css.badge}>{t('githubCloned')}</small> : null}
+                  </span>
+                  {repo.description !== '' ? <small>{repo.description}</small> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {cloneFrom !== undefined ? <code className={css.repositoryPath}>{t('githubUse')}: {cloneFrom}</code> : null}
+        </div>
+      ) : null}
       <label>
         <span>{t('taskTitle')}</span>
-        <input autoFocus maxLength={120} value={title} onChange={event => { setTitle(event.currentTarget.value) }} />
+        <input maxLength={120} value={title} onChange={event => { setTitle(event.currentTarget.value) }} />
       </label>
       <div className={css.formGrid}>
         <label>
@@ -446,13 +565,13 @@ function CreateTaskForm({
         <span>{t('validationCommand')}</span>
         <input value={validationCommand} placeholder={t('validationPlaceholder')} onChange={event => { setValidationCommand(event.currentTarget.value) }} />
       </label>
-      <code className={css.repositoryPath}>{repository ?? t('allRepositories')}</code>
+      {source === 'workspace' ? <code className={css.repositoryPath}>{repository ?? t('allRepositories')}</code> : null}
       <div className={css.formActions}>
         <Button variant="outline" disabled={busy} onClick={onCancel}>{t('cancel')}</Button>
         <Button
           variant="primary"
           icon={<IconPlusOutline16 size={15} />}
-          disabled={busy || repository === undefined || title.trim() === ''}
+          disabled={busy || title.trim() === '' || (source === 'workspace' ? repository === undefined : cloneFrom === undefined)}
           type="submit"
         >
           {t('createAndOpen')}

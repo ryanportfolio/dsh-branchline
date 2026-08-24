@@ -5,14 +5,14 @@ export type TaskId = string & { readonly __taskId: unique symbol }
 
 const TASK_ID_PATTERN = /^wt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 
-/** Test whether a string is a canonical Branchline task UUID. */
+/** Test whether a string is a canonical Worktree Studio UUID. */
 export function isTaskId(value: string): value is TaskId {
   return TASK_ID_PATTERN.test(value)
 }
 
 /** Brand a validated task identifier. */
 export function TaskId(value: string): TaskId {
-  if (!isTaskId(value)) throw new TypeError('task id must be a canonical worktree-studio UUID')
+  if (!isTaskId(value)) throw new TypeError('task id must be a canonical branchline UUID')
   return value as TaskId
 }
 
@@ -119,6 +119,24 @@ export interface DoctorView {
   readonly orphaned: readonly TaskId[]
   readonly recoveryNeeded: readonly TaskId[]
   readonly problems: readonly string[]
+}
+
+/** One repository advertised by the authenticated `gh` account. */
+export interface GitHubRepoView {
+  readonly nameWithOwner: string
+  readonly description: string
+  readonly updatedAt: string
+  readonly isFork: boolean
+  /** True when `cloneRoot` already holds a directory named after the repository. */
+  readonly cloned: boolean
+}
+
+/** Result of ensuring a GitHub repository exists under the clone root. */
+export interface CloneOutcome {
+  readonly source: string
+  readonly path: string
+  /** False when an existing Git checkout was reused instead of cloned. */
+  readonly cloned: boolean
 }
 
 /** Creation request accepted by the manager. */

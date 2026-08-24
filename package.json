@@ -1,6 +1,6 @@
 {
   "name": "dsh-branchline",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Fresh, isolated worktrees for DeepSeek Harness, with a Windows launcher and review-only task board.",
   "license": "MIT",
   "type": "module",
@@ -118,6 +118,7 @@
     "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.7",
     "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.7",
     "@deepseek-ai/dsh-client-test-runtime": "^0.1.0-rc.7",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.0-rc.7",
     "@deepseek-ai/dsh-client-ui-primitives": "^0.1.0-rc.7",
     "@deepseek-ai/dsh-client-ui-sidebar": "^0.1.0-rc.7",
     "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.7",

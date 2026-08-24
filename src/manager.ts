@@ -32,6 +32,8 @@ export interface WorktreeStudioOptions {
   readonly reviewMaxBytes: number
   readonly requireValidation: boolean
   readonly allowDelivery: boolean
+  readonly cloneRoot: string
+  readonly cloneTimeoutMs: number
 }
 
 const EMPTY_CHANGES = Object.freeze({
@@ -439,12 +441,12 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
   /** Stop mutation admission and wait for the accepted operation to settle. */
   async close(): Promise<void> {
     this.admissionOpen = false
-    this.lifecycle.abort(new StudioError('busy', 'Branchline is closing'))
+    this.lifecycle.abort(new StudioError('busy', 'worktree studio is closing'))
     await this.operationTail
   }
 
   private mutate<T>(operation: () => Promise<T>): Promise<T> {
-    if (!this.admissionOpen) return Promise.reject(new StudioError('busy', 'Branchline is closing'))
+    if (!this.admissionOpen) return Promise.reject(new StudioError('busy', 'worktree studio is closing'))
     const result = this.operationTail.then(() => this.store.exclusive(operation))
     this.operationTail = result.then(() => undefined, () => undefined)
     return result

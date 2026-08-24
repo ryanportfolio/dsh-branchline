@@ -63,10 +63,10 @@ describe('GitClient', () => {
     const subprocess = await createSubprocessFixture()
     subprocesses.push(subprocess)
     const git = new GitClient(subprocess.subprocess, 10_000, 200, 16 * 1024)
-    const result = await git.validate(process.cwd(), ['pnpm', '--version'], 'a'.repeat(64), 10_000, 16 * 1024)
+    const result = await git.validate(process.cwd(), ['node', '--version'], 'a'.repeat(64), 10_000, 16 * 1024)
     expect(result.stderr).toBe('')
     expect(result).toMatchObject({ passed: true, timedOut: false, exitCode: 0 })
-    expect(result.stdout).toMatch(/^\d+\.\d+\.\d+/u)
+    expect(result.stdout).toMatch(/^v?\d+\.\d+\.\d+/u)
   })
 
   it('lists a real linked worktree and bounds review output', async () => {

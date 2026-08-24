@@ -3,6 +3,7 @@
 import type {
   DashboardView,
   DoctorView,
+  GitHubRepoView,
   MergePreview,
   ReviewView,
   TaskId,
@@ -25,12 +26,14 @@ interface SuccessEnvelope<T> {
 export interface StudioClientActions {
   loadDashboard(repository?: string, signal?: AbortSignal): Promise<DashboardView>
   createTask(input: {
-    readonly repository: string
+    readonly repository?: string
+    readonly cloneFrom?: string
     readonly title: string
     readonly branch?: string
     readonly baseRef?: string
     readonly validationCommand?: string
   }): Promise<TaskView>
+  listGitHubRepositories(): Promise<readonly GitHubRepoView[]>
   inspectTask(id: TaskId): Promise<{ readonly task: TaskView; readonly review: ReviewView }>
   validateTask(task: TaskView, command?: string): Promise<TaskView>
   previewTask(task: TaskView): Promise<MergePreview>
@@ -38,7 +41,7 @@ export interface StudioClientActions {
   archiveTask(task: TaskView): Promise<TaskView>
   discardTask(task: TaskView): Promise<TaskView>
   recover(): Promise<DoctorView>
-  startTaskSession(path: string): Promise<void>
+  startTaskSession(path: string, title?: string): Promise<void>
   openPath(path: string): Promise<void>
 }
 
@@ -46,6 +49,12 @@ export interface StudioClientActions {
 export async function loadDashboard(repository?: string, signal?: AbortSignal): Promise<DashboardView> {
   const query = repository === undefined ? '' : `?repository=${encodeURIComponent(repository)}`
   return await request<DashboardView>(`${ROUTE}${query}`, undefined, signal)
+}
+
+/** List the authenticated GitHub account's repositories with clone markers. */
+export async function listGitHubRepositories(): Promise<readonly GitHubRepoView[]> {
+  return await post<{ readonly repositories: readonly GitHubRepoView[] }>({ operation: 'github.list' })
+    .then(value => value.repositories)
 }
 
 /** Post one operation and unwrap the stable envelope. */
@@ -63,7 +72,7 @@ async function request<T>(url: string, init?: RequestInit, signal?: AbortSignal)
   try {
     envelope = await response.json() as SuccessEnvelope<T> | ErrorEnvelope
   } catch {
-    throw new Error(`worktree-studio request failed (${String(response.status)})`)
+    throw new Error(`branchline request failed (${String(response.status)})`)
   }
   if (!response.ok || !envelope.ok) {
     const failure = envelope as ErrorEnvelope
@@ -71,3 +80,4 @@ async function request<T>(url: string, init?: RequestInit, signal?: AbortSignal)
   }
   return envelope.value
 }
+

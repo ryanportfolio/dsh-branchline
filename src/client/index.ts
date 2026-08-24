@@ -2,10 +2,12 @@
 
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { MergePreview, TaskId, TaskView } from '../types.ts'
-import { loadDashboard, post, type StudioClientActions } from './api.ts'
+import { loadDashboard, listGitHubRepositories, post, type StudioClientActions } from './api.ts'
 import { WorktreeStudio } from './WorktreeStudio.tsx'
+import { WorktreeQuickAction } from './WorktreeQuickAction.tsx'
 import { en, zh, type StudioLocaleKey } from './locales.ts'
 
 export type { StudioClientActions } from './api.ts'
@@ -31,6 +33,7 @@ export function apply(ctx: ClientContext): void {
   const actions: StudioClientActions = {
     loadDashboard,
     createTask: input => post<TaskView>({ operation: 'create', ...input }),
+    listGitHubRepositories,
     inspectTask: id => post({ operation: 'inspect', id }),
     validateTask: (task, command) => post<TaskView>({
       operation: 'validate',
@@ -56,8 +59,15 @@ export function apply(ctx: ClientContext): void {
       confirmation: task.id,
     }),
     recover: () => post({ operation: 'recover' }),
-    async startTaskSession(path) {
+    async startTaskSession(path, title) {
       const workspace = await ctx.workspaces.create({ path })
+      if (title !== undefined && title !== '') {
+        try {
+          await ctx.workspaces.rename(workspace.workspaceId, title)
+        } catch {
+          // A workspace title conflict keeps the registry's default name.
+        }
+      }
       ctx.workspaces.startSession(workspace.workspaceId)
     },
     openPath: path => ctx.workspaces.openPath(path),
@@ -70,4 +80,12 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: (): StudioClientActions => actions,
   }, WorktreeStudio))
+
+  ctx.slots.inject('conversation.input.left', () => ctx.slots.register({
+    name: 'conversation.input.left',
+    id: 'branchline-quick',
+    order: 10,
+    locale: NS,
+    inject: (): StudioClientActions => actions,
+  }, WorktreeQuickAction))
 }

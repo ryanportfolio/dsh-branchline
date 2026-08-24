@@ -33,7 +33,7 @@ export async function createRepositoryFixture(): Promise<RepositoryFixture> {
   const repository = join(root, 'repository')
   await mkdir(repository)
   git(repository, ['init', '--initial-branch=main'])
-  git(repository, ['config', 'user.email', 'worktree-studio@example.invalid'])
+  git(repository, ['config', 'user.email', 'branchline@example.invalid'])
   git(repository, ['config', 'user.name', 'Branchline Test'])
   git(repository, ['config', 'core.autocrlf', 'false'])
   await writeFile(join(repository, 'README.md'), '# fixture\n')
