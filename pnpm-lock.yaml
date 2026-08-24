@@ -91,6 +91,10 @@ importers:
         specifier: ^4.1.8
         version: 4.1.10(@types/node@22.20.1)(jsdom@29.1.1)(vite@8.2.1(@types/node@22.20.1))
 
+  packages/dsh-session-extras: {}
+
+  packages/dsh-ship-controls: {}
+
 packages:
 
   '@asamuzakjp/css-color@5.1.11':
