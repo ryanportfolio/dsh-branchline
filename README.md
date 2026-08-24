@@ -7,8 +7,6 @@
 <img alt="DSH Branchline routes the current remote default branch into isolated DSH tasks while the primary checkout stays untouched." src="assets/readme/masthead-light.svg" width="100%">
 </picture>
 
-<p align="center"><a href="README.zh.md">简体中文</a></p>
-
 DSH Branchline gives [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) a clean start for every task: fetch the remote default branch, pin its exact commit, then open an isolated worktree as a native DSH Workspace and Session.
 
 ## Install

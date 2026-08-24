@@ -35,6 +35,8 @@ jobs:
       - run: pnpm test
       - run: pnpm run build
       - run: pnpm run pack:check
+      - name: Verify companion plugins
+        run: node scripts/verify-companion-plugins.mjs
       - name: Verify generated README
         if: runner.os == 'Linux'
         run: |
