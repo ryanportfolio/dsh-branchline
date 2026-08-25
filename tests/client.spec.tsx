@@ -239,7 +239,7 @@ describe('WorktreeQuickAction', () => {
     } as unknown as WorkspaceListState
   }
 
-  function sessionState(byId: Record<string, { readonly cwd?: string; readonly blank?: boolean }>): SessionListState {
+  function sessionState(byId: Record<string, { readonly cwd?: string; readonly blank?: boolean; readonly agentPreset?: string }>): SessionListState {
     return {
       ids: [],
       byId,
@@ -354,6 +354,41 @@ describe('WorktreeQuickAction', () => {
     expect(sendCommand).toHaveBeenCalledWith('session-2', '/permission danger-full-access')
     // The preset must land before the first submit reaches the new session.
     expect(order).toEqual(['/permission danger-full-access', 'submit'])
+  })
+
+  it('carries the source agent preset into the worktree session before its first submit', async () => {
+    const created = task()
+    const createTask = vi.fn().mockResolvedValue(created)
+    const startTaskSessionId = vi.fn().mockResolvedValue('session-2')
+    const openSession = vi.fn()
+    const order: string[] = []
+    const setAgentPreset = vi.fn(async (_sessionId: string, agentPreset: string) => {
+      order.push('preset:' + agentPreset)
+      return true
+    })
+    const source = fakeShell('build the thing')
+    const next = fakeShell('')
+    const originalNextSubmit = next.submit.bind(next)
+    next.submit = (mode?: string) => {
+      order.push('submit')
+      originalNextSubmit(mode)
+    }
+    const composerShell = vi.fn((id: string) => (id === SESSION ? source : next))
+    render(<WorktreeQuickAction {...quickProps({
+      createTask,
+      startTaskSessionId,
+      openSession,
+      composerShell,
+      setAgentPreset,
+      useSessions: ((selector: (state: SessionListState) => unknown) => selector(sessionState({ [SESSION]: { blank: true, agentPreset: 'cordis' } }))) as WorktreeQuickActionProps['useSessions'],
+    })} />)
+
+    source.submit('queue')
+
+    await waitFor(() => { expect(next.submitted).toEqual(['queue']) })
+    expect(setAgentPreset).toHaveBeenCalledWith('session-2', 'cordis')
+    // The agent preset must land before the first submit reaches the new session.
+    expect(order).toEqual(['preset:cordis', 'submit'])
   })
 
   it('skips the permission carry-over for a custom or unreadable access mode', async () => {
