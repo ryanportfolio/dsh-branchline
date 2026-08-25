@@ -24,7 +24,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 const NS = 'worktreeStudio'
 
 /** Client services and slot declarations required by the task board. */
-export const inject = ['slots', 'locale', 'workspaces', 'sessions', 'conversation']
+export const inject = ['slots', 'locale', 'workspaces', 'sessions', 'conversation', 'connection']
 
 /** Register localized callbacks and the sidebar footer contribution. */
 export function apply(ctx: ClientContext): void {
@@ -112,7 +112,16 @@ export function apply(ctx: ClientContext): void {
       await command.call(session, line)
       return true
     },
-    openPath: path => ctx.workspaces.openPath(path),
+setAgentPreset: async (sessionId, agentPreset) => {
+  const connection = (ctx as unknown as { get?: (name: string) => unknown }).get?.('connection') as
+    | { api?: { agentPresets?: { select?: (request: { sessionId: string; agentPreset: string }) => Promise<{ result: { ok: boolean } }> } } }
+    | undefined
+  const select = connection?.api?.agentPresets?.select
+  if (select === undefined) return false
+  const response = await select({ sessionId, agentPreset })
+  return response?.result?.ok === true
+},
+openPath: path => ctx.workspaces.openPath(path),
   }
 
   ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({

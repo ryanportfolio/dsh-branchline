@@ -63,7 +63,7 @@ function permissionPresetOf(useProjection: unknown): string | undefined {
  * when the session has no repository path.
  */
 export function WorktreeQuickAction(props: WorktreeQuickActionProps): ReactNode {
-  const { sessionId, useSession, useSessions, useWorkspaces, useProjection, t, createTask, composerShell, sendCommand, startTaskSessionId, openSession } = props
+  const { sessionId, useSession, useSessions, useWorkspaces, useProjection, t, createTask, composerShell, sendCommand, startTaskSessionId, openSession, setAgentPreset } = props
   const blank = useSession(state => state.blank)
   // Authoritative empty-log bit from the sessions summary: false from the first
   // render for an existing session, so it anchors the gate while the
@@ -80,6 +80,12 @@ export function WorktreeQuickAction(props: WorktreeQuickActionProps): ReactNode 
   // absent (older hosts, tests). Read fresh at launch time via the ref below.
   const permissionPresetRef = useRef<string>()
   permissionPresetRef.current = permissionPresetOf(useProjection)
+  // The source session's agent preset (Creator / PTC / custom), read at launch
+  // time from the sessions summary. The seat applies a pick to the current
+  // blank session, so the source summary already carries the intended preset.
+  const agentPresetRef = useRef<string>()
+  agentPresetRef.current = useSessions(state =>
+    (state.byId[sessionId] as { agentPreset?: string } | undefined)?.agentPreset)
   const [armed, setArmed] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
@@ -108,6 +114,17 @@ export function WorktreeQuickAction(props: WorktreeQuickActionProps): ReactNode 
             await sendCommand(nextSessionId, `/permission ${preset}`)
           } catch (reason) {
             console.warn('worktree quick action: permission carry-over failed:', reason)
+          }
+        }
+        // Carry the source agent preset before the first submit, so a
+        // Creator-mode launch does not silently revert the worktree session to
+        // the deployment default (the `code` preset, shown as "PTC mode").
+        const agentPreset = agentPresetRef.current
+        if (agentPreset !== undefined && agentPreset !== '') {
+          try {
+            await setAgentPreset(nextSessionId, agentPreset)
+          } catch (reason) {
+            console.warn('worktree quick action: agent preset carry-over failed:', reason)
           }
         }
         openSession(nextSessionId)

@@ -71,6 +71,14 @@ export interface StudioClientActions {
    * whether the command was admitted; false when the session face is absent.
    */
   sendCommand(sessionId: string, line: string): Promise<boolean>
+  /**
+   * Apply one agent preset to a session that is still blank, before its first
+   * turn. The host refuses to adopt a running session under a different preset,
+   * so this must land before the first submit. Mirrors the permission carry-over
+   * but over the agent-preset Remote API (there is no slash command for it).
+   * Resolves to whether the host accepted the switch.
+   */
+  setAgentPreset(sessionId: string, agentPreset: string): Promise<boolean>
   openPath(path: string): Promise<void>
 }
 
