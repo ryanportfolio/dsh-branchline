@@ -97,11 +97,92 @@ function Get-LauncherSettings {
 }
 
 function Save-LauncherSettings {
+    # Merge instead of overwrite so updateCheck state written by the notice
+    # check below survives a normal workspace save.
     param([string]$LastWorkspace)
     $parent = Split-Path -Parent $Script:SettingsFile
     if (-not (Test-Path -LiteralPath $parent)) { [void](New-Item -ItemType Directory -Path $parent -Force) }
-    [pscustomobject]@{ lastWorkspace = $LastWorkspace } |
-        ConvertTo-Json | Set-Content -LiteralPath $Script:SettingsFile -Encoding UTF8
+    $current = Get-LauncherSettings
+    $current | Add-Member -NotePropertyName lastWorkspace -NotePropertyValue $LastWorkspace -Force
+    $current | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $Script:SettingsFile -Encoding UTF8
+}
+
+# --- update notice ---------------------------------------------------------
+
+# Reports newer @deepseek-ai/dsh releases as a notice only. Read-only: nothing
+# is installed, cached, or switched; the -Version pin stays authoritative.
+# Results are cached in launcher-settings.json for 6 hours so launches stay
+# fast and the script stays quiet when offline.
+function Get-DshUpdateNoticeLines {
+    param(
+        [string]$Version,
+        [string]$SettingsFile
+    )
+    $lines = @()
+
+    $nowUtc = (Get-Date).ToUniversalTime()
+    $state = $null
+    if (Test-Path -LiteralPath $SettingsFile) {
+        try {
+            $settings = Get-Content -LiteralPath $SettingsFile -Raw | ConvertFrom-Json
+            if ($settings.updateCheck -and $settings.updateCheck.lastCheckedUtc) {
+                # Cached verdict is only valid for the same pin it was computed
+                # against; a different -Version must recheck.
+                $ageMinutes = ($nowUtc - [datetime]$settings.updateCheck.lastCheckedUtc).TotalMinutes
+                if ($ageMinutes -ge 0 -and $ageMinutes -lt 360 -and $settings.updateCheck.pinnedVersion -eq $Version) {
+                    $state = $settings.updateCheck
+                }
+            }
+        } catch { }
+    }
+
+    if (-not $state) {
+        $knownLatest = ''
+        $isNewer = $false
+        try {
+            $pkg = Invoke-RestMethod -Uri 'https://registry.npmjs.org/@deepseek-ai%2Fdsh' `
+                -Headers @{ 'User-Agent' = 'dsh-launcher-update-notice' } -TimeoutSec 4
+            $knownLatest = [string]$pkg.'dist-tags'.latest
+            if ($knownLatest -and $knownLatest -ne $Version) {
+                # Compare publish timestamps instead of parsing semver; rc
+                # suffixes defeat [version]. Newest publish time wins.
+                $tLatest = $pkg.time.$knownLatest
+                $tPinned = $pkg.time.$Version
+                if (-not $tPinned) {
+                    $isNewer = $true   # pinned version unknown to npm: treat as outdated
+                } elseif ($tLatest -and ([datetime]$tLatest -gt [datetime]$tPinned)) {
+                    $isNewer = $true
+                }
+            }
+        } catch {
+            # Offline or registry blocked: stay silent, retry on a later launch.
+            $knownLatest = ''
+        }
+        $state = [pscustomobject]@{
+            lastCheckedUtc = $nowUtc.ToString('o')
+            pinnedVersion  = $Version
+            knownLatest    = $knownLatest
+            isNewer        = $isNewer
+        }
+        try {
+            $settingsForWrite =
+                if (Test-Path -LiteralPath $SettingsFile) {
+                    Get-Content -LiteralPath $SettingsFile -Raw | ConvertFrom-Json
+                } else {
+                    [pscustomobject]@{ lastWorkspace = '' }
+                }
+            $settingsForWrite | Add-Member -NotePropertyName updateCheck -NotePropertyValue $state -Force
+            $settingsForWrite | Select-Object lastWorkspace, updateCheck |
+                ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $SettingsFile -Encoding UTF8
+        } catch { }
+    }
+
+    if ($state.isNewer) {
+        $lines += ('NOTICE: DSH update available - launcher pinned {0}, npm latest {1}.' -f $Version, $state.knownLatest)
+        $lines += '  Nothing was changed. To move up: edit $Version in start-dsh.ps1 (or pass -Version) and restart.'
+        $lines += '  Plugins, sessions, and settings live under ~/.dsh and CoreWise, outside the package.'
+    }
+    return $lines
 }
 
 # --- process helpers ------------------------------------------------------
@@ -704,6 +785,10 @@ if ($SelfTest) {
 }
 
 if ($PSBoundParameters.Count -eq 0 -and -not $NoGui) {
+    # Update notice lands at the top of the launcher log pane via the shared queue.
+    foreach ($line in (Get-DshUpdateNoticeLines -Version $Version -SettingsFile $Script:SettingsFile)) {
+        $Script:LogQueue.Enqueue($line)
+    }
     $gui = New-LauncherGui
     [void]$gui.ShowDialog()
     exit 0
@@ -717,5 +802,8 @@ if (-not $ws) {
 if (-not (Test-Path $ws)) {
     Write-Error ("Workspace not found: {0}" -f $ws)
     exit 1
+}
+foreach ($line in (Get-DshUpdateNoticeLines -Version $Version -SettingsFile $Script:SettingsFile)) {
+    Write-Host $line -ForegroundColor Yellow
 }
 Start-Headless -Ws $ws
