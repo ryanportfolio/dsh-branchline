@@ -823,15 +823,17 @@ window.__ModuleLoader__.load({
 				const draft = snapshot != null ? snapshot.draft : "";
 				const draftRev = snapshot != null ? snapshot.draftRev : undefined;
 				const quoted = "> " + text.trim().split(/\r?\n/).join("\n> ");
+				// Two blank rows after the quote so the typing caret lands two lines below it.
+				const tail = "\n\n";
 				if (draftRev !== undefined && binding != null && binding.ctx != null) {
 					const ok = binding.ctx.bail(binding.ctx, "slash/input-insert-text", {
-						text: draft === "" ? quoted : "\n\n" + quoted,
+						text: draft === "" ? quoted + tail : "\n\n" + quoted + tail,
 						span: { start: draft.length, end: draft.length, draftRev },
 					});
 					if (ok === true) return true;
 				}
 				if (shell.actions != null && typeof shell.actions.setDraft === "function") {
-					shell.actions.setDraft(draft === "" ? quoted : draft + "\n\n" + quoted);
+					shell.actions.setDraft(draft === "" ? quoted + tail : draft + "\n\n" + quoted + tail);
 					return true;
 				}
 				return false;
@@ -846,7 +848,22 @@ window.__ModuleLoader__.load({
 				const seat = document.querySelector("[data-composer-seat]");
 				if (seat == null) return;
 				const input = seat.querySelector("textarea");
-				if (input != null) input.focus();
+				if (input == null) return;
+				input.focus();
+				// Place the typing caret at the very end once React has committed the
+				// new draft, so it rests two lines below the inserted quote.
+				const placeCaret = () => {
+					try {
+						const end = typeof input.value === "string" ? input.value.length : 0;
+						input.setSelectionRange(end, end);
+						const scroller = input.closest("[data-input-scroll]");
+						if (scroller != null) scroller.scrollTop = scroller.scrollHeight;
+					} catch (error) {
+						console.error("selr: caret placement failed", error);
+					}
+				};
+				if (typeof requestAnimationFrame === "function") requestAnimationFrame(placeCaret);
+				else placeCaret();
 			} catch (error) {
 				console.error("selr: focus failed", error);
 			}
