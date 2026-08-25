@@ -239,7 +239,7 @@ describe('WorktreeQuickAction', () => {
     } as unknown as WorkspaceListState
   }
 
-  function sessionState(byId: Record<string, { readonly cwd?: string }>): SessionListState {
+  function sessionState(byId: Record<string, { readonly cwd?: string; readonly blank?: boolean }>): SessionListState {
     return {
       ids: [],
       byId,
@@ -253,29 +253,220 @@ describe('WorktreeQuickAction', () => {
     return {
       sessionId: SESSION,
       t: ((key: StudioLocaleKey) => en[key]) as WorktreeQuickActionProps['t'],
+      useSession: ((selector: (state: { readonly blank?: boolean }) => unknown) => selector({ blank: true })) as WorktreeQuickActionProps['useSession'],
       useWorkspaces: ((selector: (state: WorkspaceListState) => unknown) => selector(workspaceState([SESSION]))) as WorktreeQuickActionProps['useWorkspaces'],
-      useSessions: ((selector: (state: SessionListState) => unknown) => selector(sessionState({}))) as WorktreeQuickActionProps['useSessions'],
+      // Brand-new blank session baseline: both blank bits true.
+      useSessions: ((selector: (state: SessionListState) => unknown) => selector(sessionState({ [SESSION]: { blank: true } }))) as WorktreeQuickActionProps['useSessions'],
+      useProjection: undefined,
       createTask: vi.fn(),
       startTaskSession: vi.fn(),
+      startTaskSessionId: vi.fn(),
+      openSession: vi.fn(),
+      composerShell: () => undefined,
+      sendCommand: vi.fn().mockResolvedValue(true),
       ...overrides,
     } as unknown as WorktreeQuickActionProps
   }
 
-  it('creates a fresh-origin task for the session workspace and opens its session', async () => {
+  /** Mutable structural fake of the composer input shell the toggle wraps. */
+  function fakeShell(initialDraft: string) {
+    const shell = {
+      draft: initialDraft,
+      submitted: [] as (string | undefined)[],
+      state: {
+        getSnapshot: () => ({
+          draft: shell.draft,
+          imageIds: [] as readonly unknown[],
+          phase: 'plain' as const,
+        }),
+      },
+      setDraft: (text: string) => {
+        shell.draft = text
+      },
+      submit: (mode?: string) => {
+        shell.submitted.push(mode)
+      },
+    }
+    return shell
+  }
+
+  it('starts armed and moves the next submit into a fresh worktree session', async () => {
     const created = task()
     const createTask = vi.fn().mockResolvedValue(created)
-    const startTaskSession = vi.fn().mockResolvedValue(undefined)
-    render(<WorktreeQuickAction {...quickProps({ createTask, startTaskSession })} />)
+    const startTaskSessionId = vi.fn().mockResolvedValue('session-2')
+    const openSession = vi.fn()
+    const source = fakeShell('build the thing')
+    const next = fakeShell('')
+    const composerShell = vi.fn((id: string) => (id === SESSION ? source : next))
+    render(<WorktreeQuickAction {...quickProps({ createTask, startTaskSessionId, openSession, composerShell })} />)
+    expect(screen.getByRole('button', { name: 'Checked: your next submit creates a fresh worktree off origin/main and sends there' })).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Checked: your next submit creates a fresh worktree off origin/main and sends there' }) as HTMLButtonElement).ariaPressed).toBe('true')
 
-    fireEvent.click(screen.getByRole('button', { name: 'New session on a fresh worktree off origin/main' }))
+    source.submit('queue')
 
     await waitFor(() => {
       expect(createTask).toHaveBeenCalledWith({
         repository: 'C:\\repo',
         title: 'repo worktree',
       })
-      expect(startTaskSession).toHaveBeenCalledWith(created.workspacePath, expect.stringMatching(/^repo wt \d{2}:\d{2}$/u))
+      expect(startTaskSessionId).toHaveBeenCalledWith(created.workspacePath, expect.stringMatching(/^repo wt \d{2}:\d{2}$/u))
     })
+    expect(source.draft).toBe('')
+    expect(source.submitted).toEqual([])
+    expect(next.draft).toBe('build the thing')
+    expect(openSession).toHaveBeenCalledWith('session-2')
+    expect(next.submitted).toEqual(['queue'])
+    // Stays armed across the launch; only a manual uncheck turns it off.
+    await screen.findByRole('button', { name: 'Checked: your next submit creates a fresh worktree off origin/main and sends there' })
+  })
+
+  it('carries the source access mode into the worktree session before its first submit', async () => {
+    const created = task()
+    const createTask = vi.fn().mockResolvedValue(created)
+    const startTaskSessionId = vi.fn().mockResolvedValue('session-2')
+    const openSession = vi.fn()
+    const order: string[] = []
+    const sendCommand = vi.fn(async (_sessionId: string, line: string) => {
+      order.push(line)
+      return true
+    })
+    const source = fakeShell('build the thing')
+    const next = fakeShell('')
+    next.submitted = []
+    const originalNextSubmit = next.submit.bind(next)
+    next.submit = (mode?: string) => {
+      order.push('submit')
+      originalNextSubmit(mode)
+    }
+    const composerShell = vi.fn((id: string) => (id === SESSION ? source : next))
+    render(<WorktreeQuickAction {...quickProps({
+      createTask,
+      startTaskSessionId,
+      openSession,
+      composerShell,
+      sendCommand,
+      useProjection: ((key: string) => key === 'permissions' ? { currentValue: 'danger-full-access', options: [] } : undefined) as WorktreeQuickActionProps['useProjection'],
+    })} />)
+
+    source.submit('queue')
+
+    await waitFor(() => { expect(next.submitted).toEqual(['queue']) })
+    expect(sendCommand).toHaveBeenCalledWith('session-2', '/permission danger-full-access')
+    // The preset must land before the first submit reaches the new session.
+    expect(order).toEqual(['/permission danger-full-access', 'submit'])
+  })
+
+  it('skips the permission carry-over for a custom or unreadable access mode', async () => {
+    const created = task()
+    const createTask = vi.fn().mockResolvedValue(created)
+    const startTaskSessionId = vi.fn().mockResolvedValue('session-2')
+    const sendCommand = vi.fn().mockResolvedValue(true)
+    const source = fakeShell('build the thing')
+    const next = fakeShell('')
+    const composerShell = vi.fn((id: string) => (id === SESSION ? source : next))
+    render(<WorktreeQuickAction {...quickProps({
+      createTask,
+      startTaskSessionId,
+      composerShell,
+      sendCommand,
+      useProjection: ((key: string) => key === 'permissions' ? { currentValue: 'custom', options: [] } : undefined) as WorktreeQuickActionProps['useProjection'],
+    })} />)
+
+    source.submit('queue')
+
+    await waitFor(() => { expect(next.submitted).toEqual(['queue']) })
+    expect(sendCommand).not.toHaveBeenCalled()
+  })
+
+  it('passes submits through once manually unchecked', () => {
+    const createTask = vi.fn()
+    const source = fakeShell('build the thing')
+    const composerShell = vi.fn(() => source)
+    render(<WorktreeQuickAction {...quickProps({ createTask, composerShell })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Checked: your next submit creates a fresh worktree off origin/main and sends there' }))
+    expect(screen.getByRole('button', { name: 'Unchecked: your next submit sends in this session' })).toBeTruthy()
+
+    source.submit('queue')
+
+    expect(source.submitted).toEqual(['queue'])
+    expect(source.draft).toBe('build the thing')
+    expect(createTask).not.toHaveBeenCalled()
+  })
+
+  it('passes submits through while the draft is empty or carries images', () => {
+    const createTask = vi.fn()
+    const source = fakeShell('')
+    const composerShell = vi.fn(() => source)
+    render(<WorktreeQuickAction {...quickProps({ createTask, composerShell })} />)
+
+    source.submit('queue')
+
+    expect(source.submitted).toEqual(['queue'])
+    expect(createTask).not.toHaveBeenCalled()
+  })
+
+  it('renders nothing once the session has messages (in-session composers never intercept)', () => {
+    const { container } = render(<WorktreeQuickAction {...quickProps({
+      useSession: ((selector: (state: { readonly blank?: boolean }) => unknown) => selector({ blank: false })) as WorktreeQuickActionProps['useSession'],
+    })} />)
+    expect(container.childElementCount).toBe(0)
+  })
+
+  it('never intercepts an in-session reply even while armed by default', () => {
+    const createTask = vi.fn()
+    const source = fakeShell('a reply')
+    const composerShell = vi.fn(() => source)
+    render(<WorktreeQuickAction {...quickProps({
+      createTask,
+      composerShell,
+      useSession: ((selector: (state: { readonly blank?: boolean }) => unknown) => selector({ blank: false })) as WorktreeQuickActionProps['useSession'],
+    })} />)
+
+    source.submit('queue')
+
+    expect(source.submitted).toEqual(['queue'])
+    expect(source.draft).toBe('a reply')
+    expect(createTask).not.toHaveBeenCalled()
+  })
+
+  it('never renders or intercepts while only the scope blank bit is true (existing-session mount window)', () => {
+    const createTask = vi.fn()
+    const source = fakeShell('a reply')
+    const composerShell = vi.fn(() => source)
+    // The conversation scope initializes blank=true even for an existing
+    // session; the summary bit is false from the first render and must win.
+    const { container } = render(<WorktreeQuickAction {...quickProps({
+      createTask,
+      composerShell,
+      useSessions: ((selector: (state: SessionListState) => unknown) => selector(sessionState({ [SESSION]: { blank: false } }))) as WorktreeQuickActionProps['useSessions'],
+    })} />)
+
+    expect(container.childElementCount).toBe(0)
+
+    source.submit('queue')
+
+    expect(source.submitted).toEqual(['queue'])
+    expect(source.draft).toBe('a reply')
+    expect(createTask).not.toHaveBeenCalled()
+  })
+
+  it('degrades a lingering override to the ordinary send once the summary clears the gate', () => {
+    const createTask = vi.fn()
+    const source = fakeShell('a second reply')
+    const composerShell = vi.fn(() => source)
+    const base = quickProps({ createTask, composerShell })
+    const summaryTrue = ((selector: (state: SessionListState) => unknown) => selector(sessionState({ [SESSION]: { blank: true } }))) as WorktreeQuickActionProps['useSessions']
+    const summaryFalse = ((selector: (state: SessionListState) => unknown) => selector(sessionState({ [SESSION]: { blank: false } }))) as WorktreeQuickActionProps['useSessions']
+    const { rerender } = render(<WorktreeQuickAction {...base} useSessions={summaryTrue} />)
+
+    // Gate flips after installation (first turn landed); a stale override must
+    // still send ordinarily instead of forking.
+    rerender(<WorktreeQuickAction {...base} useSessions={summaryFalse} />)
+    source.submit('queue')
+
+    expect(source.submitted).toEqual(['queue'])
+    expect(source.draft).toBe('a second reply')
+    expect(createTask).not.toHaveBeenCalled()
   })
 
   it('renders nothing when the session has no repository workspace', () => {
@@ -289,16 +480,20 @@ describe('WorktreeQuickAction', () => {
   it('falls back to the session cwd when no workspace accounts the session', () => {
     render(<WorktreeQuickAction {...quickProps({
       useWorkspaces: ((selector: (state: WorkspaceListState) => unknown) => selector(workspaceState([]))) as WorktreeQuickActionProps['useWorkspaces'],
-      useSessions: ((selector: (state: SessionListState) => unknown) => selector(sessionState({ [SESSION]: { cwd: 'C:\\repo' } }))) as WorktreeQuickActionProps['useSessions'],
+      useSessions: ((selector: (state: SessionListState) => unknown) => selector(sessionState({ [SESSION]: { cwd: 'C:\\repo', blank: true } }))) as WorktreeQuickActionProps['useSessions'],
     })} />)
-    expect(screen.getByRole('button', { name: 'New session on a fresh worktree off origin/main' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Checked: your next submit creates a fresh worktree off origin/main and sends there' })).toBeTruthy()
   })
 
-  it('surfaces creation failure as a retryable warning state', async () => {
+  it('surfaces creation failure as a retryable warning state and restores the draft', async () => {
     const createTask = vi.fn().mockRejectedValue(new Error('git fetch failed'))
-    render(<WorktreeQuickAction {...quickProps({ createTask })} />)
-    fireEvent.click(screen.getByRole('button', { name: 'New session on a fresh worktree off origin/main' }))
+    const source = fakeShell('build the thing')
+    const composerShell = vi.fn(() => source)
+    render(<WorktreeQuickAction {...quickProps({ createTask, composerShell })} />)
+
+    source.submit('queue')
 
     await screen.findByRole('button', { name: 'Worktree creation failed: git fetch failed' })
+    expect(source.draft).toBe('build the thing')
   })
 })

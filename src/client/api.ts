@@ -12,6 +12,23 @@ import type {
 
 const ROUTE = '/api/dsh-branchline'
 
+/**
+ * Structural slice of the per-session composer input shell the toggle needs.
+ * The conversation package owns the full face; this stays assignable from the
+ * runtime object (including its mutable `submit`, which the armed toggle wraps).
+ */
+export interface ComposerShellFace {
+  readonly state: {
+    readonly getSnapshot: () => {
+      readonly draft: string
+      readonly imageIds: readonly unknown[]
+      readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting'
+    }
+  }
+  setDraft(text: string): void
+  submit(mode?: string): void
+}
+
 interface ErrorEnvelope {
   readonly ok: false
   readonly error: { readonly code: string; readonly message: string }
@@ -42,6 +59,18 @@ export interface StudioClientActions {
   discardTask(task: TaskView): Promise<TaskView>
   recover(): Promise<DoctorView>
   startTaskSession(path: string, title?: string): Promise<void>
+  /** Create the workspace, then connect its blank session and return the new session id (caller owns navigation). */
+  startTaskSessionId(path: string, title?: string): Promise<string>
+  /** Navigate the shell to one session. */
+  openSession(sessionId: string): void
+  /** Resolve the session's composer input shell (undefined when the conversation service is unavailable). */
+  composerShell(sessionId: string): ComposerShellFace | undefined
+  /**
+   * Execute one slash-command line against the session's agent (the same
+   * admission path the composer's access-mode dropdown uses). Resolves to
+   * whether the command was admitted; false when the session face is absent.
+   */
+  sendCommand(sessionId: string, line: string): Promise<boolean>
   openPath(path: string): Promise<void>
 }
 
@@ -72,7 +101,7 @@ async function request<T>(url: string, init?: RequestInit, signal?: AbortSignal)
   try {
     envelope = await response.json() as SuccessEnvelope<T> | ErrorEnvelope
   } catch {
-    throw new Error(`branchline request failed (${String(response.status)})`)
+    throw new Error(`worktree-studio request failed (${String(response.status)})`)
   }
   if (!response.ok || !envelope.ok) {
     const failure = envelope as ErrorEnvelope
