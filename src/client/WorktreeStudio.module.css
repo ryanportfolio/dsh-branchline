@@ -671,6 +671,12 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
+.quickAction[data-armed='true'] {
+  border-color: var(--dsw-alias-state-business-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-state-business-primary);
+}
+
 .repoPicker {
   display: flex;
   min-width: 0;

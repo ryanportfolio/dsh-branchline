@@ -5,7 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { MergePreview, TaskId, TaskView } from '../types.ts'
-import { loadDashboard, listGitHubRepositories, post, type StudioClientActions } from './api.ts'
+import { loadDashboard, listGitHubRepositories, post, type ComposerShellFace, type StudioClientActions } from './api.ts'
 import { WorktreeStudio } from './WorktreeStudio.tsx'
 import { WorktreeQuickAction } from './WorktreeQuickAction.tsx'
 import { en, zh, type StudioLocaleKey } from './locales.ts'
@@ -24,7 +24,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 const NS = 'worktreeStudio'
 
 /** Client services and slot declarations required by the task board. */
-export const inject = ['slots', 'locale', 'workspaces']
+export const inject = ['slots', 'locale', 'workspaces', 'sessions', 'conversation']
 
 /** Register localized callbacks and the sidebar footer contribution. */
 export function apply(ctx: ClientContext): void {
@@ -70,6 +70,48 @@ export function apply(ctx: ClientContext): void {
       }
       ctx.workspaces.startSession(workspace.workspaceId)
     },
+    async startTaskSessionId(path, title) {
+      const workspace = await ctx.workspaces.create({ path })
+      if (title !== undefined && title !== '') {
+        try {
+          await ctx.workspaces.rename(workspace.workspaceId, title)
+        } catch {
+          // A workspace title conflict keeps the registry's default name.
+        }
+      }
+      // Resolves synchronously-addressable: the binding exists on return, so the
+      // caller may write the new scope's draft before navigating.
+      return await ctx.workspaces.connectWorkspace(workspace.workspaceId)
+    },
+    openSession: sessionId => {
+      // The published face has open(id); a host-side dsh-session augmentation
+      // shadows it in this program's view, so route through a structural cast.
+      ;(ctx.sessions as unknown as { open: (id: string) => void }).open(sessionId)
+    },
+    composerShell: sessionId => {
+      // The runtime resolver carries the id-addressed `shell` accessor that the
+      // published SessionInputResolver interface omits.
+      const input = ctx.conversation?.input as unknown as
+        | { shell?: (id: string) => ComposerShellFace | undefined }
+        | undefined
+      try {
+        return input?.shell?.(sessionId)
+      } catch {
+        return undefined
+      }
+    },
+    sendCommand: async (sessionId, line) => {
+      // The runtime face carries binding(id) → session.command(line); the
+      // published interface omits both, so route through a structural cast.
+      const sessions = ctx.sessions as unknown as {
+        binding?: (id: string) => { readonly session?: { command?: (line: string) => Promise<unknown> } } | undefined
+      }
+      const session = sessions.binding?.(sessionId)?.session
+      const command = session?.command
+      if (command === undefined) return false
+      await command.call(session, line)
+      return true
+    },
     openPath: path => ctx.workspaces.openPath(path),
   }
 
@@ -89,3 +131,4 @@ export function apply(ctx: ClientContext): void {
     inject: (): StudioClientActions => actions,
   }, WorktreeQuickAction))
 }
+
