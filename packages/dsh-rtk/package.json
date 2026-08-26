@@ -1,0 +1,18 @@
+{
+  "name": "dsh-rtk",
+  "version": "0.1.0",
+  "description": "RTK tool for DeepSeek Harness: compact noisy-read output through the rtk CLI, with system-prompt guidance to prefer rtk for supported reads.",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": { "default": "./lib/index.js" },
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
