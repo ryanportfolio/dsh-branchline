@@ -96,6 +96,8 @@ importers:
 
   packages/dsh-session-extras: {}
 
+  packages/dsh-session-pins: {}
+
   packages/dsh-ship-controls: {}
 
 packages:
