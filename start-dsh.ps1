@@ -414,8 +414,16 @@ function Sync-PluginSource {
     if (Get-Command pnpm -ErrorAction SilentlyContinue) {
         $pnpmName = 'pnpm'
     } elseif (Get-Command corepack -ErrorAction SilentlyContinue) {
+        # The repo pins packageManager (pnpm@x.y.z). Corepack must run that
+        # exact version: pnpm refuses to proceed when invoked through corepack
+        # under a different one.
+        $pinned = ''
+        try {
+            $pkg = Get-Content (Join-Path $repo 'package.json') -Raw | ConvertFrom-Json
+            if ($pkg.packageManager -like 'pnpm@*') { $pinned = $pkg.packageManager }
+        } catch { }
         $pnpmName = 'corepack'
-        $pnpmLead = @('pnpm')
+        $pnpmLead = if ($pinned) { @($pinned) } else { @('pnpm') }
     } else {
         throw 'neither pnpm nor corepack found on PATH; cannot rebuild the plugin bundle'
     }
@@ -435,9 +443,14 @@ function Sync-PluginSource {
         }
 
         $local = ([string](& git -C $repo rev-parse HEAD 2>$null)).Trim()
+        $promptWas = $env:GIT_TERMINAL_PROMPT
         $env:GIT_TERMINAL_PROMPT = '0'
         & git -C $repo fetch --prune origin 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'offline' }
+        $fetchExit = $LASTEXITCODE
+        $env:GIT_TERMINAL_PROMPT = $promptWas
+        if ($fetchExit -ne 0) { throw 'offline' }
+        $ahead = @(& git -C $repo rev-list --count 'origin/main..HEAD' 2>$null)
+        if ($ahead.Count -gt 0 -and [int]$ahead[0] -gt 0) { throw ("plugin checkout is " + $ahead[0] + " commit(s) ahead of origin/main; push them first - the launcher serves origin/main only") }
         $remote = ([string](& git -C $repo rev-parse origin/main 2>$null)).Trim()
         if ($local -ne $remote) {
             & git -C $repo merge --ff-only origin/main 2>&1 | ForEach-Object { $detail.Add($_) }
@@ -446,8 +459,13 @@ function Sync-PluginSource {
             $changed = @(& git -C $repo diff --name-only HEAD~1 HEAD 2>$null)
             if ($changed -contains 'package.json' -or $changed -contains 'pnpm-lock.yaml') {
                 & $write 'plugin deps changed; reinstalling'
-                & $pnpmName @pnpmLead --dir $repo install --frozen-lockfile 2>&1 | ForEach-Object { $detail.Add($_) }
-                if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
+                Push-Location $repo
+                try {
+                    & $pnpmName @pnpmLead install --frozen-lockfile 2>&1 | ForEach-Object { $detail.Add($_) }
+                    if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
+                } finally {
+                    Pop-Location
+                }
             }
         } else {
             & $write ('plugin source already at origin/main @ ' + $local.Substring(0, [Math]::Min(12, $local.Length)))
@@ -455,8 +473,13 @@ function Sync-PluginSource {
 
         if (-not (Test-Path (Join-Path $repo 'node_modules'))) {
             & $write 'plugin node_modules missing; installing'
-            & $pnpmName @pnpmLead --dir $repo install --frozen-lockfile 2>&1 | ForEach-Object { $detail.Add($_) }
-            if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
+            Push-Location $repo
+            try {
+                & $pnpmName @pnpmLead install --frozen-lockfile 2>&1 | ForEach-Object { $detail.Add($_) }
+                if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
+            } finally {
+                Pop-Location
+            }
         }
 
         # Build through the checkout's own binaries: pnpm lifecycle scripts
@@ -545,6 +568,10 @@ function Test-ProcessLogCapture {
 function Start-Headless {
     param([string]$Ws)
 
+    # Sync before anything is stopped, so a failed sync leaves the running
+    # harness untouched.
+    if (-not $SkipSync) { Sync-PluginSource }
+
     $listenMap = Get-ListenMap
     $targets = @(Find-DshTargetPids -Port $Port -ListenMap $listenMap)
 
@@ -565,8 +592,6 @@ function Start-Headless {
             exit 1
         }
     }
-
-    if (-not $SkipSync) { Sync-PluginSource }
 
     $npxArgs = @('-y', "@deepseek-ai/dsh@$Version", 'web')
     if ($NoOpen) { $npxArgs += '--no-open' }
@@ -769,6 +794,10 @@ function New-LauncherGui {
         $btnStart.Enabled = $false
         $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
         try {
+            # 0) plugin source sync: must pass before anything is stopped, so a
+            #    failed sync leaves the running harness untouched.
+            if (-not $SkipSync) { Sync-PluginSource -Log $addLogLine }
+
             # 1) handover: close existing DSH instances
             if ($KeepExisting) {
                 & $addLogLine '-KeepExisting set - leaving any running DSH alone.'
@@ -790,7 +819,6 @@ function New-LauncherGui {
             }
 
             # 3) launch
-            if (-not $SkipSync) { Sync-PluginSource -Log $addLogLine }
             & $addLogLine ('Starting DSH web UI in ' + $sel)
             $guiState.Proc = Start-DshProc -Ws $sel
             $btnStop.Enabled = $true
