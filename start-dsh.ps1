@@ -459,12 +459,23 @@ function Sync-PluginSource {
             if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
         }
 
+        # Build through the checkout's own binaries: pnpm lifecycle scripts
+        # invoke `pnpm` internally, which is not guaranteed on PATH. The local
+        # tsc/tsdown shims avoid the dependency entirely.
         & $write 'plugin bundle rebuild'
-        & $pnpmName @pnpmLead --dir $repo run build 2>&1 | ForEach-Object { $detail.Add($_) }
-        if ($LASTEXITCODE -ne 0) { throw 'plugin build failed' }
+        Push-Location $repo
+        try {
+            & .\node_modules\.bin\tsc.cmd -p tsconfig.build.json 2>&1 | ForEach-Object { $detail.Add($_) }
+            if ($LASTEXITCODE -ne 0) { throw 'plugin type build failed' }
+            & .\node_modules\.bin\tsdown.cmd 2>&1 | ForEach-Object { $detail.Add($_) }
+            if ($LASTEXITCODE -ne 0) { throw 'plugin bundle build failed' }
+        } finally {
+            Pop-Location
+        }
         if (-not (Test-Path (Join-Path $repo 'lib\client.cjs'))) { throw 'plugin build produced no lib/client.cjs' }
         if (-not (Test-Path (Join-Path $repo 'lib\index.js'))) { throw 'plugin build produced no lib/index.js' }
     } catch {
+        foreach ($line in $detail) { & $write $line }
         if ($_.Exception.Message -eq 'offline') {
             & $write '[warn] offline: serving local main as-is; latest fixes not pulled'
         } else {
