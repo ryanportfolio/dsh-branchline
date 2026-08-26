@@ -1,0 +1,57 @@
+# Reference template for the ~/.dsh/settings.yaml customizations this setup
+# relies on. Copy the sections you want into ~/.dsh/settings.yaml and restart
+# DSH.
+#
+# Not included here:
+#   - ui-onboarding: runtime state, DSH rewrites it.
+#   - The bulk of llm-pi-ai.providers.openrouter.models: DSH populates stock
+#     OpenRouter catalog ids itself. Keep tilde-pinned entries and any
+#     hand-defined models (the stealth/ox-alpha block below).
+
+shell:
+  timeoutMs: 600000
+  maxTimeoutMs: 1800000
+
+llm-pi-ai:
+  providers:
+    openrouter:
+      apiKeyEnv: OPENROUTER_API_KEY
+      retryPolicy:
+        mode: normal
+        maxRetries: 50
+        retryableCodes: [ EMPTY_RESPONSE, RATE_LIMIT, SERVER, TIMEOUT, TRANSPORT, PI_AI_ERROR ]
+        backoff:
+          initialDelayMs: 500
+          maxDelayMs: 10000
+          jitterRatio: 0.1
+      streamIdleTimeoutMs: 60000
+      timeoutMs: 3600000
+      models:
+        # Tilde entries are pinned; other catalog ids are populated by DSH.
+        - id: "~anthropic/claude-fable-latest"
+        - id: "~anthropic/claude-haiku-latest"
+        - id: "~anthropic/claude-opus-latest"
+        - id: "~anthropic/claude-sonnet-latest"
+        - id: "~google/gemini-flash-latest"
+        - id: "~google/gemini-pro-latest"
+        - id: "~moonshotai/kimi-latest"
+        - id: "~openai/gpt-latest"
+        - id: "~openai/gpt-mini-latest"
+        - id: "~x-ai/grok-latest"
+        - id: stealth/ox-alpha
+          name: Ox Alpha
+          contextWindow: 1000000
+          input: [ text, image ]
+
+ui-theme:
+  preference: dark
+
+ui-conversation:
+  busyEnter: steer
+
+agent-presets:
+  default: code
+
+agent-default-model:
+  provider: openrouter
+  model: stealth/ox-alpha

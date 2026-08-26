@@ -76,14 +76,13 @@ The unofficial [dsh-worktree](https://github.com/Eleven-is-cool/dsh-worktree) cr
 
 1. Start the launcher and choose any local Git repository.
 2. Open **Worktree tasks** in the DSH sidebar.
-3. Create a task with **Base ref** empty — or switch the source to **GitHub** and pick one of your `gh` repositories (or paste `owner/name` or a URL); Branchline clones it when absent, reuses the local checkout when present.
-4. In any session whose workspace is a repository, the composer's **worktree** button repeats the fresh-origin task in one click.
-5. Work in the new DSH Session. Your primary checkout stays on its current branch with its current files.
-6. Review the task, then push its dsh/* branch or open a pull request through your normal Git workflow.
+3. Create a task with **Base ref** empty.
+4. Work in the new DSH Session. Your primary checkout stays on its current branch with its current files.
+5. Review the task, then push its dsh/* branch or open a pull request through your normal Git workflow.
 
 ## Verified surface
 
-33 tests across 5 files · 1 runtime dependency · PowerShell 5.1 and 7 launcher self-tests · local delivery disabled by default
+42 tests across 5 files · 1 runtime dependency · PowerShell 5.1 and 7 launcher self-tests · local delivery disabled by default
 
 ## Docs
 

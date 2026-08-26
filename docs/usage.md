@@ -67,6 +67,17 @@ GitHub sourcing requires the GitHub CLI (`gh`) on the Host `PATH` with an authen
 
 See [architecture.md](architecture.md) for mutation tokens, process isolation, Web request trust, and recovery rules.
 
+## Local DSH customizations
+
+Two repo files capture machine-level DSH tweaks that live outside the plugin:
+
+| File | Purpose |
+| --- | --- |
+| `scripts/dsh-core-overrides/apply-canonical-workspace-default.ps1` | Reapplies the canonical-workspace-default overrides to the DSH client runtime bundle in the npx cache: recency prefers canonical folders over worktree checkouts, and New Session does not anchor to a worktree session. Rerun by hand after cache eviction or a `dsh` version change; idempotent, verified with `node --check`. |
+| [settings-template.yaml](settings-template.yaml) | Reference template for `~/.dsh/settings.yaml`: shell deadlines, OpenRouter retry policy and timeouts, pinned and hand-defined models, default agent preset and model. |
+
+The override script patches upstream runtime code in place and is never run by the launcher; applying it stays a manual step.
+
 ## Launcher controls
 
 | Action | Result |

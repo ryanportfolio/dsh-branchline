@@ -1,7 +1,7 @@
 {
-  "version": "0.2.0",
-  "tests": 20,
-  "testFiles": 4,
+  "version": "0.3.0",
+  "tests": 42,
+  "testFiles": 5,
   "dependencies": 1,
   "stages": 4
 }
