@@ -409,6 +409,16 @@ function Sync-PluginSource {
     $write = if ($Log) { $Log } else { { param($text) Write-Host $text } }
     $repo = $Script:ScriptRoot
     $detail = New-Object System.Collections.Generic.List[string]
+    $pnpmName = $null
+    $pnpmLead = @()
+    if (Get-Command pnpm -ErrorAction SilentlyContinue) {
+        $pnpmName = 'pnpm'
+    } elseif (Get-Command corepack -ErrorAction SilentlyContinue) {
+        $pnpmName = 'corepack'
+        $pnpmLead = @('pnpm')
+    } else {
+        throw 'neither pnpm nor corepack found on PATH; cannot rebuild the plugin bundle'
+    }
 
     try {
         $branch = ([string](& git -C $repo rev-parse --abbrev-ref HEAD 2>$null)).Trim()
@@ -436,7 +446,7 @@ function Sync-PluginSource {
             $changed = @(& git -C $repo diff --name-only HEAD~1 HEAD 2>$null)
             if ($changed -contains 'package.json' -or $changed -contains 'pnpm-lock.yaml') {
                 & $write 'plugin deps changed; reinstalling'
-                & pnpm --dir $repo install --frozen-lockfile 2>&1 | ForEach-Object { $detail.Add($_) }
+                & $pnpmName @pnpmLead --dir $repo install --frozen-lockfile 2>&1 | ForEach-Object { $detail.Add($_) }
                 if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
             }
         } else {
@@ -445,12 +455,12 @@ function Sync-PluginSource {
 
         if (-not (Test-Path (Join-Path $repo 'node_modules'))) {
             & $write 'plugin node_modules missing; installing'
-            & pnpm --dir $repo install --frozen-lockfile 2>&1 | ForEach-Object { $detail.Add($_) }
+            & $pnpmName @pnpmLead --dir $repo install --frozen-lockfile 2>&1 | ForEach-Object { $detail.Add($_) }
             if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
         }
 
         & $write 'plugin bundle rebuild'
-        & pnpm --dir $repo run build 2>&1 | ForEach-Object { $detail.Add($_) }
+        & $pnpmName @pnpmLead --dir $repo run build 2>&1 | ForEach-Object { $detail.Add($_) }
         if ($LASTEXITCODE -ne 0) { throw 'plugin build failed' }
         if (-not (Test-Path (Join-Path $repo 'lib\client.cjs'))) { throw 'plugin build produced no lib/client.cjs' }
         if (-not (Test-Path (Join-Path $repo 'lib\index.js'))) { throw 'plugin build produced no lib/index.js' }
