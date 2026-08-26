@@ -38,6 +38,7 @@ param(
     [switch]$KeepExisting,
     [switch]$NoGui,
     [switch]$SelfTest,
+    [switch]$SkipSync,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$DshArgs
 )
@@ -395,6 +396,75 @@ function Get-GitStatus {
     return $st
 }
 
+# --- plugin source sync ---------------------------------------------------
+
+# Keeps the serving plugin checkout at origin/main and the root bundle rebuilt
+# before every launch, so the harness never serves stale or locally-edited
+# plugin code. main is the source of truth: a dirty or diverged checkout
+# aborts the launch instead of serving a mix. Use -SkipSync while developing
+# inside the checkout; when the plugin is finished and pushed to origin, the
+# next launch pulls it in and serves it.
+function Sync-PluginSource {
+    param([scriptblock]$Log)
+    $write = if ($Log) { $Log } else { { param($text) Write-Host $text } }
+    $repo = $Script:ScriptRoot
+    $detail = New-Object System.Collections.Generic.List[string]
+
+    try {
+        $branch = ([string](& git -C $repo rev-parse --abbrev-ref HEAD 2>$null)).Trim()
+        if ($branch -ne 'main') { throw "plugin checkout is on branch '$branch', not 'main'" }
+
+        $dirty = @(& git -C $repo status --porcelain --untracked-files=no 2>$null)
+        if ($dirty.Count -gt 0) {
+            $names = (($dirty | ForEach-Object { $_.Substring(3) }) | Select-Object -First 5) -join ', '
+            throw "plugin checkout has uncommitted changes ($names, ...). Commit and push them first; the launcher serves main only. Use -SkipSync while mid-development."
+        }
+        $untracked = @(& git -C $repo status --porcelain 2>$null | Where-Object { $_ -like '?? *' })
+        if ($untracked.Count -gt 0) {
+            & $write ('[warn] untracked files in plugin checkout (left alone): ' + ((($untracked | ForEach-Object { $_.Substring(3) }) | Select-Object -First 3) -join ', '))
+        }
+
+        $local = ([string](& git -C $repo rev-parse HEAD 2>$null)).Trim()
+        $env:GIT_TERMINAL_PROMPT = '0'
+        & git -C $repo fetch --prune origin 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'offline' }
+        $remote = ([string](& git -C $repo rev-parse origin/main 2>$null)).Trim()
+        if ($local -ne $remote) {
+            & git -C $repo merge --ff-only origin/main 2>&1 | ForEach-Object { $detail.Add($_) }
+            if ($LASTEXITCODE -ne 0) { throw 'fast-forward to origin/main failed (local history diverged from origin?)' }
+            & $write ('plugin source synced to origin/main @ ' + $remote.Substring(0, [Math]::Min(12, $remote.Length)))
+            $changed = @(& git -C $repo diff --name-only HEAD~1 HEAD 2>$null)
+            if ($changed -contains 'package.json' -or $changed -contains 'pnpm-lock.yaml') {
+                & $write 'plugin deps changed; reinstalling'
+                & pnpm --dir $repo install --frozen-lockfile 2>&1 | ForEach-Object { $detail.Add($_) }
+                if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
+            }
+        } else {
+            & $write ('plugin source already at origin/main @ ' + $local.Substring(0, [Math]::Min(12, $local.Length)))
+        }
+
+        if (-not (Test-Path (Join-Path $repo 'node_modules'))) {
+            & $write 'plugin node_modules missing; installing'
+            & pnpm --dir $repo install --frozen-lockfile 2>&1 | ForEach-Object { $detail.Add($_) }
+            if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
+        }
+
+        & $write 'plugin bundle rebuild'
+        & pnpm --dir $repo run build 2>&1 | ForEach-Object { $detail.Add($_) }
+        if ($LASTEXITCODE -ne 0) { throw 'plugin build failed' }
+        if (-not (Test-Path (Join-Path $repo 'lib\client.cjs'))) { throw 'plugin build produced no lib/client.cjs' }
+        if (-not (Test-Path (Join-Path $repo 'lib\index.js'))) { throw 'plugin build produced no lib/index.js' }
+    } catch {
+        if ($_.Exception.Message -eq 'offline') {
+            & $write '[warn] offline: serving local main as-is; latest fixes not pulled'
+        } else {
+            & $write ('[fatal] ' + $_.Exception.Message)
+            throw
+        }
+    }
+    foreach ($line in $detail) { & $write $line }
+}
+
 # --- server spawn ---------------------------------------------------------
 
 function Start-DshProc {
@@ -474,6 +544,8 @@ function Start-Headless {
             exit 1
         }
     }
+
+    if (-not $SkipSync) { Sync-PluginSource }
 
     $npxArgs = @('-y', "@deepseek-ai/dsh@$Version", 'web')
     if ($NoOpen) { $npxArgs += '--no-open' }
@@ -697,6 +769,7 @@ function New-LauncherGui {
             }
 
             # 3) launch
+            if (-not $SkipSync) { Sync-PluginSource -Log $addLogLine }
             & $addLogLine ('Starting DSH web UI in ' + $sel)
             $guiState.Proc = Start-DshProc -Ws $sel
             $btnStop.Enabled = $true
