@@ -349,7 +349,10 @@ export async function refreshOpenRouter(ctx) {
 async function maybeAutoRefresh(ctx) {
   const state = await readState()
   if (state.auto === false) return
-  if (typeof state.lastRunAt === "string") {
+  // Older state files only recorded the catalog refresh timestamp. Do not let
+  // that timestamp suppress the one-time metadata backfill added later.
+  const hasCostCache = typeof state.costsAt === "string"
+  if (hasCostCache && typeof state.lastRunAt === "string") {
     const age = Date.now() - new Date(state.lastRunAt).getTime()
     if (Number.isFinite(age) && age >= 0 && age < STALE_AFTER_MS) return
   }
