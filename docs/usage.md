@@ -8,7 +8,7 @@ cd dsh-branchline
 .\setup.ps1
 ```
 
-Setup installs dependencies, builds the plugin, and links this checkout into the DSH Web profile. Re-run it after pulling plugin updates.
+Setup installs dependencies, builds Branchline, and links the root plugin plus every permanent companion package under `packages/` into the DSH Web profile. Re-run it after pulling plugin updates.
 
 Start with `Start-Branchline.cmd`, or run:
 
@@ -17,6 +17,12 @@ Start with `Start-Branchline.cmd`, or run:
 ```
 
 The launcher remembers its last repository under `%LOCALAPPDATA%\DSH Branchline`. Set `DSH_REPO_ROOT` or pass `-RepositoryRoot` to add discovery roots. Browse works without either.
+
+## Model metadata
+
+The permanent `dsh-openrouter-sync` and `dsh-session-extras` companions enhance the model picker with OpenRouter prices and minimum-context filters. The default **256k** filter keeps OpenRouter models with at least 256,000 context tokens; models from other providers are never hidden or priced using OpenRouter metadata.
+
+Opening the model pane reads validated cached prices and context windows. That read never contacts OpenRouter and still gets context windows from the configured OpenRouter model list when the price cache is empty. Network refreshes happen only through the OpenRouter Sync settings page or its enabled daily refresh. Re-enter the model pane, or use **Retry**, to load newly refreshed metadata.
 
 ## Fresh remote base
 

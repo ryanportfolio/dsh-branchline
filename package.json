@@ -35,6 +35,7 @@
     "assets/readme/**/*.svg",
     "docs/architecture.md",
     "docs/usage.md",
+    "packages/**",
     "start-dsh.ps1",
     "Start-DSH.cmd",
     "Start-Branchline.cmd",

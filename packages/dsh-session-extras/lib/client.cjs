@@ -42,6 +42,68 @@ window.__ModuleLoader__.load({
 			return api({ op: "archived-restore", sessionId });
 		}
 
+		// ---------------------------------------------------------------------------
+		// OpenRouter cost + context chips (from the dsh-openrouter-sync plugin, optional).
+		// ---------------------------------------------------------------------------
+		const OR_SYNC_ROUTE = "/api/dsh-openrouter-sync";
+		const OPENROUTER_PROVIDER = "openrouter";
+
+		function normalizeCosts(value) {
+			if (value == null || typeof value !== "object" || Array.isArray(value)) return null;
+			const normalized = {};
+			for (const [id, row] of Object.entries(value)) {
+				if (id.length === 0 || row == null || typeof row !== "object" || Array.isArray(row)) continue;
+				const input = typeof row.input === "number" && Number.isFinite(row.input) && row.input >= 0 ? row.input : undefined;
+				const output = typeof row.output === "number" && Number.isFinite(row.output) && row.output >= 0 ? row.output : undefined;
+				if (input === undefined && output === undefined) continue;
+				normalized[id] = {
+					...(input === undefined ? {} : { input }),
+					...(output === undefined ? {} : { output }),
+				};
+			}
+			return normalized;
+		}
+
+		function normalizeContexts(value) {
+			if (value == null || typeof value !== "object" || Array.isArray(value)) return null;
+			const normalized = {};
+			for (const [id, contextWindow] of Object.entries(value)) {
+				if (id.length > 0 && typeof contextWindow === "number" && Number.isInteger(contextWindow) && contextWindow > 0) {
+					normalized[id] = contextWindow;
+				}
+			}
+			return Object.keys(normalized).length > 0 ? normalized : null;
+		}
+
+		async function fetchModelMeta() {
+			try {
+				const response = await fetch(OR_SYNC_ROUTE + "?op=costs", { method: "GET" });
+				let envelope;
+				try {
+					envelope = await response.json();
+				} catch {
+					return null;
+				}
+				if (!response.ok || !envelope.ok) return null;
+				const value = envelope.value;
+				if (value == null || typeof value !== "object") return null;
+				return {
+					costs: normalizeCosts(value.costs),
+					contexts: normalizeContexts(value.contexts),
+				};
+			} catch (error) {
+				return null;
+			}
+		}
+
+		function fmtCost(value) {
+			if (typeof value !== "number" || !Number.isFinite(value)) return "?";
+			if (value === 0) return "$0";
+			if (value >= 100) return "$" + Math.round(value).toString();
+			if (value >= 1) return "$" + value.toFixed(2);
+			return "$" + parseFloat(value.toFixed(3)).toString();
+		}
+
 		function insertCss(css) {
 			if (typeof document === "undefined") return;
 			const id = "dsh-session-extras";
@@ -63,6 +125,35 @@ window.__ModuleLoader__.load({
 		// Feature 1: model picker plus (search + favorites + active model readout).
 		// ---------------------------------------------------------------------------
 		const FAV_KEY = "dsh.modpick.favorites";
+
+		/** Minimum context-window filter presets, tokens. "all" disables the filter. */
+		const FILTERS = [
+			{ value: "all", label: "All" },
+			{ value: "128000", label: "128k" },
+			{ value: "256000", label: "256k" },
+			{ value: "512000", label: "512k" },
+			{ value: "1000000", label: "1M" },
+		];
+		const FILTER_KEY = "dsh.modpick.contextFilter";
+		const DEFAULT_FILTER = "256000";
+
+		function loadFilter() {
+			try {
+				const raw = localStorage.getItem(FILTER_KEY);
+				if (raw !== null && FILTERS.some((f) => f.value === raw)) return raw;
+			} catch (error) {
+				// storage unavailable; fall through to the default
+			}
+			return DEFAULT_FILTER;
+		}
+
+		function saveFilter(value) {
+			try {
+				localStorage.setItem(FILTER_KEY, value);
+			} catch (error) {
+				console.error("modpick: context filter persistence failed", error);
+			}
+		}
 
 		function loadFavs() {
 			try {
@@ -123,6 +214,11 @@ window.__ModuleLoader__.load({
 
 			const running = useRunning(sessions, sessionId);
 			const [activeModel, setActiveModel] = react.useState(null);
+			const [costs, setCosts] = react.useState(null);
+			const [contexts, setContexts] = react.useState(null);
+			const [metaStatus, setMetaStatus] = react.useState("idle");
+			const [metaReload, setMetaReload] = react.useState(0);
+			const [contextFilter, setContextFilter] = react.useState(loadFilter);
 
 			react.useEffect(() => {
 				if (!available) return undefined;
@@ -139,6 +235,29 @@ window.__ModuleLoader__.load({
 					cancelled = true;
 				};
 			}, [available, sessionId, running]);
+
+			react.useEffect(() => {
+				if (!open || pane !== "model") return undefined;
+				let cancelled = false;
+				setMetaStatus("loading");
+				fetchModelMeta().then(
+					(meta) => {
+						if (cancelled) return;
+						setCosts(meta !== null ? meta.costs : null);
+						setContexts(meta !== null ? meta.contexts : null);
+						setMetaStatus(meta !== null && meta.contexts !== null ? "ready" : "unavailable");
+					},
+					() => {
+						if (cancelled) return;
+						setCosts(null);
+						setContexts(null);
+						setMetaStatus("unavailable");
+					},
+				);
+				return () => {
+					cancelled = true;
+				};
+			}, [open, pane, metaReload]);
 
 			const choices = react.useMemo(() => {
 				const rows = [];
@@ -342,16 +461,33 @@ window.__ModuleLoader__.load({
 			};
 
 			const favIds = favs.filter((id) => choiceById.has(id));
-			const favChoices = favIds.map((id) => choiceById.get(id)).filter((choice) => matches(choice.group, choice.model));
+			const contextThreshold = contextFilter === "all" ? null : Number(contextFilter);
+			const passesContext = (choice) => {
+				if (contextThreshold === null) return true;
+				if (choice.group.id !== OPENROUTER_PROVIDER) return true;
+				const window = contexts !== null && typeof contexts[choice.model.id] === "number" ? contexts[choice.model.id] : undefined;
+				if (window === undefined) return false;
+				return window >= contextThreshold;
+			};
+			const setFilter = (value) => {
+				setContextFilter(value);
+				saveFilter(value);
+			};
+			const hiddenCount = contexts !== null && contextThreshold !== null ? choices.filter((choice) => !passesContext(choice)).length : 0;
+
+			const favChoices = favIds
+				.map((id) => choiceById.get(id))
+				.filter((choice) => matches(choice.group, choice.model) && passesContext(choice));
 			const visibleGroups = [];
 			for (const group of state.groups) {
-				const groupChoices = choices.filter((choice) => choice.group === group && matches(group, choice.model));
+				const groupChoices = choices.filter((choice) => choice.group === group && matches(group, choice.model) && passesContext(choice));
 				if (groupChoices.length > 0) visibleGroups.push({ group, choices: groupChoices });
 			}
 
 			const renderRow = (choice) => {
 				const selected = state.current !== null && state.current.provider === choice.group.id && state.current.model === choice.model.id;
 				const starred = favs.includes(choice.id);
+				const price = choice.group.id === OPENROUTER_PROVIDER && costs !== null ? costs[choice.model.id] : undefined;
 				return react.createElement(
 					"div",
 					{
@@ -385,7 +521,18 @@ window.__ModuleLoader__.load({
 					react.createElement(
 						"span",
 						{ className: "mfp-copy" },
-						react.createElement("span", { className: "mfp-modelName" }, choice.model.name),
+						react.createElement(
+							"span",
+							{ className: "mfp-nameRow" },
+							react.createElement("span", { className: "mfp-modelName" }, choice.model.name),
+							price !== undefined
+								? react.createElement(
+										"span",
+										{ className: "mfp-cost", title: "Input / output cost per 1M tokens (OpenRouter)" },
+										"I " + fmtCost(price.input) + " \u00b7 O " + fmtCost(price.output),
+									)
+								: null,
+						),
 						choice.model.description !== undefined
 							? react.createElement("span", { className: "mfp-description" }, choice.model.description)
 							: null,
@@ -477,6 +624,46 @@ window.__ModuleLoader__.load({
 							onChange: (event) => setQuery(event.target.value),
 							onKeyDown: onSearchKeyDown,
 						}),
+					),
+				);
+
+				if (contexts !== null) children.push(
+					react.createElement(
+						"div",
+						{ key: "context-filter", className: "mfp-filters", role: "group", "aria-label": "Minimum context window" },
+						react.createElement("span", { className: "mfp-filtersLabel" }, "Context"),
+						FILTERS.map((f) =>
+							react.createElement(
+								"button",
+								{
+									key: f.value,
+									type: "button",
+									className: "mfp-filter" + (contextFilter === f.value ? " mfp-filterOn" : ""),
+									"aria-pressed": contextFilter === f.value,
+									title: f.value === "all" ? "Show every model" : "Hide models below " + f.label + " context window",
+									onClick: () => setFilter(f.value),
+								},
+								f.label,
+							),
+						),
+						hiddenCount > 0
+							? react.createElement("span", { key: "hidden-count", className: "mfp-filterCount" }, hiddenCount + " hidden")
+							: null,
+					),
+				);
+				else if (metaStatus === "loading") children.push(
+					react.createElement("div", { key: "context-loading", className: "mfp-metaStatus" }, "Loading context data\u2026"),
+				);
+				else if (metaStatus === "unavailable") children.push(
+					react.createElement(
+						"div",
+						{ key: "context-unavailable", className: "mfp-metaStatus" },
+						"Context data unavailable",
+						react.createElement(
+							"button",
+							{ type: "button", className: "mfp-metaRetry", onClick: () => setMetaReload((value) => value + 1) },
+							"Retry",
+						),
 					),
 				);
 
@@ -997,6 +1184,14 @@ window.__ModuleLoader__.load({
 			".mfp-search{width:100%;box-sizing:border-box;height:28px;border-radius:8px;border:1px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);outline:none;padding:0 8px;font-size:13px;line-height:20px;font-family:inherit}",
 			".mfp-search:focus{border-color:var(--dsw-alias-border-inverted);background:none}",
 			".mfp-search::placeholder{color:var(--dsw-alias-label-caption)}",
+			".mfp-filters{display:flex;align-items:center;gap:4px;padding:0 2px 6px;flex-wrap:wrap}",
+			".mfp-filtersLabel{color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px;margin-right:2px}",
+			".mfp-filter{background:none;border:1px solid var(--dsw-alias-border-l3);color:var(--dsw-alias-label-secondary);border-radius:999px;padding:1px 8px;font-size:11px;line-height:16px;cursor:pointer;font-family:inherit}",
+			".mfp-filter:hover{border-color:var(--dsw-alias-border-inverted);color:var(--dsw-alias-label-primary)}",
+			".mfp-filterOn{background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-inverted);color:var(--dsw-alias-label-primary)}",
+			".mfp-filterCount{color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px;margin-left:auto;white-space:nowrap}",
+			".mfp-metaStatus{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px;padding:0 2px 6px}",
+			".mfp-metaRetry{background:none;border:none;color:var(--dsw-alias-label-secondary);font:inherit;padding:0;cursor:pointer;text-decoration:underline}",
 			".mfp-groups{overflow-y:auto;display:flex;flex-direction:column;gap:2px}",
 			".mfp-group{display:flex;flex-direction:column;gap:1px}",
 			".mfp-groupTitle{color:var(--dsw-alias-label-caption);font-size:11px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;padding:6px 8px 2px}",
@@ -1008,7 +1203,10 @@ window.__ModuleLoader__.load({
 			".mfp-star:hover{color:var(--dsw-alias-label-primary)}",
 			".mfp-starOn{color:#eab308}",
 			".mfp-copy{display:flex;flex-direction:column;min-width:0;flex:1}",
+			".mfp-nameRow{display:flex;align-items:baseline;gap:6px;min-width:0}",
+			".mfp-nameRow .mfp-modelName{flex:1 1 auto;min-width:0}",
 			".mfp-modelName{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;line-height:18px}",
+			".mfp-cost{flex:none;color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px;white-space:nowrap;padding:0 5px;border:1px solid var(--dsw-alias-border-l3);border-radius:999px}",
 			".mfp-description{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
 			".mfp-check{flex:none;width:16px;text-align:center;font-size:13px}",
 			".mfp-cell{display:flex;align-items:center;gap:8px;width:100%;border:none;background:none;color:inherit;font:inherit;text-align:left;border-radius:8px;padding:7px 8px;cursor:pointer}",

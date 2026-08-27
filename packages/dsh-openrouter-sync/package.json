@@ -1,7 +1,7 @@
 {
-  "name": "dsh-session-extras",
+  "name": "dsh-openrouter-sync",
   "version": "0.1.0",
-  "description": "Session UI extras: searchable model picker with favorites, OpenRouter price/context metadata, archived-session restore, and selection reply.",
+  "description": "Keep the OpenRouter model list current: daily auto-refresh plus a manual refresh button, sorted newest-first by release date.",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -18,10 +18,7 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-conversation",
-        "@deepseek-ai/dsh-client-ui-model-selection",
         "@deepseek-ai/dsh-client-ui-slots"
       ]
     }
