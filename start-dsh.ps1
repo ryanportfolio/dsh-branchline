@@ -320,8 +320,20 @@ function Get-RepositoryRoots {
     if ($RepositoryRoot) { $configured += $RepositoryRoot }
     if ($env:DSH_REPO_ROOT) { $configured += $env:DSH_REPO_ROOT -split [IO.Path]::PathSeparator }
     $candidates = @($configured)
-    try { $candidates += (Get-Location).Path } catch { }
+    try {
+        $current = [IO.Path]::GetFullPath((Get-Location).Path)
+        $desktop = [Environment]::GetFolderPath('Desktop')
+        $desktopFull = if ($desktop) { [IO.Path]::GetFullPath($desktop).TrimEnd([char[]]@('\', '/')) } else { '' }
+        $desktopPrefix = if ($desktopFull) { $desktopFull + [IO.Path]::DirectorySeparatorChar } else { '' }
+        $isDesktopLocation = $desktopFull -and (
+            $current.Equals($desktopFull, [StringComparison]::OrdinalIgnoreCase) -or
+            $current.StartsWith($desktopPrefix, [StringComparison]::OrdinalIgnoreCase)
+        )
+        if (-not $isDesktopLocation) { $candidates += $current }
+    } catch { }
     $candidates += @(
+        (Split-Path -Parent $Script:ScriptRoot),
+        (Join-Path $profile 'CoreWise'),
         (Join-Path $profile 'source'),
         (Join-Path $profile 'src'),
         (Join-Path $profile 'projects'),
@@ -713,6 +725,17 @@ function New-LauncherGui {
     # launcher's script scope, so callbacks must capture shared objects directly.
     $guiState = [pscustomobject]@{ Proc = $null }
     $logQueue = $Script:LogQueue
+    $commands = [pscustomobject]@{
+        FindDshTargetPids     = Get-Command Find-DshTargetPids -CommandType Function
+        FindPortSquatter      = Get-Command Find-PortSquatter -CommandType Function
+        GetGitStatus          = Get-Command Get-GitStatus -CommandType Function
+        GetListenMap          = Get-Command Get-ListenMap -CommandType Function
+        SaveLauncherSettings = Get-Command Save-LauncherSettings -CommandType Function
+        ShowGitStatusPane     = Get-Command Show-GitStatusPane -CommandType Function
+        StartDshProc          = Get-Command Start-DshProc -CommandType Function
+        StopDshInstances      = Get-Command Stop-DshInstances -CommandType Function
+        SyncPluginSource      = Get-Command Sync-PluginSource -CommandType Function
+    }
 
     $addLogLine = ({
         param($text)
@@ -725,7 +748,9 @@ function New-LauncherGui {
         $sel = $combo.SelectedItem
         if ($sel) {
             $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
-            try { Show-GitStatusPane -Status (Get-GitStatus -RepoPath $sel) -Rtb $rtbStatus }
+            try {
+                & $commands.ShowGitStatusPane -Status (& $commands.GetGitStatus -RepoPath $sel) -Rtb $rtbStatus
+            }
             finally { $form.Cursor = [System.Windows.Forms.Cursors]::Default }
         } else {
             $rtbStatus.Clear()
@@ -769,7 +794,7 @@ function New-LauncherGui {
     $btnStop.Add_Click(({
         $btnStop.Enabled = $false
         try {
-            Stop-DshInstances -Port $Port -OwnProc $guiState.Proc -Log $addLogLine
+            & $commands.StopDshInstances -Port $Port -OwnProc $guiState.Proc -Log $addLogLine
             $guiState.Proc = $null
         } catch {
             & $addLogLine ('stop error: ' + $_.Exception.Message)
@@ -790,25 +815,25 @@ function New-LauncherGui {
             [System.Windows.Forms.MessageBox]::Show('Pick a repository first.', 'DSH Branchline') | Out-Null
             return
         }
-        Save-LauncherSettings -LastWorkspace $sel
+        & $commands.SaveLauncherSettings -LastWorkspace $sel
         $btnStart.Enabled = $false
         $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
         try {
             # 0) plugin source sync: must pass before anything is stopped, so a
             #    failed sync leaves the running harness untouched.
-            if (-not $SkipSync) { Sync-PluginSource -Log $addLogLine }
+            if (-not $SkipSync) { & $commands.SyncPluginSource -Log $addLogLine }
 
             # 1) handover: close existing DSH instances
             if ($KeepExisting) {
                 & $addLogLine '-KeepExisting set - leaving any running DSH alone.'
             } else {
-                Stop-DshInstances -Port $Port -OwnProc $null -Log $addLogLine
+                & $commands.StopDshInstances -Port $Port -OwnProc $null -Log $addLogLine
             }
 
             # 2) squatter check
-            $listenMap = Get-ListenMap
-            $known = @(Find-DshTargetPids -Port $Port -ListenMap $listenMap)
-            $squatter = Find-PortSquatter -Port $Port -ListenMap $listenMap -Excluded $known
+            $listenMap = & $commands.GetListenMap
+            $known = @(& $commands.FindDshTargetPids -Port $Port -ListenMap $listenMap)
+            $squatter = & $commands.FindPortSquatter -Port $Port -ListenMap $listenMap -Excluded $known
             if ($squatter -gt 0) {
                 $proc = Get-Process -Id $squatter -ErrorAction SilentlyContinue
                 $pname = if ($proc) { $proc.Name } else { 'unknown' }
@@ -820,7 +845,7 @@ function New-LauncherGui {
 
             # 3) launch
             & $addLogLine ('Starting DSH web UI in ' + $sel)
-            $guiState.Proc = Start-DshProc -Ws $sel
+            $guiState.Proc = & $commands.StartDshProc -Ws $sel
             $btnStop.Enabled = $true
             $btnBrowser.Enabled = $true
             & $addLogLine ('DSH starting at http://127.0.0.1:{0}/  (first run may download the package)' -f $Port)
@@ -869,7 +894,7 @@ function New-LauncherGui {
                 [System.Windows.Forms.MessageBoxIcon]::Warning)
             if ($answer -eq [System.Windows.Forms.DialogResult]::Cancel) { $e.Cancel = $true; return }
             if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) {
-                Stop-DshInstances -Port $Port -OwnProc $guiState.Proc -Log $addLogLine
+                & $commands.StopDshInstances -Port $Port -OwnProc $guiState.Proc -Log $addLogLine
             } else {
                 & $addLogLine 'Launcher closed; DSH left running.'
             }
@@ -894,10 +919,41 @@ if ($SelfTest) {
     if (-not $f.Tag -or -not $f.Tag.TimerTick) { Write-Error 'GUI timer callback unavailable'; exit 1 }
     & $f.Tag.TimerTick $null ([System.EventArgs]::Empty)
     $repoCombo = @($f.Controls | Where-Object { $_ -is [System.Windows.Forms.ComboBox] })[0]
-    if ($repoCombo -and $repoCombo.Items.Count -gt 0) {
-        # Exercise the callback after New-LauncherGui has returned. This catches
-        # lost local variables in event scriptblocks without querying another repo.
-        $repoCombo.SelectedIndex = -1
+    if (-not $repoCombo -or $repoCombo.Items.Count -eq 0) {
+        throw 'GUI callback self-test requires at least one repository'
+    }
+    $desktop = [Environment]::GetFolderPath('Desktop')
+    if ($desktop) {
+        $desktopFull = [IO.Path]::GetFullPath($desktop).TrimEnd([char[]]@('\', '/'))
+        $desktopPrefix = $desktopFull + [IO.Path]::DirectorySeparatorChar
+        $desktopRepos = @($repoCombo.Items | Where-Object {
+            $path = [string]$_
+            $path.Equals($desktopFull, [StringComparison]::OrdinalIgnoreCase) -or
+            $path.StartsWith($desktopPrefix, [StringComparison]::OrdinalIgnoreCase)
+        })
+        if ($desktopRepos.Count -gt 0) { throw ('GUI listed Desktop repositories: ' + ($desktopRepos -join ', ')) }
+    }
+    $coreWise = Split-Path -Parent $Script:ScriptRoot
+    if (Test-Path -LiteralPath $coreWise -PathType Container) {
+        $coreWisePrefix = [IO.Path]::GetFullPath($coreWise).TrimEnd([char[]]@('\', '/')) + [IO.Path]::DirectorySeparatorChar
+        $coreWiseRepos = @($repoCombo.Items | Where-Object {
+            ([string]$_).StartsWith($coreWisePrefix, [StringComparison]::OrdinalIgnoreCase)
+        })
+        if ($coreWiseRepos.Count -eq 0) { throw 'GUI found no repositories under CoreWise' }
+    }
+    $callbackErrorCount = $Error.Count
+    Remove-Item Function:Get-GitStatus
+    Remove-Item Function:Show-GitStatusPane
+    $repoCombo.SelectedIndex = -1
+    $repoCombo.SelectedIndex = 0
+    $newErrorCount = $Error.Count - $callbackErrorCount
+    $callbackCommandErrors = if ($newErrorCount -gt 0) {
+        @($Error | Select-Object -First $newErrorCount | Where-Object {
+            $_.Exception -is [System.Management.Automation.CommandNotFoundException]
+        })
+    } else { @() }
+    if ($callbackCommandErrors.Count -gt 0) {
+        throw ('GUI callback command lookup failed: ' + (($callbackCommandErrors | ForEach-Object { $_.Exception.Message }) -join ' | '))
     }
     [void]$f.Handle
     $f.Close()
