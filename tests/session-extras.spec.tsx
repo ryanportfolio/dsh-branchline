@@ -152,8 +152,10 @@ describe('dsh-session-extras OpenRouter metadata', () => {
     expect(screen.getByText('Other provider collision')).toBeTruthy()
     expect(screen.queryByText('Unknown context')).toBeNull()
     expect(screen.getByText('2 hidden')).toBeTruthy()
-    expect(screen.getByText('I $1.25 · O $2.50')).toBeTruthy()
-    expect(screen.queryByText('I $99 · O $99')).toBeNull()
+    const cost = screen.getByTitle('Input / output cost per 1M tokens (OpenRouter)')
+    expect(cost.textContent).toBe('I 1.25 · O 2.50')
+    expect([...cost.querySelectorAll('strong')].map((node) => node.textContent)).toEqual(['1.25', '2.50'])
+    expect(screen.queryByText('I 99 · O 99')).toBeNull()
     expect(screen.getByText('Malformed cost')).toBeTruthy()
   })
 
