@@ -27,10 +27,16 @@ try {
     & npx -y 'pnpm@11.7.0' run build
     if ($LASTEXITCODE -ne 0) { throw 'plugin build failed.' }
 
-    $link = 'link:' + ($PSScriptRoot -replace '\\', '/')
-    Write-Host 'Linking plugin into the DSH Web profile...'
-    & npx -y "@deepseek-ai/dsh@$DshVersion" plugin --profile web add $link --trust-lockfile
-    if ($LASTEXITCODE -ne 0) { throw 'DSH plugin installation failed.' }
+    $pluginRoots = @($PSScriptRoot)
+    $pluginRoots += Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'packages') -Directory |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'package.json') } |
+        ForEach-Object { $_.FullName }
+    foreach ($pluginRoot in $pluginRoots) {
+        $link = 'link:' + ($pluginRoot -replace '\\', '/')
+        Write-Host "Linking $([System.IO.Path]::GetFileName($pluginRoot)) into the DSH Web profile..."
+        & npx -y "@deepseek-ai/dsh@$DshVersion" plugin --profile web add $link --trust-lockfile
+        if ($LASTEXITCODE -ne 0) { throw "DSH plugin installation failed for $pluginRoot." }
+    }
 } finally {
     Pop-Location
 }

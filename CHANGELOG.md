@@ -6,8 +6,14 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Permanent `dsh-openrouter-sync` companion package, installed with the other workspace companions and verified in CI.
+- OpenRouter cost chips and minimum-context filters in the enhanced model picker, defaulting to models with at least 256,000 context tokens.
 - `scripts/dsh-core-overrides/apply-canonical-workspace-default.ps1`, which reapplies the canonical-workspace-default overrides to the DSH client runtime bundle in the npx cache after cache eviction or a `dsh` version change.
 - `docs/settings-template.yaml`, a reference template for the `~/.dsh/settings.yaml` customizations this setup relies on: shell deadlines, OpenRouter retry policy and timeouts, pinned and custom models, default agent preset and model.
+
+### Fixed
+
+- Keep OpenRouter metadata reads cache-only, validate cached rows, refresh metadata when the picker is reopened, and avoid filtering or pricing models from other providers.
 
 ## 0.3.0 - 2026-08-24
 
