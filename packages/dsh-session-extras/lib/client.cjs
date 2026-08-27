@@ -98,10 +98,10 @@ window.__ModuleLoader__.load({
 
 		function fmtCost(value) {
 			if (typeof value !== "number" || !Number.isFinite(value)) return "?";
-			if (value === 0) return "$0";
-			if (value >= 100) return "$" + Math.round(value).toString();
-			if (value >= 1) return "$" + value.toFixed(2);
-			return "$" + parseFloat(value.toFixed(3)).toString();
+			if (value === 0) return "0";
+			if (value >= 100) return Math.round(value).toString();
+			if (value >= 1) return value.toFixed(2);
+			return parseFloat(value.toFixed(3)).toString();
 		}
 
 		function insertCss(css) {
@@ -529,7 +529,10 @@ window.__ModuleLoader__.load({
 								? react.createElement(
 										"span",
 										{ className: "mfp-cost", title: "Input / output cost per 1M tokens (OpenRouter)" },
-										"I " + fmtCost(price.input) + " \u00b7 O " + fmtCost(price.output),
+										"I ",
+										react.createElement("strong", { className: "mfp-costValue" }, fmtCost(price.input)),
+										" \u00b7 O ",
+										react.createElement("strong", { className: "mfp-costValue" }, fmtCost(price.output)),
 									)
 								: null,
 						),
@@ -1207,6 +1210,7 @@ window.__ModuleLoader__.load({
 			".mfp-nameRow .mfp-modelName{flex:1 1 auto;min-width:0}",
 			".mfp-modelName{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;line-height:18px}",
 			".mfp-cost{flex:none;color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px;white-space:nowrap;padding:0 5px;border:1px solid var(--dsw-alias-border-l3);border-radius:999px}",
+			".mfp-costValue{font-weight:700}",
 			".mfp-description{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
 			".mfp-check{flex:none;width:16px;text-align:center;font-size:13px}",
 			".mfp-cell{display:flex;align-items:center;gap:8px;width:100%;border:none;background:none;color:inherit;font:inherit;text-align:left;border-radius:8px;padding:7px 8px;cursor:pointer}",
