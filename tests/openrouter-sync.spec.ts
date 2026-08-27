@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 
 type OpenRouterSyncModule = {
   readonly apply: (ctx: Record<string, unknown>) => void
+  readonly maybeAutoRefresh: (ctx: Record<string, unknown>) => Promise<void>
   readonly costsOf: (live: readonly Record<string, unknown>[]) => Record<string, { readonly input?: number, readonly output?: number }>
   readonly contextsOf: (live: readonly Record<string, unknown>[]) => Record<string, number>
   readonly modelMetadataOf: (
@@ -136,5 +137,46 @@ describe('dsh-openrouter-sync metadata', () => {
       },
     })
     expect(liveFetch).not.toHaveBeenCalled()
+  })
+
+  it('backfills prices when recent legacy state has no metadata cache', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-openrouter-sync-'))
+    temporaryRoots.push(root)
+    await writeFile(join(root, 'openrouter-sync.json'), JSON.stringify({
+      lastRunAt: new Date().toISOString(),
+      lastRunCount: 1,
+    }), 'utf8')
+    vi.stubEnv('DSH_HOME', root)
+    const liveFetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      data: [{
+        id: 'vendor/model',
+        name: 'Vendor Model',
+        created: 123,
+        context_length: 256000,
+        pricing: { prompt: '0.000001', completion: '0.000002' },
+        top_provider: { max_completion_tokens: 4096 },
+      }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const update = vi.fn().mockResolvedValue(undefined)
+    const base = settingsContext([{
+      id: 'vendor/model',
+      name: 'Vendor Model',
+      contextWindow: 256000,
+      maxTokens: 4096,
+    }])
+    const ctx = {
+      ...base,
+      settings: { ...(base.settings as Record<string, unknown>), writable: true, update },
+      logger: { warn: vi.fn(), info: vi.fn() },
+    }
+
+    await plugin.maybeAutoRefresh(ctx)
+
+    expect(liveFetch).toHaveBeenCalledOnce()
+    expect(update).not.toHaveBeenCalled()
+    const state = JSON.parse(await readFile(join(root, 'openrouter-sync.json'), 'utf8')) as Record<string, unknown>
+    expect(state.costs).toEqual({ 'vendor/model': { input: 1, output: 2 } })
+    expect(state.contexts).toEqual({ 'vendor/model': 256000 })
+    expect(state.costsAt).toEqual(expect.any(String))
   })
 })
