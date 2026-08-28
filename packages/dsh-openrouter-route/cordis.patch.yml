@@ -1,0 +1,3 @@
+- insert:
+    - id: dsh-openrouter-route
+      name: "dsh-openrouter-route"

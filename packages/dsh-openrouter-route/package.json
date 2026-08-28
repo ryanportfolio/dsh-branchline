@@ -1,0 +1,27 @@
+{
+  "name": "dsh-openrouter-route",
+  "version": "0.1.0",
+  "description": "Per-model OpenRouter provider control: a loopback proxy that injects the OpenRouter provider routing preference (pin one provider or auto cost-sort), plus a composer chip showing which provider actually served the last request with a pin/auto dropdown.",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": { "default": "./lib/index.js" },
+    "./client": { "default": "./lib/client.cjs" },
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-model-selection"
+      ]
+    }
+  }
+}
