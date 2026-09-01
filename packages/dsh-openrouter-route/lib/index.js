@@ -33,8 +33,8 @@ const UPSTREAM = "https://openrouter.ai/api/v1"
 const NAMESPACE = "llm-pi-ai"
 const PROVIDER = "openrouter"
 
-/** Hard cap on a proxied request body (JSON or SSE frame bulk). */
-const MAX_REQUEST_BYTES = 8 * 1024 * 1024
+/** Hard cap on a proxied request body. The relay buffers JSON before injecting provider routing. */
+export const MAX_REQUEST_BYTES = 64 * 1024 * 1024
 /** Stop scanning a response for the serving provider after this many bytes. */
 const PROVIDER_SCAN_LIMIT = 256 * 1024
 /** Request timeout for the endpoints listing (metadata, not the relay). */
@@ -51,6 +51,14 @@ let stateWrite = null
 const endpointsCache = new Map()
 /** model id -> in-flight endpoints fetch (dedupe). */
 const endpointsInFlight = new Map()
+
+export class RequestBodyTooLargeError extends Error {
+  constructor(limit) {
+    super(`request body exceeds ${limit} bytes`)
+    this.name = "RequestBodyTooLargeError"
+    this.limit = limit
+  }
+}
 
 function dshHomeDir() {
   return process.env.DSH_HOME && process.env.DSH_HOME.length > 0
@@ -482,13 +490,13 @@ function isLoopbackSameOrigin(request) {
   }
 }
 
-async function readBody(request) {
+export async function readBody(request, maxBytes = MAX_REQUEST_BYTES) {
   const chunks = []
   let size = 0
   for await (const raw of request) {
     const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw)
     size += chunk.length
-    if (size > MAX_REQUEST_BYTES) throw new Error(`request body exceeds ${MAX_REQUEST_BYTES} bytes`)
+    if (size > maxBytes) throw new RequestBodyTooLargeError(maxBytes)
     chunks.push(chunk)
   }
   return Buffer.concat(chunks)
@@ -502,6 +510,27 @@ function requiredString(input, key) {
 
 function errorMessage(error) {
   return error && typeof error.message === "string" ? error.message : String(error)
+}
+
+export function relayFailureFor(error) {
+  if (error instanceof RequestBodyTooLargeError) {
+    return {
+      status: 413,
+      body: {
+        error: {
+          message: `DSH OpenRouter proxy request exceeds ${error.limit} bytes`,
+        },
+      },
+    }
+  }
+  return {
+    status: 502,
+    body: {
+      error: {
+        message: `dsh-openrouter-route relay failed: ${errorMessage(error)}`,
+      },
+    },
+  }
 }
 
 function send(response, status, value) {
@@ -562,7 +591,11 @@ export function apply(ctx) {
         handler(request, response) {
           relay(ctx, request, response).catch((error) => {
             ctx.logger?.warn?.(`dsh-openrouter-route: relay crashed: ${errorMessage(error)}`)
-            if (!response.headersSent) response.writeHead(502)
+            if (!response.headersSent) {
+              const failure = relayFailureFor(error)
+              send(response, failure.status, failure.body)
+              return
+            }
             response.end()
           })
         },

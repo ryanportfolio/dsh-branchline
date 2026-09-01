@@ -14,6 +14,7 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- Raise the OpenRouter routing proxy request limit from 8 MiB to 64 MiB and return a descriptive 413 response when it is exceeded.
 - Show OpenRouter input/output prices without dollar signs and emphasize only the numeric values.
 - Backfill OpenRouter price metadata when legacy sync state has a recent catalog refresh but no cost cache.
 - Keep OpenRouter metadata reads cache-only, validate cached rows, refresh metadata when the picker is reopened, and avoid filtering or pricing models from other providers.
