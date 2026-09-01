@@ -9,8 +9,14 @@ time; this plugin pulls the live endpoint instead.
 Refresh replaces the configured `models` list with the live snapshot sorted by
 `created` (newest first), then appends any configured ids the live endpoint no
 longer lists (pseudo-models like openrouter/auto, or a model the user added by
-hand) so a refresh never deletes an id the user curated. A daily timer runs the
-same refresh; a manual button on the client calls the same path over HTTP.
+hand) so a refresh never deletes an id the user curated. Live entries also carry
+OpenRouter's declared input modalities (`architecture.input_modalities`,
+narrowed to the `text`/`image` pair the `llm-pi-ai` route schema accepts), so a
+model OpenRouter serves images for stays attachable across refreshes instead of
+resetting to the text-only default; configured-only fields a mapped live entry
+does not set survive the merge, so a hand-curated field is only lost when the
+live endpoint explicitly contradicts it. A daily timer runs the same refresh; a
+manual button on the client calls the same path over HTTP.
 */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises"
@@ -93,6 +99,21 @@ function isPosInt(value) {
 }
 
 /**
+ * OpenRouter's `architecture.input_modalities`, narrowed to the modalities the
+ * `llm-pi-ai` route schema declares (`text`, `image`). OpenRouter unions the
+ * claim across its endpoint set, so this mirrors its metadata rather than
+ * auditing any upstream; an entry without usable modality data stays
+ * undeclared and keeps the route's text default.
+ */
+function inputModalitiesOf(raw) {
+  const architecture = raw.architecture && typeof raw.architecture === "object" ? raw.architecture : undefined
+  const declared = architecture && Array.isArray(architecture.input_modalities) ? architecture.input_modalities : undefined
+  if (declared === undefined) return undefined
+  const input = declared.filter((modality) => modality === "text" || modality === "image")
+  return input.length > 0 ? input : undefined
+}
+
+/**
  * Map one live OpenRouter listing entry to the harness model-entry shape.
  * Only fields the `llm-pi-ai` route schema accepts are carried.
  */
@@ -103,25 +124,41 @@ function mapEntry(raw) {
   const contextWindow = isPosInt(raw.context_length) ? raw.context_length : undefined
   const top = raw.top_provider && typeof raw.top_provider === "object" ? raw.top_provider : undefined
   const maxTokens = top && isPosInt(top.max_completion_tokens) ? top.max_completion_tokens : undefined
+  const input = inputModalitiesOf(raw)
   return {
     id,
     ...(name !== id ? { name } : {}),
     ...(contextWindow === undefined ? {} : { contextWindow }),
     ...(maxTokens === undefined ? {} : { maxTokens }),
+    ...(input === undefined ? {} : { input }),
   }
 }
 
 /**
  * Sort live entries newest-first by release timestamp, then merge the
  * configured entries the live list no longer describes (kept in their current
- * order, fields untouched) so a refresh never drops a hand-curated id.
+ * order, fields untouched) so a refresh never drops a hand-curated id. A live
+ * id that is also configured keeps any configured field its mapped entry does
+ * not set: live data wins on the fields it carries, while a hand-curated
+ * field — an `input` claim for a model OpenRouter records no modalities for,
+ * a `compat` switch — survives the refresh.
  */
 function buildModelEntries(live, configured) {
+  const configuredById = new Map()
+  for (const entry of configured) {
+    if (entry && typeof entry.id === "string" && entry.id.length > 0 && !configuredById.has(entry.id)) {
+      configuredById.set(entry.id, entry)
+    }
+  }
   const byId = new Map()
   for (const raw of live) {
     const entry = mapEntry(raw)
     if (entry !== undefined && !byId.has(entry.id)) {
-      byId.set(entry.id, { entry, created: typeof raw.created === "number" ? raw.created : 0 })
+      const prior = configuredById.get(entry.id)
+      byId.set(entry.id, {
+        entry: prior === undefined ? entry : { ...prior, ...entry },
+        created: typeof raw.created === "number" ? raw.created : 0,
+      })
     }
   }
   const sorted = [...byId.values()]

@@ -6,6 +6,10 @@ import { Readable } from 'node:stream'
 
 type OpenRouterSyncModule = {
   readonly apply: (ctx: Record<string, unknown>) => void
+  readonly buildModelEntries: (
+    live: readonly Record<string, unknown>[],
+    configured: readonly Record<string, unknown>[],
+  ) => readonly Record<string, unknown>[]
   readonly maybeAutoRefresh: (ctx: Record<string, unknown>) => Promise<void>
   readonly costsOf: (live: readonly Record<string, unknown>[]) => Record<string, { readonly input?: number, readonly output?: number }>
   readonly contextsOf: (live: readonly Record<string, unknown>[]) => Record<string, number>
@@ -39,6 +43,44 @@ function settingsContext(models: readonly Record<string, unknown>[]): Record<str
 }
 
 describe('dsh-openrouter-sync metadata', () => {
+  it('maps supported input modalities and preserves configured-only fields', () => {
+    const configured = [
+      { id: 'vendor/vision', name: 'Old name', input: ['text'], compat: 'keep-me', contextWindow: 128000 },
+      { id: 'vendor/unknown', input: ['text', 'image'], compat: 'also-keep' },
+      { id: 'vendor/text', input: ['text', 'image'] },
+      { id: 'vendor/manual', name: 'Manual model', input: ['image'] },
+    ]
+    const live = [
+      {
+        id: 'vendor/vision',
+        name: 'Vision model',
+        created: 30,
+        context_length: 256000,
+        architecture: { input_modalities: ['text', 'image', 'audio'] },
+      },
+      { id: 'vendor/unknown', created: 20, context_length: 512000 },
+      { id: 'vendor/text', created: 10, architecture: { input_modalities: ['text'] } },
+    ]
+
+    expect(plugin.buildModelEntries(live, configured)).toEqual([
+      {
+        id: 'vendor/vision',
+        name: 'Vision model',
+        input: ['text', 'image'],
+        compat: 'keep-me',
+        contextWindow: 256000,
+      },
+      {
+        id: 'vendor/unknown',
+        input: ['text', 'image'],
+        compat: 'also-keep',
+        contextWindow: 512000,
+      },
+      { id: 'vendor/text', input: ['text'] },
+      { id: 'vendor/manual', name: 'Manual model', input: ['image'] },
+    ])
+  })
+
   it('converts usable OpenRouter costs and contexts', () => {
     const live = [
       { id: 'vendor/valid', context_length: 256000, pricing: { prompt: '0.0000015', completion: 0.000002 } },
