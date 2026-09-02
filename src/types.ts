@@ -78,6 +78,8 @@ export interface TaskView extends TaskRecord {
   readonly headCommit: string | null
   readonly currentBranch: string | null
   readonly changes: ChangeSummary
+  /** Git-ignored paths surfaced for deletion-safety classification. */
+  readonly ignoredPaths: readonly string[]
   readonly exists: boolean
   readonly changeToken: string
   /** Path clients pass to the native Workspace registry after creation. */
@@ -131,6 +133,32 @@ export interface GitHubRepoView {
   readonly cloned: boolean
 }
 
+/** One merged pull request whose recorded head exactly matches a task HEAD. */
+export interface MergedPullRequestView {
+  readonly number: number
+  readonly url: string
+  readonly mergedAt: string
+  readonly headCommit: string
+  readonly mergeCommit: string
+}
+
+/** Whether deleting a managed worktree would discard repository work. */
+export type WorktreePreservationStatus = 'safe' | 'unsafe' | 'unknown'
+
+/** Fresh, explainable proof used by status badges and guarded deletion. */
+export interface WorktreePreservation {
+  readonly status: WorktreePreservationStatus
+  readonly reason: string
+  readonly checkedAt: string
+  readonly changeToken: string
+  readonly headCommit: string | null
+  readonly branch: string | null
+  readonly ignoredPaths: readonly string[]
+  readonly defaultRef?: string
+  readonly defaultCommit?: string
+  readonly pullRequest?: MergedPullRequestView
+}
+
 /** Result of ensuring a GitHub repository exists under the clone root. */
 export interface CloneOutcome {
   readonly source: string
@@ -158,6 +186,8 @@ export interface TaskMutationRequest {
 export interface PurgeOptions {
   /** False keeps the task branch in the repository (default deletes it). */
   readonly deleteBranch?: boolean
+  /** True recomputes remote/GitHub proof and refuses to purge unless repository work is preserved. */
+  readonly requirePreserved?: boolean
 }
 
 /** Result of removing one task's worktree, branch, and record. */
@@ -174,6 +204,7 @@ export interface WorktreeStudioManager {
   dashboard(repository?: string): Promise<DashboardView>
   inspect(id: TaskId): Promise<{ readonly task: TaskView; readonly review: ReviewView }>
   previewMerge(id: TaskId, targetPath?: string): Promise<MergePreview>
+  assessPreservation(id: TaskId): Promise<WorktreePreservation>
   validate(id: TaskId, changeToken: string, command?: readonly string[]): Promise<TaskView>
   deliver(id: TaskId, changeToken: string, targetPath?: string): Promise<TaskView>
   archive(request: TaskMutationRequest): Promise<TaskView>

@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-delete",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Permanent session deletion: removes the session log, registry entries, sidecars, and the attached branchline worktree folder and branch.",
   "license": "MIT",
   "type": "module",

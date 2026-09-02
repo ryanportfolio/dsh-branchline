@@ -10,6 +10,7 @@ window.__ModuleLoader__.load({
 		// Host bridge: one same-origin JSON route.
 		// ---------------------------------------------------------------------------
 		const ROUTE = "/api/dsh-session-extras";
+		const DELETE_ROUTE = "/api/dsh-session-delete";
 
 		async function api(body) {
 			const response = await fetch(ROUTE, {
@@ -40,6 +41,25 @@ window.__ModuleLoader__.load({
 
 		async function archivedRestore(sessionId) {
 			return api({ op: "archived-restore", sessionId });
+		}
+
+		async function deletionReadiness(sessionIds) {
+			const response = await fetch(DELETE_ROUTE, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ op: "readiness", sessionIds }),
+			});
+			let envelope;
+			try {
+				envelope = await response.json();
+			} catch {
+				throw new Error(`dsh-session-delete readiness failed (${String(response.status)})`);
+			}
+			if (!response.ok || !envelope.ok) {
+				const detail = envelope && envelope.error && envelope.error.message ? envelope.error.message : `request failed (${String(response.status)})`;
+				throw new Error(detail);
+			}
+			return envelope.value;
 		}
 
 		// ---------------------------------------------------------------------------
@@ -813,11 +833,54 @@ window.__ModuleLoader__.load({
 		async function fetchArchivedSessions() {
 			try {
 				const res = await archivedList();
-				return res && res.sessions ? res.sessions : [];
+				const sessions = res && Array.isArray(res.sessions) ? res.sessions : [];
+				if (sessions.length === 0) return sessions;
+				let byId = new Map();
+				try {
+					const result = await deletionReadiness(sessions.map((session) => session.id));
+					const rows = result && Array.isArray(result.sessions) ? result.sessions : [];
+					byId = new Map(rows.map((row) => [row.sessionId, row.readiness]));
+				} catch (error) {
+					console.error("archived: deletion readiness failed", error);
+				}
+				return sessions.map((session) => ({
+					...session,
+					readiness: byId.get(session.id) || {
+						status: "unknown",
+						label: "Could not verify",
+						detail: "Deletion safety could not be checked.",
+					},
+				}));
 			} catch (e) {
 				console.error("archived: fetch failed", e);
 				return [];
 			}
+		}
+
+		const READINESS_VIEW = {
+			safe: { symbol: "\u2713", label: "Safe to delete" },
+			unsafe: { symbol: "!", label: "Work not preserved" },
+			unknown: { symbol: "?", label: "Could not verify" },
+			"no-worktree": { symbol: "\u2014", label: "No worktree" },
+			running: { symbol: "\u25cf", label: "Running" },
+			shared: { symbol: "!", label: "Shared worktree" },
+		};
+
+		function ReadinessBadge({ readiness }) {
+			const status = readiness && READINESS_VIEW[readiness.status] ? readiness.status : "unknown";
+			const view = READINESS_VIEW[status];
+			const label = readiness && readiness.label ? readiness.label : view.label;
+			const detail = readiness && readiness.detail ? readiness.detail : "Deletion safety could not be checked.";
+			const checked = readiness && readiness.checkedAt ? ` Checked ${new Date(readiness.checkedAt).toLocaleString()}.` : "";
+			return react.createElement(
+				"span",
+				{
+					className: `archs-readiness archs-readiness-${status}`,
+					title: `${label}: ${detail}${checked}`,
+					"aria-label": label,
+				},
+				view.symbol,
+			);
 		}
 
 		async function restoreSession(sessionId) {
@@ -854,7 +917,12 @@ window.__ModuleLoader__.load({
 						onClick: () => openSession(session.id),
 						disabled: pending,
 					},
-					react.createElement("span", { className: "archs-row-title" }, session.title || "Untitled"),
+					react.createElement(
+						"span",
+						{ className: "archs-row-titleline" },
+						react.createElement(ReadinessBadge, { readiness: session.readiness }),
+						react.createElement("span", { className: "archs-row-title" }, session.title || "Untitled"),
+					),
 					session.workspaceName && react.createElement(
 						"span",
 						{ className: "archs-row-workspace" },
@@ -1251,7 +1319,13 @@ window.__ModuleLoader__.load({
 			".archs-row-main{background:none;border:none;color:var(--dsw-alias-label-primary);font:inherit;text-align:left;cursor:pointer;padding:2px 0;flex:1;min-width:0;display:flex;flex-direction:column}",
 			".archs-row-main:hover{color:var(--dsw-alias-label-primary)}",
 			".archs-row-main:disabled{cursor:default;opacity:.6}",
+			".archs-row-titleline{display:flex;align-items:center;gap:7px;min-width:0}",
 			".archs-row-title{font-size:13px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+			".archs-readiness{width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:999px;border:1px solid currentColor;font-size:11px;font-weight:700;line-height:1}",
+			".archs-readiness-safe{color:var(--dsw-alias-state-success-primary)}",
+			".archs-readiness-unsafe,.archs-readiness-shared{color:var(--dsw-alias-state-warning-primary,#d89b21)}",
+			".archs-readiness-unknown,.archs-readiness-no-worktree{color:var(--dsw-alias-label-tertiary)}",
+			".archs-readiness-running{color:var(--dsw-alias-state-error-primary)}",
 			".archs-row-workspace{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
 			".archs-btn{background:none;border:none;color:var(--dsw-alias-label-tertiary);cursor:pointer;padding:4px 8px;border-radius:4px;font-size:14px;line-height:1;flex:none}",
 			".archs-btn:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}",

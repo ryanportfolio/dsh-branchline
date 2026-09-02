@@ -78,6 +78,10 @@ function registerWeb(ctx) {
         }
         const body = await readBody(request)
         const op = requiredString(body, 'op')
+        if (op === 'readiness') {
+          send(response, 200, { ok: true, value: await readinessBatch(ctx, requiredSessionIds(body)) })
+          return
+        }
         const sessionId = requiredSessionId(body)
         if (op === 'preview') {
           send(response, 200, { ok: true, value: await preview(ctx, sessionId) })
@@ -114,7 +118,7 @@ async function preview(ctx, sessionId) {
   return await previewFromRecord(ctx, record)
 }
 
-async function previewFromRecord(ctx, record) {
+async function previewFromRecord(ctx, record, snapshot) {
   const header = record.header ?? {}
   const sessionId = header.id
   const cwd = typeof header.cwd === 'string' ? header.cwd : ''
@@ -127,11 +131,25 @@ async function previewFromRecord(ctx, record) {
     attached: runtime.attached,
     running: runtime.running,
     worktree: null,
+    readiness: null,
   }
   if (cwd !== '') {
-    const view = await resolveWorktree(ctx, cwd)
+    const view = await resolveWorktree(ctx, cwd, snapshot)
     if (view !== null) {
-      const otherSessions = await countOtherSessions(ctx, view.path, sessionId)
+      const otherSessions = await countOtherSessions(ctx, view.path, sessionId, snapshot?.records)
+      let preservation
+      try {
+        preservation = await assessPreservation(ctx, view, snapshot)
+      } catch (error) {
+        preservation = {
+          status: 'unknown',
+          reason: `could not verify repository work: ${errorMessage(error)}`,
+          checkedAt: new Date().toISOString(),
+          changeToken: view.changeToken,
+          headCommit: view.headCommit,
+          branch: view.currentBranch ?? view.branch ?? null,
+        }
+      }
       summary.worktree = {
         taskId: String(view.id),
         title: view.title,
@@ -144,13 +162,81 @@ async function previewFromRecord(ctx, record) {
         unstaged: view.changes.unstaged,
         untracked: view.changes.untracked,
         commitsAhead: view.changes.commitsAhead,
+        preservation,
         otherSessions,
         forceAllowed: otherSessions === 0,
-        blockers: worktreeBlockers(view, otherSessions),
+        blockers: worktreeBlockers(view, preservation, otherSessions),
       }
     }
   }
+  summary.readiness = readinessOf(summary)
   return summary
+}
+
+/** Return compact deletion readiness for archived-session rows in one request. */
+async function readinessBatch(ctx, sessionIds) {
+  const records = await ctx.sessionQuery.listSessions()
+  const byId = new Map(records.map((record) => [record?.header?.id, record]))
+  const dashboard = await ctx.worktreeStudio.dashboard()
+  const worktrees = []
+  for (const view of dashboard.tasks) {
+    worktrees.push({ view, path: await canonicalize(view.path) })
+  }
+  const snapshot = { records, worktrees, preservation: new Map() }
+  const sessions = await mapLimit(sessionIds, 4, async (sessionId) => {
+    const record = byId.get(sessionId)
+    if (record === undefined) {
+      return {
+        sessionId,
+        readiness: status('unknown', 'Could not verify', 'Session record no longer exists.'),
+      }
+    }
+    try {
+      const value = await previewFromRecord(ctx, record, snapshot)
+      return { sessionId, readiness: value.readiness }
+    } catch (error) {
+      return {
+        sessionId,
+        readiness: status('unknown', 'Could not verify', errorMessage(error)),
+      }
+    }
+  })
+  return { sessions }
+}
+
+async function mapLimit(values, concurrency, transform) {
+  const results = new Array(values.length)
+  let cursor = 0
+  async function worker() {
+    while (cursor < values.length) {
+      const index = cursor
+      cursor += 1
+      results[index] = await transform(values[index], index)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, () => worker()))
+  return results
+}
+
+function readinessOf(summary) {
+  if (summary.running) return status('running', 'Running', 'Stop the active session before deleting it.')
+  const worktree = summary.worktree
+  if (worktree === null) return status('no-worktree', 'No worktree', 'No managed worktree folder is attached to this session.')
+  if (worktree.otherSessions > 0) {
+    return status('shared', 'Shared worktree', `${String(worktree.otherSessions)} other session(s) still use this worktree.`)
+  }
+  const proof = worktree.preservation
+  if (proof?.status === 'safe') {
+    return status('safe', 'Safe to delete', proof.reason, proof.checkedAt)
+  }
+  if (proof?.status === 'unsafe') {
+    return status('unsafe', 'Work not preserved', proof.reason, proof.checkedAt)
+  }
+  return status('unknown', 'Could not verify', proof?.reason ?? 'Repository preservation could not be verified.', proof?.checkedAt)
+}
+
+function status(value, label, detail, checkedAt = new Date().toISOString()) {
+  return { status: value, label, detail, checkedAt }
 }
 
 /** Permanently delete one session: worktree, registry state, log, and sidecars. */
@@ -175,7 +261,9 @@ async function deleteSession(ctx, sessionId, { confirmation, force }) {
     }
   }
   await detachIdleSession(ctx, sessionId)
-  const purge = summary.worktree === null ? null : await ctx.worktreeStudio.purge(summary.worktree.taskId)
+  const purge = summary.worktree === null
+    ? null
+    : await ctx.worktreeStudio.purge(summary.worktree.taskId, { requirePreserved: force !== true })
   const log = await removeSessionLog(logTarget)
   const registry = await unarchiveEverywhere(ctx, sessionId)
   const accounting = await unaccountSession(ctx, sessionId)
@@ -244,8 +332,14 @@ function unwrapTitle(value) {
 }
 
 /** Find the branchline task whose worktree owns the session's cwd, when one exists. */
-async function resolveWorktree(ctx, cwd) {
+async function resolveWorktree(ctx, cwd, snapshot) {
   const canonical = await canonicalize(cwd)
+  if (snapshot !== undefined) {
+    for (const entry of snapshot.worktrees) {
+      if (entry.path === canonical || canonical.startsWith(entry.path + separator())) return entry.view
+    }
+    return null
+  }
   const dashboard = await ctx.worktreeStudio.dashboard()
   for (const view of dashboard.tasks) {
     const key = await canonicalize(view.path)
@@ -254,10 +348,21 @@ async function resolveWorktree(ctx, cwd) {
   return null
 }
 
-async function countOtherSessions(ctx, worktreePath, exceptSessionId) {
+function assessPreservation(ctx, view, snapshot) {
+  if (snapshot === undefined) return ctx.worktreeStudio.assessPreservation(view.id)
+  const key = String(view.id)
+  let pending = snapshot.preservation.get(key)
+  if (pending === undefined) {
+    pending = Promise.resolve().then(() => ctx.worktreeStudio.assessPreservation(view.id))
+    snapshot.preservation.set(key, pending)
+  }
+  return pending
+}
+
+async function countOtherSessions(ctx, worktreePath, exceptSessionId, knownRecords) {
   const key = await canonicalize(worktreePath)
   const prefix = key + separator()
-  const records = await ctx.sessionQuery.listSessions()
+  const records = knownRecords ?? await ctx.sessionQuery.listSessions()
   let count = 0
   for (const record of records) {
     if (record?.header?.id === exceptSessionId) continue
@@ -274,11 +379,11 @@ async function countOtherSessions(ctx, worktreePath, exceptSessionId) {
   return count
 }
 
-function worktreeBlockers(view, otherSessions) {
+function worktreeBlockers(view, preservation, otherSessions) {
   const blockers = []
   if (view.changes.dirty) blockers.push('worktree has uncommitted changes')
-  if (view.changes.commitsAhead > 0) {
-    blockers.push(`branch has ${view.changes.commitsAhead} commit(s) not in the base ref`)
+  if (!view.changes.dirty && preservation?.status !== 'safe') {
+    blockers.push(preservation?.reason ?? 'repository work could not be verified on the default branch')
   }
   if (otherSessions > 0) blockers.push(`${otherSessions} other session(s) still use this worktree`)
   return blockers
@@ -509,4 +614,23 @@ function requiredSessionId(body) {
     throw new HttpError('invalid-input', 'sessionId is not a valid session id')
   }
   return value
+}
+
+function requiredSessionIds(body) {
+  const value = body.sessionIds
+  if (!Array.isArray(value) || value.length === 0 || value.length > 200) {
+    throw new HttpError('invalid-input', 'sessionIds must contain between 1 and 200 session ids')
+  }
+  const unique = []
+  const seen = new Set()
+  for (const id of value) {
+    if (typeof id !== 'string' || !SESSION_ID_PATTERN.test(id)) {
+      throw new HttpError('invalid-input', 'sessionIds contains an invalid session id')
+    }
+    if (!seen.has(id)) {
+      seen.add(id)
+      unique.push(id)
+    }
+  }
+  return unique
 }

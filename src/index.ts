@@ -88,8 +88,6 @@ export function createWorktreeStudioManager(
 /** Register the manager, recover interrupted state, and attach Web when available. */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const options = resolveOptions(config)
-  const manager = new LocalWorktreeStudioManager(options, ctx.subprocess)
-  ctx.provide('worktreeStudio', manager)
   const github = new GitHubClient(
     {
       cloneRoot: options.cloneRoot,
@@ -100,6 +98,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     },
     ctx.subprocess,
   )
+  const manager = new LocalWorktreeStudioManager(options, ctx.subprocess, undefined, undefined, github)
+  ctx.provide('worktreeStudio', manager)
   const report = await manager.recover()
   for (const problem of report.problems) ctx.logger.warn(`dsh-branchline: ${problem}`)
   ctx.inject(['webServer'], webCtx => webCtx.effect(

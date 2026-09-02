@@ -50,6 +50,7 @@ export interface GitStatus {
   readonly headCommit: string
   readonly branch: string | null
   readonly changes: ChangeSummary
+  readonly ignoredPaths: readonly string[]
   readonly fingerprint: string
 }
 
@@ -258,6 +259,17 @@ export class GitClient {
     return (await this.checked(repository, ['rev-parse', '--verify', `${ref}^{commit}`])).stdout.trim()
   }
 
+  /** Whether one exact commit is already reachable from another commit. */
+  async isAncestor(repository: string, ancestor: string, descendant: string): Promise<boolean> {
+    if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(ancestor) || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(descendant)) {
+      throw new StudioError('invalid-input', 'ancestor checks require full commit ids')
+    }
+    const result = await this.raw(repository, ['merge-base', '--is-ancestor', ancestor, descendant])
+    if (!result.timedOut && result.exitCode === 0) return true
+    if (!result.timedOut && result.exitCode === 1) return false
+    throw new StudioError('git-failure', `git merge-base failed: ${compactFailure(result)}`)
+  }
+
   /** Fetch and resolve the remote's current default branch without touching a checkout. */
   async fetchDefaultBase(repository: string, remote = 'origin'): Promise<RemoteBase> {
     if (remote.length === 0 || remote.includes('\0') || /[\r\n]/u.test(remote) || remote.startsWith('-')) {
@@ -347,7 +359,7 @@ export class GitClient {
   /** Read fresh changes and an exact fingerprint of status output. */
   async status(path: string, baseCommit: string): Promise<GitStatus> {
     const [status, head, branchResult, ahead] = await Promise.all([
-      this.checked(path, ['status', '--porcelain=v2', '-z', '--untracked-files=all']),
+      this.checked(path, ['status', '--porcelain=v2', '-z', '--untracked-files=all', '--ignored=matching']),
       this.checked(path, ['rev-parse', '--verify', 'HEAD^{commit}']),
       this.raw(path, ['branch', '--show-current']),
       this.checked(path, ['rev-list', '--count', `${baseCommit}..HEAD`]),
@@ -359,7 +371,12 @@ export class GitClient {
     let unstaged = 0
     let untracked = 0
     const untrackedPaths: string[] = []
+    const ignoredPaths: string[] = []
     for (const entry of status.stdout.split('\0')) {
+      if (entry.startsWith('! ')) {
+        ignoredPaths.push(entry.slice(2))
+        continue
+      }
       if (entry.startsWith('? ')) {
         untracked += 1
         untrackedPaths.push(entry.slice(2))
@@ -394,6 +411,7 @@ export class GitClient {
         untracked,
         commitsAhead,
       },
+      ignoredPaths,
       fingerprint: createHash('sha256')
         .update(headCommit)
         .update('\0')

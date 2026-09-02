@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
 			if (workspacesService === null || typeof workspacesService.archiveSession !== "function") {
 				throw new Error("This DSH build cannot close the session before deletion.");
 			}
-			await workspacesService.archiveSession(sessionId);
+			return state;
 		}
 
 		// ---------------------------------------------------------------------------
@@ -104,6 +104,12 @@ window.__ModuleLoader__.load({
 			".sdel-kv-val{min-width:0;text-align:right;word-break:break-all}",
 			".sdel-blockers{display:flex;flex-direction:column;gap:4px}",
 			".sdel-blocker{color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:18px}",
+			".sdel-readiness{padding:10px 12px;border-radius:8px;border:1px solid currentColor;font-size:12px;line-height:18px}",
+			".sdel-readiness strong{display:block;font-size:12px;margin-bottom:2px}",
+			".sdel-readiness-safe{color:var(--dsw-alias-state-success-primary);background:var(--dsw-alias-state-success-bg,transparent)}",
+			".sdel-readiness-unsafe,.sdel-readiness-shared{color:var(--dsw-alias-state-warning-primary,#d89b21)}",
+			".sdel-readiness-unknown,.sdel-readiness-no-worktree{color:var(--dsw-alias-label-tertiary)}",
+			".sdel-readiness-running{color:var(--dsw-alias-state-error-primary)}",
 			".sdel-warning{color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:18px;font-weight:600}",
 			".sdel-loading,.sdel-empty{padding:18px;text-align:center;color:var(--dsw-alias-label-tertiary);font-size:13px}",
 			".sdel-error{padding:10px 12px;background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary);border-radius:8px;font-size:12px;line-height:18px;word-break:break-word}",
@@ -156,13 +162,25 @@ window.__ModuleLoader__.load({
 					label: "Uncommitted changes",
 					value: `${worktree.staged || 0} staged, ${worktree.unstaged || 0} unstaged, ${worktree.untracked || 0} untracked`,
 				}),
-				(worktree.commitsAhead || 0) > 0 && react.createElement(Kv, { label: "Undelivered commits", value: String(worktree.commitsAhead) }),
 				(worktree.otherSessions || 0) > 0 && react.createElement(Kv, { label: "Other sessions using it", value: String(worktree.otherSessions) }),
 				blockers.length > 0 && react.createElement(
 					"div",
 					{ className: "sdel-blockers" },
 					blockers.map((line, index) => react.createElement("div", { key: index, className: "sdel-blocker" }, line)),
 				),
+			);
+		}
+
+		function ReadinessPanel({ readiness }) {
+			if (readiness === null || readiness === undefined) return null;
+			const state = typeof readiness.status === "string" ? readiness.status : "unknown";
+			const label = readiness.label || "Could not verify";
+			const detail = readiness.detail || "Deletion safety could not be checked.";
+			return react.createElement(
+				"div",
+				{ className: `sdel-readiness sdel-readiness-${state}` },
+				react.createElement("strong", null, state === "safe" ? "\u2713 " + label : label),
+				detail,
 			);
 		}
 
@@ -200,7 +218,12 @@ window.__ModuleLoader__.load({
 				setPhase("deleting");
 				setError(null);
 				try {
-					await prepareSessionDeletion(sessionId);
+					const current = await prepareSessionDeletion(sessionId);
+					setPreview(current);
+					if (force !== true && current.worktree !== null && current.readiness && current.readiness.status !== "safe") {
+						throw new Error(`Worktree is no longer proven safe to delete: ${current.readiness.detail || current.readiness.label}`);
+					}
+					await workspacesService.archiveSession(sessionId);
 					await apiDelete(sessionId, force);
 					bus.close();
 					window.dispatchEvent(new CustomEvent(EVENT_DELETED, { detail: { sessionId } }));
@@ -218,6 +241,7 @@ window.__ModuleLoader__.load({
 			const blockers = preview && preview.worktree ? preview.worktree.blockers || [] : [];
 			const forceAllowed = !preview || !preview.worktree || preview.worktree.forceAllowed !== false;
 			const running = preview !== null && preview.running === true;
+			const safeWorktree = preview !== null && preview.worktree !== null && preview.readiness && preview.readiness.status === "safe";
 			const close = () => bus.close();
 
 			return react.createElement(
@@ -244,6 +268,7 @@ window.__ModuleLoader__.load({
 						react.createElement("div", { className: "sdel-session-title" }, preview.title || "Untitled session"),
 						react.createElement("div", { className: "sdel-session-id" }, preview.sessionId),
 						react.createElement(WorktreeSection, { worktree: preview.worktree }),
+						react.createElement(ReadinessPanel, { readiness: preview.readiness }),
 						react.createElement(
 							"div",
 							{ className: "sdel-warning" },
@@ -264,7 +289,7 @@ window.__ModuleLoader__.load({
 						phase === "ready" && !running && blockers.length === 0 && react.createElement(
 							"button",
 							{ className: "sdel-btn sdel-btn-danger", onClick: () => perform(false) },
-							"Delete permanently",
+							safeWorktree ? "Delete safely" : "Delete permanently",
 						),
 						phase === "ready" && !running && blockers.length > 0 && forceAllowed && react.createElement(
 							"button",

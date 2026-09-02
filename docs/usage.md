@@ -44,6 +44,12 @@ After creation, the client registers the worktree as a DSH Workspace and opens a
 
 **Archive** removes a clean linked worktree and retains its task record. **Discard** requires the exact task ID and can remove uncommitted task files.
 
+### Safe session cleanup
+
+Archived sessions show deletion-readiness beside their names. A green `✓` means the managed worktree is clean and its exact HEAD is proven on the freshly fetched remote default branch, either by commit ancestry or by an exact-head merged GitHub pull request whose merge commit is on that branch. `!` means repository work is not preserved, `?` means the proof could not be completed, `—` means no managed worktree is attached, and `●` means the session is running.
+
+Normal deletion recomputes the proof inside the guarded purge immediately before removing the worktree and branch. Running or shared worktrees remain blocked; the explicit force path can bypass repository-preservation blockers. The safety claim covers tracked, untracked, and ignored local work. Known disposable ignored roots such as `node_modules` and build/cache folders are allowed. Other ignored paths, including `.env` files, block the green state because they may contain unique local data.
+
 ## Commands
 
 ```text

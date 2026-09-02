@@ -7,6 +7,7 @@ import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { StudioError, errorMessage } from './errors.ts'
 import { assertCommand, assertPathInside, GitClient, samePath } from './git.ts'
 import type { GitStatus } from './git.ts'
+import type { GitHubClient } from './github.ts'
 import { TaskStore, type StoreState } from './store.ts'
 import {
   TaskId,
@@ -21,6 +22,7 @@ import {
   type TaskRecord,
   type TaskView,
   type WorktreeStudioManager,
+  type WorktreePreservation,
 } from './types.ts'
 
 /** Deployment choices resolved by the Host plugin. */
@@ -46,6 +48,12 @@ const EMPTY_CHANGES = Object.freeze({
   commitsAhead: 0,
 })
 
+const DISPOSABLE_IGNORED_ROOTS = new Set([
+  '.astro', '.cache', '.gradle', '.mypy_cache', '.next', '.nuxt', '.pytest_cache',
+  '.ruff_cache', '.svelte-kit', '.turbo', '.venv', '.vite', '__pycache__', 'bin',
+  'build', 'coverage', 'dist', 'lib', 'node_modules', 'obj', 'out', 'target', 'venv',
+])
+
 /** Local task manager. Every mutation is serialized in-process and cross-process. */
 export class LocalWorktreeStudioManager implements WorktreeStudioManager {
   private readonly git: GitClient
@@ -65,6 +73,7 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
     subprocess: SubprocessRuntime,
     git?: GitClient,
     store?: TaskStore,
+    private readonly github?: Pick<GitHubClient, 'findMergedPullRequest'>,
   ) {
     this.git = git ?? new GitClient(
       subprocess,
@@ -74,6 +83,12 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
       this.lifecycle.signal,
     )
     this.store = store ?? new TaskStore(options.statePath)
+  }
+
+  /** Prove whether the exact clean task HEAD is preserved on the fetched default branch. */
+  async assessPreservation(id: TaskId): Promise<WorktreePreservation> {
+    const task = this.requireTask(await this.store.read(), id)
+    return await this.assessTaskPreservation(task)
   }
 
   /** Create a branch-backed worktree and persist its recovery marker first. */
@@ -362,6 +377,12 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
       }
       const task = known
       assertPathInside(this.options.managedRoot, task.path)
+      if (options.requirePreserved === true) {
+        const proof = await this.assessTaskPreservation(task)
+        if (proof.status !== 'safe') {
+          throw new StudioError('state-conflict', `worktree is not proven safe to delete: ${proof.reason}`)
+        }
+      }
       await this.replaceTask(id, record => ({
         ...record,
         pendingOperation: 'purge',
@@ -559,6 +580,7 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
         headCommit: status.headCommit,
         currentBranch: status.branch,
         changes: status.changes,
+        ignoredPaths: status.ignoredPaths,
         exists: true,
         changeToken,
         workspacePath: task.path,
@@ -571,10 +593,77 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
         headCommit: null,
         currentBranch: null,
         changes: EMPTY_CHANGES,
+        ignoredPaths: [],
         exists: true,
         changeToken: fallbackToken(task),
         workspacePath: task.path,
       }
+    }
+  }
+
+  private async assessTaskPreservation(task: TaskRecord): Promise<WorktreePreservation> {
+    const checkedAt = new Date().toISOString()
+    const view = await this.view(task)
+    const common = {
+      checkedAt,
+      changeToken: view.changeToken,
+      headCommit: view.headCommit,
+      branch: view.currentBranch,
+      ignoredPaths: view.ignoredPaths,
+    }
+    if (!view.exists) return { status: 'unknown', reason: 'managed worktree folder is missing', ...common }
+    if (view.changes.dirty) {
+      const count = view.changes.staged + view.changes.unstaged + view.changes.untracked
+      return { status: 'unsafe', reason: `worktree has ${String(count)} uncommitted file change(s)`, ...common }
+    }
+    const protectedIgnored = view.ignoredPaths.filter(path => !isDisposableIgnoredPath(path))
+    if (protectedIgnored.length > 0) {
+      const shown = protectedIgnored.slice(0, 3).join(', ')
+      const more = protectedIgnored.length > 3 ? ` (+${String(protectedIgnored.length - 3)} more)` : ''
+      return { status: 'unsafe', reason: `worktree has ignored local path(s) that may contain data: ${shown}${more}`, ...common }
+    }
+    if (view.headCommit === null || view.currentBranch === null) {
+      return { status: 'unknown', reason: 'worktree HEAD or branch could not be resolved', ...common }
+    }
+    let base
+    try {
+      base = await this.git.fetchDefaultBase(task.repository)
+    } catch (error) {
+      return { status: 'unknown', reason: `could not refresh origin: ${errorMessage(error)}`, ...common }
+    }
+    const remote = { defaultRef: base.ref, defaultCommit: base.commit }
+    try {
+      if (await this.git.isAncestor(task.repository, view.headCommit, base.commit)) {
+        return { status: 'safe', reason: `exact HEAD is contained in ${base.remote}/${base.branch}`, ...common, ...remote }
+      }
+    } catch (error) {
+      return { status: 'unknown', reason: `could not compare commits: ${errorMessage(error)}`, ...common, ...remote }
+    }
+    if (this.github === undefined) {
+      return { status: 'unknown', reason: 'GitHub merge verification is unavailable', ...common, ...remote }
+    }
+    let pullRequest
+    try {
+      pullRequest = await this.github.findMergedPullRequest(task.repository, view.currentBranch, view.headCommit)
+    } catch (error) {
+      return { status: 'unknown', reason: `could not verify a merged pull request: ${errorMessage(error)}`, ...common, ...remote }
+    }
+    if (pullRequest === null) {
+      return { status: 'unsafe', reason: 'current branch HEAD has no matching merged pull request', ...common, ...remote }
+    }
+    try {
+      if (!(await this.git.isAncestor(task.repository, pullRequest.mergeCommit, base.commit))) {
+        return { status: 'unsafe', reason: `PR #${String(pullRequest.number)} is not contained in ${base.remote}/${base.branch}`, ...common, ...remote, pullRequest }
+      }
+    } catch (error) {
+      return { status: 'unknown', reason: `could not verify the PR merge commit: ${errorMessage(error)}`, ...common, ...remote, pullRequest }
+    }
+    return {
+      status: 'safe',
+      reason: `PR #${String(pullRequest.number)} merged and contains this exact HEAD`,
+      ...common,
+      ...remote,
+      pullRequest,
     }
   }
 
@@ -663,10 +752,16 @@ function missingView(task: TaskRecord): TaskView {
     headCommit: null,
     currentBranch: null,
     changes: EMPTY_CHANGES,
+    ignoredPaths: [],
     exists: false,
     changeToken: fallbackToken(task),
     workspacePath: task.path,
   }
+}
+
+function isDisposableIgnoredPath(path: string): boolean {
+  const segments = path.replace(/\\/gu, '/').replace(/^\.\//u, '').split('/').filter(Boolean)
+  return segments.some(segment => DISPOSABLE_IGNORED_ROOTS.has(segment.toLocaleLowerCase()))
 }
 
 function failedPreview(task: TaskRecord, targetPath: string | undefined, reason: string, sourceHead: string | null = null): MergePreview {

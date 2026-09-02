@@ -5,7 +5,7 @@ import { join, isAbsolute, resolve } from 'node:path'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { StudioError, errorMessage } from './errors.ts'
 import { executableEnvironment, runProcess, type ProcessResult } from './git.ts'
-import type { CloneOutcome, GitHubRepoView } from './types.ts'
+import type { CloneOutcome, GitHubRepoView, MergedPullRequestView } from './types.ts'
 
 /** One row returned by `gh repo list --json`. */
 interface GhRepoRow {
@@ -13,6 +13,14 @@ interface GhRepoRow {
   readonly description?: unknown
   readonly updatedAt?: unknown
   readonly isFork?: unknown
+}
+
+interface GhPullRequestRow {
+  readonly number?: unknown
+  readonly url?: unknown
+  readonly mergedAt?: unknown
+  readonly headRefOid?: unknown
+  readonly mergeCommit?: { readonly oid?: unknown } | null
 }
 
 /** Injectable process boundary so tests never need `gh` or the network. */
@@ -87,6 +95,43 @@ export class GitHubClient {
     return rows
   }
 
+  /** Find a merged PR whose recorded branch head exactly equals the supplied commit. */
+  async findMergedPullRequest(repository: string, branch: string, headCommit: string): Promise<MergedPullRequestView | null> {
+    if (branch.trim() === '' || branch.startsWith('-') || branch.includes('\0') || /[\r\n]/u.test(branch)) {
+      throw new StudioError('invalid-input', 'pull request branch is invalid')
+    }
+    if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(headCommit)) {
+      throw new StudioError('invalid-input', 'pull request proof requires a full head commit id')
+    }
+    const result = await this.checked([
+      'pr', 'list', '--state', 'merged', '--head', branch, '--limit', '100',
+      '--json', 'number,url,mergedAt,mergeCommit,headRefOid',
+    ], this.options.listTimeoutMs, repository)
+    if (result.stdoutTruncated) throw new StudioError('git-failure', 'gh pr list output exceeded the configured capture limit')
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(result.stdout) as unknown
+    } catch (error) {
+      throw new StudioError('git-failure', `gh pr list returned invalid JSON: ${errorMessage(error)}`)
+    }
+    if (!Array.isArray(parsed)) throw new StudioError('git-failure', 'gh pr list returned unexpected output')
+    for (const row of parsed) {
+      const record = row as GhPullRequestRow
+      const mergeCommit = record.mergeCommit?.oid
+      if (record.headRefOid !== headCommit || !Number.isSafeInteger(record.number) || typeof record.url !== 'string'
+        || typeof record.mergedAt !== 'string' || typeof mergeCommit !== 'string'
+        || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(mergeCommit)) continue
+      return {
+        number: record.number as number,
+        url: record.url,
+        mergedAt: record.mergedAt,
+        headCommit,
+        mergeCommit,
+      }
+    }
+    return null
+  }
+
   /**
    * Ensure `cloneRoot/<name>` holds a Git checkout of `source`, cloning when
    * absent and reusing the existing checkout when present. Concurrent requests
@@ -140,16 +185,16 @@ export class GitHubClient {
     })
   }
 
-  private raw(args: readonly string[], timeoutMs: number, executable = 'gh'): Promise<ProcessResult> {
-    return this.run(executable, args, { cwd: this.options.cloneRoot, timeoutMs, env: this.environment() })
+  private raw(args: readonly string[], timeoutMs: number, executable = 'gh', cwd = this.options.cloneRoot): Promise<ProcessResult> {
+    return this.run(executable, args, { cwd, timeoutMs, env: this.environment() })
       .catch((error: unknown) => {
         if (error instanceof StudioError) throw error
         throw new StudioError('git-failure', `cannot run ${executable}: ${errorMessage(error)}`, 502, { cause: error })
       })
   }
 
-  private async checked(args: readonly string[], timeoutMs: number): Promise<ProcessResult> {
-    const result = await this.raw(args, timeoutMs)
+  private async checked(args: readonly string[], timeoutMs: number, cwd = this.options.cloneRoot): Promise<ProcessResult> {
+    const result = await this.raw(args, timeoutMs, 'gh', cwd)
     if (result.exitCode !== 0 || result.timedOut) {
       const label = args.slice(0, 2).join(' ')
       const detail = result.timedOut

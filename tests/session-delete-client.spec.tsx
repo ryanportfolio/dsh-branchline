@@ -118,6 +118,49 @@ describe('dsh-session-delete client', () => {
     await waitFor(() => expect(screen.queryByText('Delete session')).toBeNull())
   })
 
+  it('shows repository proof and labels a verified worktree delete as safe', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      ok: true,
+      value: {
+        sessionId: SESSION,
+        title: 'Merged task',
+        cwd: 'C:\\wt',
+        attached: false,
+        running: false,
+        readiness: {
+          status: 'safe',
+          label: 'Safe to delete',
+          detail: 'PR #21 merged and contains this exact HEAD',
+          checkedAt: '2026-09-01T00:00:00.000Z',
+        },
+        worktree: {
+          taskId: 'wt-22222222-2222-4222-8222-222222222222',
+          title: 'Merged task',
+          path: 'C:\\wt',
+          branch: 'codex/merged-task',
+          repository: 'C:\\repo',
+          exists: true,
+          dirty: false,
+          staged: 0,
+          unstaged: 0,
+          untracked: 0,
+          commitsAhead: 2,
+          otherSessions: 0,
+          forceAllowed: true,
+          blockers: [],
+        },
+      },
+    }))
+    const { headerAction, overlay } = loadBundle(fetchMock)
+    render(React.createElement(headerAction, { sessionId: SESSION }))
+    render(React.createElement(overlay, {}))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete session permanently' }))
+
+    await screen.findByText('PR #21 merged and contains this exact HEAD')
+    expect(screen.getByRole('button', { name: 'Delete safely' })).toBeTruthy()
+    expect(screen.queryByText('Undelivered commits')).toBeNull()
+  })
+
   it('archives an idle attached session before deleting it', async () => {
     let previews = 0
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {

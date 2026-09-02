@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { assertPathInside, GitClient, runProcess } from '../src/git.ts'
@@ -106,6 +106,43 @@ describe('GitClient', () => {
       ref: 'refs/remotes/origin/main',
       commit: runGit(fixture.repository, ['rev-parse', 'origin/main']),
     })
+  })
+
+  it('checks exact commit ancestry without changing a checkout', async () => {
+    const fixture = await createRepositoryFixture()
+    fixtures.push(fixture)
+    const subprocess = await createSubprocessFixture()
+    subprocesses.push(subprocess)
+    const client = new GitClient(subprocess.subprocess, 10_000, 200, 128 * 1024)
+    const initial = runGit(fixture.repository, ['rev-parse', 'HEAD'])
+    await writeFile(join(fixture.repository, 'next.txt'), 'next\n')
+    runGit(fixture.repository, ['add', 'next.txt'])
+    runGit(fixture.repository, ['commit', '-m', 'next'])
+    const next = runGit(fixture.repository, ['rev-parse', 'HEAD'])
+
+    await expect(client.isAncestor(fixture.repository, initial, next)).resolves.toBe(true)
+    await expect(client.isAncestor(fixture.repository, next, initial)).resolves.toBe(false)
+    await expect(client.isAncestor(fixture.repository, '-bad', next)).rejects.toMatchObject({ code: 'invalid-input' })
+  })
+
+  it('surfaces ignored paths for deletion-safety classification', async () => {
+    const fixture = await createRepositoryFixture()
+    fixtures.push(fixture)
+    const subprocess = await createSubprocessFixture()
+    subprocesses.push(subprocess)
+    const client = new GitClient(subprocess.subprocess, 10_000, 200, 128 * 1024)
+    await writeFile(join(fixture.repository, '.gitignore'), '.env.local\nnode_modules/\n')
+    runGit(fixture.repository, ['add', '.gitignore'])
+    runGit(fixture.repository, ['commit', '-m', 'ignore local files'])
+    await writeFile(join(fixture.repository, '.env.local'), 'secret=value\n')
+    await mkdir(join(fixture.repository, 'node_modules'))
+    await writeFile(join(fixture.repository, 'node_modules', 'cache.txt'), 'cache\n')
+    const head = runGit(fixture.repository, ['rev-parse', 'HEAD'])
+
+    const status = await client.status(fixture.repository, head)
+
+    expect(status.changes.dirty).toBe(false)
+    expect(status.ignoredPaths).toEqual(expect.arrayContaining(['.env.local', 'node_modules/']))
   })
 
   it('rejects a managed path that escapes its configured root', () => {
