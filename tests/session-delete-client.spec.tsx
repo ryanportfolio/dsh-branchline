@@ -37,6 +37,7 @@ function loadBundle(fetchMock: ReturnType<typeof vi.fn>): {
   readonly headerAction: Component
   readonly overlay: Component
   readonly refresh: ReturnType<typeof vi.fn>
+  readonly archiveSession: ReturnType<typeof vi.fn>
 } {
   let definition: BundleDefinition | undefined
   Object.defineProperty(window, '__ModuleLoader__', {
@@ -52,6 +53,7 @@ function loadBundle(fetchMock: ReturnType<typeof vi.fn>): {
   })
   const registered = new Map<string, Component>()
   const refresh = vi.fn(async () => undefined)
+  const archiveSession = vi.fn(async () => undefined)
   const slots = {
     inject: (_name: string, install: () => void) => { install() },
     register: (config: { readonly name: string }, component: Component) => {
@@ -61,21 +63,21 @@ function loadBundle(fetchMock: ReturnType<typeof vi.fn>): {
   }
   const ctx = {
     slots,
-    workspaces: { refresh },
+    workspaces: { refresh, archiveSession },
     effect: (fn: () => unknown) => fn(),
   }
   bundle.apply(ctx)
   const headerAction = registered.get('conversation.session.header.actions')
   const overlay = registered.get('shell.overlay')
   if (headerAction === undefined || overlay === undefined) throw new Error('session delete slots were not registered')
-  return { headerAction, overlay, refresh }
+  return { headerAction, overlay, refresh, archiveSession }
 }
 
 describe('dsh-session-delete client', () => {
   it('renders the header action only with a session id and opens the dialog from it', async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({
       ok: true,
-      value: { sessionId: SESSION, title: 'Purge me', cwd: '', live: false, worktree: null },
+      value: { sessionId: SESSION, title: 'Purge me', cwd: '', attached: false, running: false, worktree: null },
     }))
     const { headerAction, overlay } = loadBundle(fetchMock)
 
@@ -96,7 +98,7 @@ describe('dsh-session-delete client', () => {
       if (body.includes('"op":"preview"')) {
         return jsonResponse({
           ok: true,
-          value: { sessionId: SESSION, title: 'Purge me', cwd: 'C:\\wt', live: false, worktree: null },
+          value: { sessionId: SESSION, title: 'Purge me', cwd: 'C:\\wt', attached: false, running: false, worktree: null },
         })
       }
       return jsonResponse({ ok: true, value: { sessionId: SESSION, worktree: null } })
@@ -116,6 +118,95 @@ describe('dsh-session-delete client', () => {
     await waitFor(() => expect(screen.queryByText('Delete session')).toBeNull())
   })
 
+  it('archives an idle attached session before deleting it', async () => {
+    let previews = 0
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = String(init?.body ?? '')
+      if (body.includes('"op":"preview"')) {
+        previews += 1
+        return jsonResponse({
+          ok: true,
+          value: {
+            sessionId: SESSION,
+            title: 'Idle session',
+            cwd: '',
+            attached: true,
+            running: false,
+            worktree: null,
+          },
+        })
+      }
+      return jsonResponse({ ok: true, value: { sessionId: SESSION, worktree: null } })
+    })
+    const { headerAction, overlay, archiveSession } = loadBundle(fetchMock)
+    render(React.createElement(headerAction, { sessionId: SESSION }))
+    render(React.createElement(overlay, {}))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete session permanently' }))
+
+    await screen.findByText('Idle session')
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }))
+
+    await waitFor(() => expect(archiveSession).toHaveBeenCalledWith(SESSION))
+    await waitFor(() => {
+      const deleteCall = fetchMock.mock.calls.find(([, init]) => String(init?.body ?? '').includes('"op":"delete"'))
+      expect(deleteCall).toBeDefined()
+    })
+    expect(previews).toBe(2)
+  })
+
+  it('blocks deletion while the session is running', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      ok: true,
+      value: {
+        sessionId: SESSION,
+        title: 'Busy session',
+        cwd: '',
+        attached: true,
+        running: true,
+        worktree: null,
+      },
+    }))
+    const { headerAction, overlay, archiveSession } = loadBundle(fetchMock)
+    render(React.createElement(headerAction, { sessionId: SESSION }))
+    render(React.createElement(overlay, {}))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete session permanently' }))
+
+    await screen.findByText('Stop the active session before deleting it.')
+    const blocked = screen.getByRole('button', { name: 'Stop session first' }) as HTMLButtonElement
+    expect(blocked.disabled).toBe(true)
+    expect(archiveSession).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not detach when an idle session starts running before confirmation', async () => {
+    let previews = 0
+    const fetchMock = vi.fn(async () => {
+      previews += 1
+      return jsonResponse({
+        ok: true,
+        value: {
+          sessionId: SESSION,
+          title: 'Racing session',
+          cwd: '',
+          attached: true,
+          running: previews > 1,
+          worktree: null,
+        },
+      })
+    })
+    const { headerAction, overlay, archiveSession } = loadBundle(fetchMock)
+    render(React.createElement(headerAction, { sessionId: SESSION }))
+    render(React.createElement(overlay, {}))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete session permanently' }))
+
+    await screen.findByText('Racing session')
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }))
+
+    await screen.findByText('Stop the active session before deleting it.')
+    expect(archiveSession).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('lists blockers and offers force deletion when the worktree blocks removal', async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = String(init?.body ?? '')
@@ -126,7 +217,8 @@ describe('dsh-session-delete client', () => {
             sessionId: SESSION,
             title: 'Purge me',
             cwd: 'C:\\wt',
-            live: false,
+            attached: false,
+            running: false,
             worktree: {
               taskId: 'wt-22222222-2222-4222-8222-222222222222',
               title: 'Task',
@@ -165,7 +257,7 @@ describe('dsh-session-delete client', () => {
   it('opens the dialog from the archived-rows bridge event', async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) => jsonResponse({
       ok: true,
-      value: { sessionId: SESSION, title: 'Bridged', cwd: '', live: false, worktree: null },
+      value: { sessionId: SESSION, title: 'Bridged', cwd: '', attached: false, running: false, worktree: null },
     }))
     const { overlay } = loadBundle(fetchMock)
     render(React.createElement(overlay, {}))
@@ -182,7 +274,8 @@ describe('dsh-session-delete client', () => {
         sessionId: SESSION,
         title: 'Shared worktree',
         cwd: 'C:\\wt',
-        live: false,
+        attached: false,
+        running: false,
         worktree: {
           taskId: 'wt-22222222-2222-4222-8222-222222222222',
           title: 'Task',

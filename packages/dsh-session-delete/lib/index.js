@@ -5,15 +5,61 @@ import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
 export const name = 'dsh-session-delete'
-export const inject = ['sessionQuery', 'sessionPersistence', 'workspaceRegistry', 'worktreeStudio']
+export const inject = ['agents', 'sessionQuery', 'sessionPersistence', 'workspaceRegistry', 'worktreeStudio']
 
 const ROUTE = '/api/dsh-session-delete'
 const BODY_LIMIT_BYTES = 256 * 1024
 const SESSION_ID_PATTERN = /^session-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu
 const PINS_FILE = join(homedir(), '.dsh', 'storages', 'dsh-session-pins.json')
+const HANDLE_TRACKER = Symbol.for('dsh-session-delete.agent-handle-tracker.v1')
 
 export function apply(ctx) {
+  ctx.effect(() => installAgentHandleTracker(ctx), 'dsh-session-delete.agent-handles')
   ctx.inject(['webServer'], (webCtx) => webCtx.effect(() => registerWeb(webCtx), 'dsh-session-delete.web'))
+}
+
+/** Capture public AgentHandle capabilities without changing caller ownership. */
+function installAgentHandleTracker(ctx) {
+  const agents = service(ctx, 'agents')
+  const methodOwner = findMethodOwner(agents, 'resume')
+  if (methodOwner === null || typeof methodOwner.create !== 'function') return () => undefined
+  let state = methodOwner[HANDLE_TRACKER]
+  if (state === undefined) {
+    const originalCreate = methodOwner.create
+    const originalResume = methodOwner.resume
+    state = { handles: new WeakMap(), owners: 0, originalCreate, originalResume }
+    const remember = async function (original, args) {
+      const handle = await Reflect.apply(original, this, args)
+      if (handle?.agent !== undefined && typeof handle.dispose === 'function') state.handles.set(handle.agent, handle)
+      return handle
+    }
+    state.trackedCreate = function (...args) { return remember.call(this, originalCreate, args) }
+    state.trackedResume = function (...args) { return remember.call(this, originalResume, args) }
+    Object.defineProperty(methodOwner, HANDLE_TRACKER, { configurable: true, value: state })
+    Object.defineProperty(methodOwner, 'create', { configurable: true, writable: true, value: state.trackedCreate })
+    Object.defineProperty(methodOwner, 'resume', { configurable: true, writable: true, value: state.trackedResume })
+  }
+  state.owners += 1
+  return () => {
+    state.owners -= 1
+    if (state.owners !== 0 || methodOwner[HANDLE_TRACKER] !== state) return
+    if (methodOwner.create === state.trackedCreate) methodOwner.create = state.originalCreate
+    if (methodOwner.resume === state.trackedResume) methodOwner.resume = state.originalResume
+    delete methodOwner[HANDLE_TRACKER]
+  }
+}
+
+function findMethodOwner(value, method) {
+  let cursor = value
+  while (cursor !== null) {
+    if (Object.hasOwn(cursor, method)) return cursor
+    cursor = Object.getPrototypeOf(cursor)
+  }
+  return null
+}
+
+function service(ctx, name) {
+  return typeof ctx.get === 'function' ? ctx.get(name) : ctx[name]
 }
 
 function registerWeb(ctx) {
@@ -72,12 +118,14 @@ async function previewFromRecord(ctx, record) {
   const header = record.header ?? {}
   const sessionId = header.id
   const cwd = typeof header.cwd === 'string' ? header.cwd : ''
+  const runtime = sessionRuntimeState(ctx, sessionId)
   const summary = {
     sessionId,
     title: await readTitle(ctx, sessionId),
     cwd,
     createdAt: header.createdAt,
-    live: isLive(ctx, sessionId),
+    attached: runtime.attached,
+    running: runtime.running,
     worktree: null,
   }
   if (cwd !== '') {
@@ -113,11 +161,10 @@ async function deleteSession(ctx, sessionId, { confirmation, force }) {
   const record = await findSession(ctx, sessionId)
   if (record === undefined) throw new HttpError('session-not-found', `unknown session ${sessionId}`, 404)
   const summary = await previewFromRecord(ctx, record)
-  if (summary.live) {
-    throw new HttpError('session-live', 'stop the session before deleting it; live sessions cannot be deleted', 409)
+  if (summary.running) {
+    throw new HttpError('session-running', 'stop the active session before deleting it', 409)
   }
   const logTarget = locateSessionLog(ctx, record)
-  let purge = null
   if (summary.worktree !== null) {
     const blockers = summary.worktree.blockers
     if (summary.worktree.otherSessions > 0) {
@@ -126,8 +173,9 @@ async function deleteSession(ctx, sessionId, { confirmation, force }) {
     if (blockers.length > 0 && force !== true) {
       throw new HttpError('worktree-blocked', `worktree removal is blocked: ${blockers.join('; ')}`, 409)
     }
-    purge = await ctx.worktreeStudio.purge(summary.worktree.taskId)
   }
+  await detachIdleSession(ctx, sessionId)
+  const purge = summary.worktree === null ? null : await ctx.worktreeStudio.purge(summary.worktree.taskId)
   const log = await removeSessionLog(logTarget)
   const registry = await unarchiveEverywhere(ctx, sessionId)
   const accounting = await unaccountSession(ctx, sessionId)
@@ -140,16 +188,40 @@ async function findSession(ctx, sessionId) {
   return records.find((record) => record?.header?.id === sessionId)
 }
 
-function isLive(ctx, sessionId) {
-  const sessions = typeof ctx.get === 'function' ? ctx.get('sessions') : undefined
-  if (sessions !== undefined && sessions !== null && typeof sessions.get === 'function' && sessions.get(sessionId) !== undefined) {
-    return true
+function sessionRuntimeState(ctx, sessionId) {
+  const sessions = service(ctx, 'sessions')
+  const agents = service(ctx, 'agents')
+  const session = sessions !== undefined && sessions !== null && typeof sessions.get === 'function'
+    ? sessions.get(sessionId)
+    : undefined
+  const agent = agents !== undefined && agents !== null && typeof agents.get === 'function'
+    ? agents.get(sessionId)
+    : undefined
+  return {
+    attached: session !== undefined || agent !== undefined,
+    running: agent?.status === 'running',
   }
-  const agents = typeof ctx.get === 'function' ? ctx.get('agents') : undefined
-  if (agents !== undefined && agents !== null && typeof agents.get === 'function' && agents.get(sessionId) !== undefined) {
-    return true
+}
+
+async function detachIdleSession(ctx, sessionId) {
+  const before = sessionRuntimeState(ctx, sessionId)
+  if (before.running) throw new HttpError('session-running', 'stop the active session before deleting it', 409)
+  if (!before.attached) return
+  const agents = service(ctx, 'agents')
+  const agent = agents?.get?.(sessionId)
+  const methodOwner = findMethodOwner(agents, 'resume')
+  const handle = agent === undefined || methodOwner === null ? undefined : methodOwner[HANDLE_TRACKER]?.handles.get(agent)
+  if (handle === undefined) {
+    throw new HttpError('session-attached', 'the idle session predates safe lifecycle tracking; restart DSH and try again', 409)
   }
-  return false
+  try {
+    await handle.dispose()
+  } catch (error) {
+    throw new HttpError('session-detach-failed', `could not stop the idle session safely: ${errorMessage(error)}`, 500)
+  }
+  if (sessionRuntimeState(ctx, sessionId).attached) {
+    throw new HttpError('session-detach-failed', 'the idle session did not detach after its lifecycle handle was disposed', 500)
+  }
 }
 
 async function readTitle(ctx, sessionId) {
