@@ -176,7 +176,7 @@ async function resolveWorktree(ctx, cwd) {
   const canonical = await canonicalize(cwd)
   const dashboard = await ctx.worktreeStudio.dashboard()
   for (const view of dashboard.tasks) {
-    const key = canonicalKey(view.path)
+    const key = await canonicalize(view.path)
     if (key === canonical || canonical.startsWith(key + separator())) return view
   }
   return null
