@@ -100,6 +100,8 @@ importers:
 
   packages/dsh-rtk: {}
 
+  packages/dsh-session-delete: {}
+
   packages/dsh-session-extras: {}
 
   packages/dsh-session-pins: {}

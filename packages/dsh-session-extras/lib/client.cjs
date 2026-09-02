@@ -842,7 +842,7 @@ window.__ModuleLoader__.load({
 			}
 		}
 
-		function SessionRow({ session, onRestore, restoring }) {
+		function SessionRow({ session, onRestore, onDelete, restoring }) {
 			const pending = restoring === session.id;
 			return react.createElement(
 				"div",
@@ -860,6 +860,20 @@ window.__ModuleLoader__.load({
 						{ className: "archs-row-workspace" },
 						session.workspaceName,
 					),
+				),
+				react.createElement(
+					"button",
+					{
+						className: "archs-btn archs-btn-delete",
+						title: "Delete session permanently",
+						"aria-label": "Delete session: " + (session.title || "Untitled"),
+						onClick: (e) => {
+							e.stopPropagation();
+							onDelete(session.id);
+						},
+						disabled: pending,
+					},
+					"✖",
 				),
 				react.createElement(
 					"button",
@@ -896,6 +910,13 @@ window.__ModuleLoader__.load({
 				if (active) load();
 			}, [active, load]);
 
+			react.useEffect(() => {
+				if (!active) return undefined;
+				const handler = () => load();
+				window.addEventListener("dsh-session-deleted", handler);
+				return () => window.removeEventListener("dsh-session-deleted", handler);
+			}, [active, load]);
+
 			const handleRestore = async (id) => {
 				setRestoring(id);
 				const ok = await restoreSession(id);
@@ -903,7 +924,11 @@ window.__ModuleLoader__.load({
 				setRestoring(null);
 			};
 
-			return { sessions, loading, error, load, restoring, handleRestore };
+			const handleDelete = (id) => {
+				window.dispatchEvent(new CustomEvent("dsh-session-delete:confirm", { detail: { sessionId: id } }));
+			};
+
+			return { sessions, loading, error, load, restoring, handleRestore, handleDelete };
 		}
 
 		function ArchivedOverlay() {
@@ -945,6 +970,7 @@ window.__ModuleLoader__.load({
 							key: s.id,
 							session: s,
 							onRestore: data.handleRestore,
+							onDelete: data.handleDelete,
 							restoring: data.restoring,
 						})),
 					),
@@ -977,6 +1003,7 @@ window.__ModuleLoader__.load({
 						key: s.id,
 						session: s,
 						onRestore: data.handleRestore,
+						onDelete: data.handleDelete,
 						restoring: data.restoring,
 					})),
 				),
@@ -1230,6 +1257,7 @@ window.__ModuleLoader__.load({
 			".archs-btn:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}",
 			".archs-btn:disabled{opacity:.5;cursor:not-allowed}",
 			".archs-btn-restore:hover{color:var(--dsw-alias-state-success-primary)}",
+			".archs-btn-delete:hover{color:var(--dsw-alias-state-error-primary)}",
 			".archs-overlay-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;display:flex;align-items:center;justify-content:center;padding:24px}",
 			".archs-overlay{background:var(--dsw-specific-menu);border:1px solid var(--dsw-alias-border-inverted);border-radius:12px;box-shadow:var(--dsw-shadow-lv3);width:100%;max-width:520px;max-height:70vh;display:flex;flex-direction:column;color:var(--dsw-alias-label-primary)}",
 			".archs-overlay-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--dsw-alias-border-inverted)}",

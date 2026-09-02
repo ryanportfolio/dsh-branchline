@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Permanent session deletion with an explicit confirmation dialog, durable session cleanup, and guarded removal of attached Branchline worktrees and branches.
 - Preserve OpenRouter image-input capabilities and configured-only model fields across catalog refreshes.
 - Permanent `dsh-openrouter-sync` companion package, installed with the other workspace companions and verified in CI.
 - OpenRouter cost chips and minimum-context filters in the enhanced model picker, defaulting to models with at least 256,000 context tokens.
