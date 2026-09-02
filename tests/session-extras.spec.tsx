@@ -25,6 +25,7 @@ type PickerProps = {
   readonly sessionId: string
 }
 type Picker = (props: PickerProps) => React.ReactNode
+type Component = (props: Record<string, unknown>) => React.ReactNode
 type BundleDefinition = {
   readonly factory: (require: (id: string) => unknown) => { readonly apply: (ctx: Record<string, unknown>) => void }
 }
@@ -203,5 +204,52 @@ describe('dsh-session-extras OpenRouter metadata', () => {
       const metadataCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes('dsh-openrouter-sync'))
       expect(metadataCalls).toHaveLength(2)
     })
+  })
+
+  it('offers permanent delete on archived rows and reloads after a deletion event', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      ok: true,
+      value: { sessions: [{ id: 'session-a', title: 'Pinned work', workspaceName: 'repo' }] },
+    }))
+    let definition: BundleDefinition | undefined
+    Object.defineProperty(window, '__ModuleLoader__', {
+      configurable: true,
+      value: { load: (next: BundleDefinition) => { definition = next } },
+    })
+    Object.defineProperty(window, 'fetch', { configurable: true, writable: true, value: fetchMock })
+    window.eval(source)
+    if (definition === undefined) throw new Error('session extras bundle did not register')
+    const bundle = definition.factory((id) => {
+      if (id === 'react') return React
+      throw new Error(`unexpected client dependency: ${id}`)
+    })
+    let settingsPage: Component | undefined
+    bundle.apply({
+      slots: {
+        inject: (_name: string, install: () => void) => { install() },
+        register: (config: { readonly name: string }, component: Component) => {
+          if (config.name === 'settings.section') settingsPage = component
+          return () => undefined
+        },
+      },
+      sessions: {},
+      conversation: {},
+      modelDirectories: {},
+    })
+    if (settingsPage === undefined) throw new Error('archived settings page was not registered')
+    render(React.createElement(settingsPage, {}))
+    await screen.findByText('Pinned work')
+
+    const seen: string[] = []
+    const listener = (event: Event): void => {
+      seen.push((event as CustomEvent).detail.sessionId as string)
+    }
+    window.addEventListener('dsh-session-delete:confirm', listener)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete session: Pinned work' }))
+    window.removeEventListener('dsh-session-delete:confirm', listener)
+    expect(seen).toEqual(['session-a'])
+
+    window.dispatchEvent(new CustomEvent('dsh-session-deleted', { detail: { sessionId: 'session-a' } }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
   })
 })

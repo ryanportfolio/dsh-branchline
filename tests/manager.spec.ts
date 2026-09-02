@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { readFile, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { LocalWorktreeStudioManager, type WorktreeStudioOptions } from '../src/manager.ts'
 import { TaskStore } from '../src/store.ts'
 import { StudioError } from '../src/errors.ts'
+import { TaskId } from '../src/types.ts'
 import {
   createRepositoryFixture,
   createSubprocessFixture,
@@ -217,5 +219,117 @@ describe('LocalWorktreeStudioManager', () => {
     const after = git(fixture.repository, ['rev-parse', 'HEAD'])
     expect(preview).toMatchObject({ canMerge: false, targetDirty: true })
     expect(after).toBe(before)
+  })
+
+  it('purges the worktree, branch, and record for session deletion', async () => {
+    const { fixture, manager } = await setup(false)
+    const created = await manager.create({ repository: fixture.repository, title: 'Purge target' })
+    await writeFile(join(created.path, 'loose.txt'), 'uncommitted\n')
+
+    const outcome = await manager.purge(created.id)
+
+    expect(outcome).toMatchObject({ id: created.id, worktreeRemoved: true, branchRemoved: true, recordRemoved: true })
+    expect(existsSync(created.path)).toBe(false)
+    expect(git(fixture.repository, ['branch', '--list', created.branch as string])).toBe('')
+    const state = JSON.parse(await readFile(fixture.statePath, 'utf8')) as { tasks: Record<string, unknown> }
+    expect(state.tasks[String(created.id)]).toBeUndefined()
+  })
+
+  it('keeps the branch when purge is asked not to delete it', async () => {
+    const { fixture, manager } = await setup(false)
+    const created = await manager.create({ repository: fixture.repository, title: 'Keep branch' })
+
+    const outcome = await manager.purge(created.id, { deleteBranch: false })
+
+    expect(outcome).toMatchObject({ worktreeRemoved: true, branchRemoved: false, recordRemoved: true })
+    expect(git(fixture.repository, ['branch', '--list', created.branch as string])).not.toBe('')
+  })
+
+  it('purges a stale directory git no longer links', async () => {
+    const { fixture, manager } = await setup(false)
+    const created = await manager.create({ repository: fixture.repository, title: 'Stale directory' })
+    git(fixture.repository, ['worktree', 'remove', '--force', created.path])
+    await mkdir(created.path, { recursive: true })
+    await writeFile(join(created.path, 'leftover.txt'), 'orphan\n')
+
+    const outcome = await manager.purge(created.id)
+
+    expect(outcome).toMatchObject({ worktreeRemoved: true, recordRemoved: true })
+    expect(existsSync(created.path)).toBe(false)
+  })
+
+  it('treats an unknown task id as an idempotent no-op', async () => {
+    const { manager } = await setup(false)
+    const outcome = await manager.purge(TaskId('wt-00000000-0000-4000-8000-000000000000'))
+    expect(outcome).toMatchObject({ worktreeRemoved: false, branchRemoved: false, recordRemoved: false })
+  })
+
+  it('refuses to purge a task record whose path escapes the managed root', async () => {
+    const { fixture, manager } = await setup(false)
+    const created = await manager.create({ repository: fixture.repository, title: 'Unsafe purge target' })
+    const store = new TaskStore(fixture.statePath)
+    await store.update(state => ({
+      version: 1,
+      tasks: {
+        ...state.tasks,
+        [String(created.id)]: {
+          ...(state.tasks[String(created.id)] as NonNullable<(typeof state.tasks)[string]>),
+          path: fixture.repository,
+        },
+      },
+    }))
+
+    await expect(manager.purge(created.id)).rejects.toMatchObject({ code: 'unsafe-path' })
+    expect(existsSync(fixture.repository)).toBe(true)
+  })
+
+  it('drops the record during recovery when an interrupted purge finished its git work', async () => {
+    const { fixture, manager } = await setup(false)
+    const created = await manager.create({ repository: fixture.repository, title: 'Interrupted purge' })
+    git(fixture.repository, ['worktree', 'remove', '--force', created.path])
+    git(fixture.repository, ['branch', '-D', created.branch as string])
+    const store = new TaskStore(fixture.statePath)
+    await store.update(state => ({
+      version: 1,
+      tasks: {
+        ...state.tasks,
+        [String(created.id)]: {
+          ...(state.tasks[String(created.id)] as NonNullable<(typeof state.tasks)[string]>),
+          pendingOperation: 'purge',
+        },
+      },
+    }))
+
+    const report = await manager.recover()
+
+    expect(report.pending).toEqual([])
+    const state = JSON.parse(await readFile(fixture.statePath, 'utf8')) as { tasks: Record<string, unknown> }
+    expect(state.tasks[String(created.id)]).toBeUndefined()
+  })
+
+  it('keeps a recovery marker when an interrupted purge left its branch behind', async () => {
+    const { fixture, manager } = await setup(false)
+    const created = await manager.create({ repository: fixture.repository, title: 'Branch left behind' })
+    git(fixture.repository, ['worktree', 'remove', '--force', created.path])
+    const store = new TaskStore(fixture.statePath)
+    await store.update(state => ({
+      version: 1,
+      tasks: {
+        ...state.tasks,
+        [String(created.id)]: {
+          ...(state.tasks[String(created.id)] as NonNullable<(typeof state.tasks)[string]>),
+          pendingOperation: 'purge',
+        },
+      },
+    }))
+
+    const report = await manager.recover()
+
+    expect(report.pending).toEqual([String(created.id)])
+    const state = JSON.parse(await readFile(fixture.statePath, 'utf8')) as { tasks: Record<string, unknown> }
+    const record = state.tasks[String(created.id)] as { phase?: string, lastError?: string } | undefined
+    expect(record).toBeDefined()
+    expect(record?.phase).toBe('recovery-needed')
+    expect(record?.lastError).toContain('branch remains')
   })
 })

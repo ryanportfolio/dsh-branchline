@@ -308,6 +308,26 @@ export class GitClient {
     await this.checked(repository, ['check-ref-format', '--branch', branch])
   }
 
+  /** Force-delete a local branch, losing any commits not merged elsewhere. */
+  async deleteBranch(repository: string, branch: string): Promise<void> {
+    await this.validateBranch(repository, branch)
+    await this.checked(repository, ['branch', '-D', '--', branch])
+  }
+
+  /** Whether a local branch with this exact name exists in the repository. */
+  async localBranchExists(repository: string, branch: string): Promise<boolean> {
+    await this.validateBranch(repository, branch)
+    const result = await this.raw(repository, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`])
+    if (!result.timedOut && result.exitCode === 0) return true
+    if (!result.timedOut && result.exitCode === 1) return false
+    throw new StudioError('git-failure', `could not inspect local branch ${branch}: ${compactFailure(result)}`)
+  }
+
+  /** Drop stale worktree administrative entries whose directories are gone. */
+  async pruneWorktrees(repository: string): Promise<void> {
+    await this.checked(repository, ['worktree', 'prune'])
+  }
+
   /** Create a detached or newly branched linked worktree. */
   async createWorktree(
     repository: string,

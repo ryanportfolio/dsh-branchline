@@ -1,8 +1,8 @@
 /** Durable worktree task lifecycle and guarded delivery. */
 
 import { createHash, randomUUID } from 'node:crypto'
-import { access, mkdir, realpath } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { access, mkdir, realpath, rm, rmdir } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { StudioError, errorMessage } from './errors.ts'
 import { assertCommand, assertPathInside, GitClient, samePath } from './git.ts'
@@ -14,6 +14,8 @@ import {
   type DashboardView,
   type DoctorView,
   type MergePreview,
+  type PurgeOptions,
+  type PurgeOutcome,
   type ReviewView,
   type TaskMutationRequest,
   type TaskRecord,
@@ -347,12 +349,82 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
     })
   }
 
+  /**
+   * Force-remove a task's worktree and branch, then drop its record entirely.
+   * The caller owns the loss policy: purge deletes uncommitted changes with
+   * the worktree and unmerged commits with the force-deleted branch.
+   */
+  purge(id: TaskId, options: PurgeOptions = {}): Promise<PurgeOutcome> {
+    return this.mutate(async () => {
+      const known = (await this.store.read()).tasks[String(id)]
+      if (known === undefined) {
+        return { id, worktreeRemoved: false, branchRemoved: false, recordRemoved: false }
+      }
+      const task = known
+      assertPathInside(this.options.managedRoot, task.path)
+      await this.replaceTask(id, record => ({
+        ...record,
+        pendingOperation: 'purge',
+        updatedAt: new Date().toISOString(),
+      }))
+      let worktreeRemoved = false
+      try {
+        if (await pathExists(task.path)) {
+          try {
+            await this.git.removeWorktree(task.repository, task.path, true)
+          } catch (error) {
+            if (await this.isLinkedWorktree(task)) throw error
+            await rm(task.path, { recursive: true, force: true, maxRetries: 2 })
+          }
+          worktreeRemoved = true
+          await rmdir(dirname(task.path)).catch(() => undefined)
+        }
+      } catch (error) {
+        await this.markRecovery(id, 'purge', error)
+        throw error
+      }
+      // Release stale administrative entries so a leftover branch checkout cannot block -D.
+      await this.git.pruneWorktrees(task.repository).catch(() => undefined)
+      let branchRemoved = false
+      const branch = options.deleteBranch === false ? undefined : task.branch
+      if (typeof branch === 'string' && branch !== '') {
+        try {
+          if (await this.git.localBranchExists(task.repository, branch)) {
+            await this.git.deleteBranch(task.repository, branch)
+            branchRemoved = true
+          }
+        } catch (error) {
+          await this.markRecovery(id, 'purge', error)
+          throw error
+        }
+      }
+      await this.store.update(state => {
+        if (state.tasks[String(id)] === undefined) return state
+        const tasks = { ...state.tasks }
+        delete tasks[String(id)]
+        return { version: 1, tasks }
+      })
+      return { id, worktreeRemoved, branchRemoved, recordRemoved: true }
+    })
+  }
+
+  /** Whether Git metadata still links the task path as a worktree. */
+  private async isLinkedWorktree(task: TaskRecord): Promise<boolean> {
+    try {
+      const linked = await this.git.listWorktrees(task.repository)
+      return linked.some(item => canonicalKey(item.path) === canonicalKey(task.path))
+    } catch {
+      return true
+    }
+  }
+
   /** Reconcile interrupted markers with Git metadata without deleting anything. */
   recover(): Promise<DoctorView> {
     return this.mutate(async () => {
       const state = await this.store.read()
       const byRepository = new Map<string, Set<string>>()
       const linkedByTask = new Map<string, boolean>()
+      const purgeBranchRemaining = new Map<string, boolean>()
       for (const task of Object.values(state.tasks)) {
         if (task.phase === 'archived') continue
         if (!byRepository.has(task.repository)) {
@@ -363,12 +435,33 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
         let linked = known?.has(canonicalKey(task.path)) === true
         if (!linked) linked = await this.confirmLinkedPath(task)
         linkedByTask.set(String(task.id), linked)
+        if (task.pendingOperation === 'purge' && !linked && typeof task.branch === 'string' && task.branch !== '') {
+          try {
+            purgeBranchRemaining.set(String(task.id), await this.git.localBranchExists(task.repository, task.branch))
+          } catch {
+            purgeBranchRemaining.set(String(task.id), true)
+          }
+        }
       }
       await this.store.update(current => {
         const tasks = { ...current.tasks }
         for (const task of Object.values(current.tasks)) {
           if (task.phase === 'archived') continue
           const linked = linkedByTask.get(String(task.id)) === true
+          if (task.pendingOperation === 'purge' && !linked) {
+            if (purgeBranchRemaining.get(String(task.id)) !== true) {
+              // The purge finished its Git work (worktree and branch both gone); only the record drop was interrupted.
+              delete tasks[String(task.id)]
+              continue
+            }
+            tasks[String(task.id)] = {
+              ...task,
+              phase: 'recovery-needed',
+              updatedAt: new Date().toISOString(),
+              lastError: 'interrupted purge: worktree removed but the branch remains; delete the branch or purge again',
+            }
+            continue
+          }
           if (!linked) {
             tasks[String(task.id)] = {
               ...task,

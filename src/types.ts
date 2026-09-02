@@ -154,6 +154,20 @@ export interface TaskMutationRequest {
   readonly changeToken: string
 }
 
+/** Options accepted by the purge operation. */
+export interface PurgeOptions {
+  /** False keeps the task branch in the repository (default deletes it). */
+  readonly deleteBranch?: boolean
+}
+
+/** Result of removing one task's worktree, branch, and record. */
+export interface PurgeOutcome {
+  readonly id: TaskId
+  readonly worktreeRemoved: boolean
+  readonly branchRemoved: boolean
+  readonly recordRemoved: boolean
+}
+
 /** Manager contract used by Host adapters and tests. */
 export interface WorktreeStudioManager {
   create(request: CreateTaskRequest): Promise<TaskView>
@@ -164,6 +178,8 @@ export interface WorktreeStudioManager {
   deliver(id: TaskId, changeToken: string, targetPath?: string): Promise<TaskView>
   archive(request: TaskMutationRequest): Promise<TaskView>
   discard(request: TaskMutationRequest, confirmation: string): Promise<TaskView>
+  /** Force-remove the worktree and branch and drop the record; the session-deletion caller owns the loss policy. */
+  purge(id: TaskId, options?: PurgeOptions): Promise<PurgeOutcome>
   recover(): Promise<DoctorView>
   doctor(): Promise<DoctorView>
   close(): Promise<void>
