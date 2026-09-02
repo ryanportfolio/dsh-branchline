@@ -69,11 +69,15 @@ interface SessionReply {
 function makeHarness(options: {
   readonly tasks?: readonly Record<string, unknown>[]
   readonly sessions?: Array<{ header: { id: string, cwd: string, createdAt?: string } }>
-  readonly live?: readonly string[]
+  readonly attached?: readonly string[]
+  readonly agentStatus?: Readonly<Record<string, 'idle' | 'running'>>
+  readonly trackHandle?: boolean
   readonly locateMode?: 'ok' | 'none' | 'throw' | 'weird'
 } = {}): {
   readonly request: (body: unknown) => Promise<SessionReply>
+  readonly disposeAgent: ReturnType<typeof vi.fn>
   readonly purge: ReturnType<typeof vi.fn>
+  readonly resumeAgent: () => Promise<unknown>
   readonly setState: ReturnType<typeof vi.fn>
 } {
   const listed = options.sessions ?? [
@@ -82,9 +86,32 @@ function makeHarness(options: {
   ]
   const purge = vi.fn(async (id: string) => ({ id, worktreeRemoved: true, branchRemoved: true, recordRemoved: true }))
   const setState = vi.fn(async () => undefined)
+  const attached = new Set(options.attached ?? [])
+  const agentById = new Map(Object.entries(options.agentStatus ?? {}).map(([id, status]) => [id, { id, status }]))
+  for (const id of agentById.keys()) attached.add(id)
   const sessions = {
-    get: (id: string) => ((options.live ?? []).includes(id) ? { id } : undefined),
+    get: (id: string) => (attached.has(id) ? { id } : undefined),
   }
+  class TestAgentRegistry {
+    get(id: string) {
+      return agentById.get(id)
+    }
+
+    async create() {
+      throw new Error('not used by this harness')
+    }
+
+    async resume() {
+      const agent = agentById.get(SESSION)
+      if (agent === undefined) throw new Error('no agent to resume')
+      return { agent, dispose: disposeAgent }
+    }
+  }
+  const agents = new TestAgentRegistry()
+  const disposeAgent = vi.fn(async () => {
+    agentById.delete(SESSION)
+    attached.delete(SESSION)
+  })
   const captured: Array<{ handler: (request: unknown, response: unknown) => Promise<void> }> = []
   const locateMode = options.locateMode ?? 'ok'
   const ctx: Record<string, unknown> = {
@@ -118,8 +145,12 @@ function makeHarness(options: {
     },
     storageDomain: { get: () => undefined },
     sessions,
+    agents,
     get(name: string) {
       return (this as Record<string, unknown>)[name]
+    },
+    effect(fn: () => unknown) {
+      return fn()
     },
     inject(_names: readonly string[], install: (webCtx: Record<string, unknown>) => void) {
       install({
@@ -135,6 +166,12 @@ function makeHarness(options: {
     },
   }
   applyHost(ctx)
+  const agent = agentById.get(SESSION)
+  if (agent !== undefined && options.trackHandle !== false) {
+    const methodOwner = Object.getPrototypeOf(agents) as Record<PropertyKey, any>
+    const tracker = methodOwner[Symbol.for('dsh-session-delete.agent-handle-tracker.v1')]
+    tracker.handles.set(agent, { agent, dispose: disposeAgent })
+  }
   const registered = captured[0]
   if (registered === undefined) throw new Error('route was not registered')
   const handler = registered.handler
@@ -161,7 +198,7 @@ function makeHarness(options: {
     if (state.status === undefined || state.body === undefined) throw new Error('handler produced no response')
     return { status: state.status, body: state.body }
   }
-  return { request, purge, setState }
+  return { request, disposeAgent, purge, resumeAgent: () => agents.resume(), setState }
 }
 
 describe('dsh-session-delete host route', () => {
@@ -173,7 +210,8 @@ describe('dsh-session-delete host route', () => {
     expect(body.value).toMatchObject({
       sessionId: SESSION,
       title: 'My session',
-      live: false,
+      attached: false,
+      running: false,
       worktree: {
         taskId: TASK_ID,
         branch: 'dsh/task-22222222',
@@ -195,12 +233,60 @@ describe('dsh-session-delete host route', () => {
     expect(wrong.body.error.code).toBe('invalid-input')
   })
 
-  it('refuses to delete a live session', async () => {
-    const { request, purge } = makeHarness({ live: [SESSION] })
+  it('reports an attached idle session separately from active work', async () => {
+    const { request } = makeHarness({ agentStatus: { [SESSION]: 'idle' } })
+    const { status, body } = await request({ op: 'preview', sessionId: SESSION })
+    expect(status).toBe(200)
+    expect(body.value).toMatchObject({ attached: true, running: false })
+  })
+
+  it('refuses to delete a running session', async () => {
+    const { request, purge } = makeHarness({ agentStatus: { [SESSION]: 'running' } })
     const { status, body } = await request({ op: 'delete', sessionId: SESSION, confirmation: SESSION })
     expect(status).toBe(409)
-    expect(body.error.code).toBe('session-live')
+    expect(body.error.code).toBe('session-running')
+    expect(body.error.message).toContain('active')
     expect(purge).not.toHaveBeenCalled()
+  })
+
+  it('disposes an idle attached session before deleting it', async () => {
+    const { request, disposeAgent, purge } = makeHarness({
+      agentStatus: { [SESSION]: 'idle' },
+      sessions: [{ header: { id: SESSION, cwd: join(home, 'elsewhere') } }],
+      tasks: [],
+      locateMode: 'none',
+    })
+    const { status, body } = await request({ op: 'delete', sessionId: SESSION, confirmation: SESSION })
+    expect(status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(disposeAgent).toHaveBeenCalledTimes(1)
+    expect(purge).not.toHaveBeenCalled()
+  })
+
+  it('rejects an attached session whose lifecycle handle was not tracked', async () => {
+    const { request, disposeAgent, purge } = makeHarness({ agentStatus: { [SESSION]: 'idle' }, trackHandle: false })
+    const { status, body } = await request({ op: 'delete', sessionId: SESSION, confirmation: SESSION })
+    expect(status).toBe(409)
+    expect(body.error.code).toBe('session-attached')
+    expect(body.error.message).toContain('restart DSH')
+    expect(disposeAgent).not.toHaveBeenCalled()
+    expect(purge).not.toHaveBeenCalled()
+  })
+
+  it('captures handles returned by the public agent resume lifecycle', async () => {
+    const harness = makeHarness({
+      agentStatus: { [SESSION]: 'idle' },
+      trackHandle: false,
+      sessions: [{ header: { id: SESSION, cwd: join(home, 'elsewhere') } }],
+      tasks: [],
+      locateMode: 'none',
+    })
+    await harness.resumeAgent()
+
+    const { status, body } = await harness.request({ op: 'delete', sessionId: SESSION, confirmation: SESSION })
+    expect(status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(harness.disposeAgent).toHaveBeenCalledTimes(1)
   })
 
   it('blocks a dirty worktree without force, purges everything with force', async () => {

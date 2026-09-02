@@ -37,6 +37,15 @@ window.__ModuleLoader__.load({
 		const apiPreview = (sessionId) => apiPost({ op: "preview", sessionId });
 		const apiDelete = (sessionId, force) => apiPost({ op: "delete", sessionId, confirmation: sessionId, force: force === true });
 
+		async function prepareSessionDeletion(sessionId) {
+			const state = await apiPreview(sessionId);
+			if (state.running === true) throw new Error("Stop the active session before deleting it.");
+			if (workspacesService === null || typeof workspacesService.archiveSession !== "function") {
+				throw new Error("This DSH build cannot close the session before deletion.");
+			}
+			await workspacesService.archiveSession(sessionId);
+		}
+
 		// ---------------------------------------------------------------------------
 		// Dialog bus: one deletion dialog at a time, shared by every entry point.
 		// ---------------------------------------------------------------------------
@@ -191,6 +200,7 @@ window.__ModuleLoader__.load({
 				setPhase("deleting");
 				setError(null);
 				try {
+					await prepareSessionDeletion(sessionId);
 					await apiDelete(sessionId, force);
 					bus.close();
 					window.dispatchEvent(new CustomEvent(EVENT_DELETED, { detail: { sessionId } }));
@@ -207,6 +217,7 @@ window.__ModuleLoader__.load({
 
 			const blockers = preview && preview.worktree ? preview.worktree.blockers || [] : [];
 			const forceAllowed = !preview || !preview.worktree || preview.worktree.forceAllowed !== false;
+			const running = preview !== null && preview.running === true;
 			const close = () => bus.close();
 
 			return react.createElement(
@@ -238,23 +249,29 @@ window.__ModuleLoader__.load({
 							{ className: "sdel-warning" },
 							"Deletion is permanent: the session log, its registry entries, and any attached worktree folder and branch cannot be recovered.",
 						),
+						running && react.createElement("div", { className: "sdel-error" }, "Stop the active session before deleting it."),
 						error !== null && react.createElement("div", { className: "sdel-error" }, error.message || "Deletion failed."),
 					),
 					react.createElement(
 						"div",
 						{ className: "sdel-footer" },
 						react.createElement("button", { className: "sdel-btn sdel-btn-ghost", onClick: close }, "Cancel"),
-						phase === "ready" && blockers.length === 0 && react.createElement(
+						phase === "ready" && running && react.createElement(
+							"button",
+							{ className: "sdel-btn sdel-btn-danger", disabled: true },
+							"Stop session first",
+						),
+						phase === "ready" && !running && blockers.length === 0 && react.createElement(
 							"button",
 							{ className: "sdel-btn sdel-btn-danger", onClick: () => perform(false) },
 							"Delete permanently",
 						),
-						phase === "ready" && blockers.length > 0 && forceAllowed && react.createElement(
+						phase === "ready" && !running && blockers.length > 0 && forceAllowed && react.createElement(
 							"button",
 							{ className: "sdel-btn sdel-btn-danger", onClick: () => perform(true), title: "Force deletion despite the listed blockers" },
 							"Delete anyway",
 						),
-						phase === "ready" && blockers.length > 0 && !forceAllowed && react.createElement(
+						phase === "ready" && !running && blockers.length > 0 && !forceAllowed && react.createElement(
 							"button",
 							{ className: "sdel-btn sdel-btn-danger", disabled: true },
 							"Delete other sessions first",
