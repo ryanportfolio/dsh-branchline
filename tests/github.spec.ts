@@ -11,7 +11,7 @@ import { git } from './helpers.ts'
 const SUBPROCESS = {} as SubprocessRuntime
 
 interface RunnerState {
-  readonly calls: readonly { readonly executable: string; readonly args: readonly string[] }[]
+  readonly calls: readonly { readonly executable: string; readonly args: readonly string[]; readonly cwd: string }[]
 }
 
 function outcome(overrides: Partial<ProcessResult> = {}): ProcessResult {
@@ -43,9 +43,9 @@ function clientWith(
   cloneRoot: string,
   behavior: (executable: string, args: readonly string[]) => ProcessResult | Promise<ProcessResult>,
 ): { readonly client: GitHubClient; readonly state: RunnerState } {
-  const calls: { executable: string; args: string[] }[] = []
-  const runner: GitHubCommandRunner = async (executable, args) => {
-    calls.push({ executable, args: [...args] })
+  const calls: { executable: string; args: string[]; cwd: string }[] = []
+  const runner: GitHubCommandRunner = async (executable, args, commandOptions) => {
+    calls.push({ executable, args: [...args], cwd: commandOptions.cwd })
     return await behavior(executable, args)
   }
   return {
@@ -112,6 +112,46 @@ describe('GitHubClient.listRepositories', () => {
     try {
       const { client } = clientWith(root, () => outcome({ exitCode: 1, stderr: 'gh auth required\n' }))
       await expect(client.listRepositories()).rejects.toThrow('gh repo list failed: gh auth required')
+    } finally {
+      await removeRoot(root)
+    }
+  })
+})
+
+describe('GitHubClient.findMergedPullRequest', () => {
+  it('returns only a merged pull request with the exact requested head', async () => {
+    const root = await createRoot()
+    try {
+      const head = '1'.repeat(40)
+      const merge = '2'.repeat(40)
+      const payload = JSON.stringify([
+        { number: 8, url: 'https://github.test/pr/8', mergedAt: '2026-09-01T00:00:00Z', headRefOid: '3'.repeat(40), mergeCommit: { oid: '4'.repeat(40) } },
+        { number: 9, url: 'https://github.test/pr/9', mergedAt: '2026-09-02T00:00:00Z', headRefOid: head, mergeCommit: { oid: merge } },
+      ])
+      const { client, state } = clientWith(root, () => outcome({ stdout: payload }))
+
+      await expect(client.findMergedPullRequest(root, 'codex/safe-delete', head)).resolves.toEqual({
+        number: 9,
+        url: 'https://github.test/pr/9',
+        mergedAt: '2026-09-02T00:00:00Z',
+        headCommit: head,
+        mergeCommit: merge,
+      })
+      expect(state.calls[0]?.cwd).toBe(root)
+      expect(state.calls[0]?.args).toContain('codex/safe-delete')
+    } finally {
+      await removeRoot(root)
+    }
+  })
+
+  it('returns null when merged PRs belong to older branch heads', async () => {
+    const root = await createRoot()
+    try {
+      const payload = JSON.stringify([
+        { number: 8, url: 'https://github.test/pr/8', mergedAt: '2026-09-01T00:00:00Z', headRefOid: '3'.repeat(40), mergeCommit: { oid: '4'.repeat(40) } },
+      ])
+      const { client } = clientWith(root, () => outcome({ stdout: payload }))
+      await expect(client.findMergedPullRequest(root, 'codex/safe-delete', '1'.repeat(40))).resolves.toBeNull()
     } finally {
       await removeRoot(root)
     }

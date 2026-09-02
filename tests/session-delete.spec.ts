@@ -73,8 +73,11 @@ function makeHarness(options: {
   readonly agentStatus?: Readonly<Record<string, 'idle' | 'running'>>
   readonly trackHandle?: boolean
   readonly locateMode?: 'ok' | 'none' | 'throw' | 'weird'
+  readonly preservation?: Record<string, unknown>
 } = {}): {
   readonly request: (body: unknown) => Promise<SessionReply>
+  readonly assessPreservation: ReturnType<typeof vi.fn>
+  readonly dashboard: ReturnType<typeof vi.fn>
   readonly disposeAgent: ReturnType<typeof vi.fn>
   readonly purge: ReturnType<typeof vi.fn>
   readonly resumeAgent: () => Promise<unknown>
@@ -85,6 +88,15 @@ function makeHarness(options: {
     { header: { id: OTHER, cwd: repositoryPath } },
   ]
   const purge = vi.fn(async (id: string) => ({ id, worktreeRemoved: true, branchRemoved: true, recordRemoved: true }))
+  const assessPreservation = vi.fn(async () => {
+    if (options.preservation !== undefined) return options.preservation
+    const first = options.tasks?.[0] ?? taskView()
+    const changes = first.changes as { dirty?: boolean } | undefined
+    return changes?.dirty === true
+      ? { status: 'unsafe', reason: 'worktree has uncommitted file changes', checkedAt: '2026-09-01T00:00:00.000Z' }
+      : { status: 'safe', reason: 'PR #21 merged and contains this exact HEAD', checkedAt: '2026-09-01T00:00:00.000Z' }
+  })
+  const dashboard = vi.fn(async () => ({ tasks: options.tasks ?? [taskView()], repositories: [], deliveryEnabled: false }))
   const setState = vi.fn(async () => undefined)
   const attached = new Set(options.attached ?? [])
   const agentById = new Map(Object.entries(options.agentStatus ?? {}).map(([id, status]) => [id, { id, status }]))
@@ -140,7 +152,8 @@ function makeHarness(options: {
       setState,
     },
     worktreeStudio: {
-      dashboard: async () => ({ tasks: options.tasks ?? [taskView()], repositories: [], deliveryEnabled: false }),
+      dashboard,
+      assessPreservation,
       purge,
     },
     storageDomain: { get: () => undefined },
@@ -198,7 +211,7 @@ function makeHarness(options: {
     if (state.status === undefined || state.body === undefined) throw new Error('handler produced no response')
     return { status: state.status, body: state.body }
   }
-  return { request, disposeAgent, purge, resumeAgent: () => agents.resume(), setState }
+  return { request, assessPreservation, dashboard, disposeAgent, purge, resumeAgent: () => agents.resume(), setState }
 }
 
 describe('dsh-session-delete host route', () => {
@@ -212,16 +225,58 @@ describe('dsh-session-delete host route', () => {
       title: 'My session',
       attached: false,
       running: false,
+      readiness: {
+        status: 'safe',
+        label: 'Safe to delete',
+        detail: 'PR #21 merged and contains this exact HEAD',
+      },
       worktree: {
         taskId: TASK_ID,
         branch: 'dsh/task-22222222',
         dirty: false,
         commitsAhead: 0,
+        preservation: { status: 'safe' },
         otherSessions: 0,
         forceAllowed: true,
         blockers: [],
       },
     })
+  })
+
+  it('returns compact readiness for multiple archived sessions', async () => {
+    const { request, assessPreservation, dashboard } = makeHarness({
+      sessions: [
+        { header: { id: SESSION, cwd: worktreePath } },
+        { header: { id: OTHER, cwd: repositoryPath } },
+      ],
+    })
+    const { status, body } = await request({ op: 'readiness', sessionIds: [SESSION, OTHER] })
+    expect(status).toBe(200)
+    expect(body.value.sessions).toEqual([
+      expect.objectContaining({ sessionId: SESSION, readiness: expect.objectContaining({ status: 'safe' }) }),
+      expect.objectContaining({ sessionId: OTHER, readiness: expect.objectContaining({ status: 'no-worktree' }) }),
+    ])
+    expect(dashboard).toHaveBeenCalledTimes(1)
+    expect(assessPreservation).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports unknown proof and blocks normal deletion while preserving explicit force', async () => {
+    const proof = {
+      status: 'unknown',
+      reason: 'could not refresh origin',
+      checkedAt: '2026-09-01T00:00:00.000Z',
+    }
+    const normal = makeHarness({ preservation: proof, locateMode: 'none' })
+    const preview = await normal.request({ op: 'preview', sessionId: SESSION })
+    expect(preview.body.value.readiness).toMatchObject({ status: 'unknown', label: 'Could not verify' })
+    const blocked = await normal.request({ op: 'delete', sessionId: SESSION, confirmation: SESSION })
+    expect(blocked.status).toBe(409)
+    expect(normal.purge).not.toHaveBeenCalled()
+
+    const forced = makeHarness({ preservation: proof, locateMode: 'none' })
+    const deleted = await forced.request({ op: 'delete', sessionId: SESSION, confirmation: SESSION, force: true })
+    expect(deleted.status).toBe(200)
+    expect(forced.purge).toHaveBeenCalledWith(TASK_ID, { requirePreserved: false })
   })
 
   it('rejects unknown sessions, bad ids, and wrong confirmations', async () => {
@@ -327,7 +382,7 @@ describe('dsh-session-delete host route', () => {
     const { status, body } = await request({ op: 'delete', sessionId: SESSION, confirmation: SESSION })
     expect(status).toBe(200)
     expect(body.ok).toBe(true)
-    expect(purge).toHaveBeenCalledWith(TASK_ID)
+    expect(purge).toHaveBeenCalledWith(TASK_ID, { requirePreserved: true })
     expect(body.value.log).toMatchObject({ removed: true })
     expect(existsSync(sessionDir)).toBe(false)
     expect(existsSync(join(home, 'sessions', '--C--repo--'))).toBe(false)

@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Archived-session safety badges backed by a fresh default-branch fetch and exact-head GitHub merge proof, with the same proof enforced again before normal worktree deletion and unknown ignored local data treated as unsafe.
 - Permanent session deletion with an explicit confirmation dialog, durable session cleanup, and guarded removal of attached Branchline worktrees and branches.
 - Preserve OpenRouter image-input capabilities and configured-only model fields across catalog refreshes.
 - Permanent `dsh-openrouter-sync` companion package, installed with the other workspace companions and verified in CI.

@@ -207,10 +207,28 @@ describe('dsh-session-extras OpenRouter metadata', () => {
   })
 
   it('offers permanent delete on archived rows and reloads after a deletion event', async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({
-      ok: true,
-      value: { sessions: [{ id: 'session-a', title: 'Pinned work', workspaceName: 'repo' }] },
-    }))
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('dsh-session-delete')) {
+        return jsonResponse({
+          ok: true,
+          value: {
+            sessions: [{
+              sessionId: 'session-a',
+              readiness: {
+                status: 'safe',
+                label: 'Safe to delete',
+                detail: 'PR #21 merged and contains this exact HEAD',
+                checkedAt: '2026-09-01T00:00:00.000Z',
+              },
+            }],
+          },
+        })
+      }
+      return jsonResponse({
+        ok: true,
+        value: { sessions: [{ id: 'session-a', title: 'Pinned work', workspaceName: 'repo' }] },
+      })
+    })
     let definition: BundleDefinition | undefined
     Object.defineProperty(window, '__ModuleLoader__', {
       configurable: true,
@@ -239,6 +257,8 @@ describe('dsh-session-extras OpenRouter metadata', () => {
     if (settingsPage === undefined) throw new Error('archived settings page was not registered')
     render(React.createElement(settingsPage, {}))
     await screen.findByText('Pinned work')
+    expect(screen.getByLabelText('Safe to delete').textContent).toBe('✓')
+    expect(screen.getByLabelText('Safe to delete').getAttribute('title')).toContain('PR #21 merged')
 
     const seen: string[] = []
     const listener = (event: Event): void => {
@@ -250,6 +270,37 @@ describe('dsh-session-extras OpenRouter metadata', () => {
     expect(seen).toEqual(['session-a'])
 
     window.dispatchEvent(new CustomEvent('dsh-session-deleted', { detail: { sessionId: 'session-a' } }))
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
+  })
+
+  it('renders unknown rather than safe when readiness lookup fails', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('dsh-session-delete')) throw new Error('offline')
+      return jsonResponse({ ok: true, value: { sessions: [{ id: 'session-a', title: 'Unknown work' }] } })
+    })
+    let definition: BundleDefinition | undefined
+    Object.defineProperty(window, '__ModuleLoader__', {
+      configurable: true,
+      value: { load: (next: BundleDefinition) => { definition = next } },
+    })
+    Object.defineProperty(window, 'fetch', { configurable: true, writable: true, value: fetchMock })
+    window.eval(source)
+    if (definition === undefined) throw new Error('session extras bundle did not register')
+    const bundle = definition.factory((id) => id === 'react' ? React : {})
+    let settingsPage: Component | undefined
+    bundle.apply({
+      slots: {
+        inject: (_name: string, install: () => void) => { install() },
+        register: (config: { readonly name: string }, component: Component) => {
+          if (config.name === 'settings.section') settingsPage = component
+          return () => undefined
+        },
+      },
+      sessions: {}, conversation: {}, modelDirectories: {},
+    })
+    if (settingsPage === undefined) throw new Error('archived settings page was not registered')
+    render(React.createElement(settingsPage, {}))
+    await screen.findByText('Unknown work')
+    expect(screen.getByLabelText('Could not verify').textContent).toBe('?')
   })
 })

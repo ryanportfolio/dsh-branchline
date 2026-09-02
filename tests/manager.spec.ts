@@ -6,6 +6,7 @@ import { LocalWorktreeStudioManager, type WorktreeStudioOptions } from '../src/m
 import { TaskStore } from '../src/store.ts'
 import { StudioError } from '../src/errors.ts'
 import { TaskId } from '../src/types.ts'
+import type { GitHubClient } from '../src/github.ts'
 import {
   createRepositoryFixture,
   createSubprocessFixture,
@@ -41,7 +42,11 @@ function options(fixture: RepositoryFixture, requireValidation = true, allowDeli
   }
 }
 
-async function setup(requireValidation = true, allowDelivery = true): Promise<{
+async function setup(
+  requireValidation = true,
+  allowDelivery = true,
+  github?: Pick<GitHubClient, 'findMergedPullRequest'>,
+): Promise<{
   readonly fixture: RepositoryFixture
   readonly manager: LocalWorktreeStudioManager
 }> {
@@ -49,12 +54,140 @@ async function setup(requireValidation = true, allowDelivery = true): Promise<{
   fixtures.push(fixture)
   const subprocess = await createSubprocessFixture()
   subprocesses.push(subprocess)
-  const manager = new LocalWorktreeStudioManager(options(fixture, requireValidation, allowDelivery), subprocess.subprocess)
+  const manager = new LocalWorktreeStudioManager(
+    options(fixture, requireValidation, allowDelivery),
+    subprocess.subprocess,
+    undefined,
+    undefined,
+    github,
+  )
   managers.push(manager)
   return { fixture, manager }
 }
 
 describe('LocalWorktreeStudioManager', () => {
+  it('marks an unchanged task safe when its exact HEAD is already on fetched main', async () => {
+    const { fixture, manager } = await setup(false)
+    const created = await manager.create({ repository: fixture.repository, title: 'Already preserved' })
+
+    await expect(manager.assessPreservation(created.id)).resolves.toMatchObject({
+      status: 'safe',
+      headCommit: created.headCommit,
+      branch: created.branch,
+      defaultRef: 'refs/remotes/origin/main',
+    })
+  })
+
+  it('marks dirty work unsafe without consulting GitHub', async () => {
+    const github = { findMergedPullRequest: async () => { throw new Error('must not run') } }
+    const { fixture, manager } = await setup(false, true, github)
+    const created = await manager.create({ repository: fixture.repository, title: 'Dirty work' })
+    await writeFile(join(created.path, 'loose.txt'), 'not committed\n')
+
+    await expect(manager.assessPreservation(created.id)).resolves.toMatchObject({
+      status: 'unsafe',
+      reason: expect.stringContaining('uncommitted'),
+    })
+  })
+
+  it('blocks ignored local files that may contain unique data', async () => {
+    const github = { findMergedPullRequest: async () => { throw new Error('must not run') } }
+    const { fixture, manager } = await setup(false, true, github)
+    const created = await manager.create({ repository: fixture.repository, title: 'Local environment' })
+    await writeFile(join(created.path, '.gitignore'), '.env.local\n')
+    git(created.path, ['add', '.gitignore'])
+    git(created.path, ['commit', '-m', 'ignore local environment'])
+    await writeFile(join(created.path, '.env.local'), 'secret=value\n')
+
+    await expect(manager.assessPreservation(created.id)).resolves.toMatchObject({
+      status: 'unsafe',
+      reason: expect.stringContaining('ignored local path'),
+      ignoredPaths: ['.env.local'],
+    })
+  })
+
+  it('allows known disposable ignored dependency folders', async () => {
+    const { fixture, manager } = await setup(false)
+    await writeFile(join(fixture.repository, '.gitignore'), 'node_modules/\n')
+    git(fixture.repository, ['add', '.gitignore'])
+    git(fixture.repository, ['commit', '-m', 'ignore dependencies'])
+    git(fixture.repository, ['push', 'origin', 'main'])
+    const created = await manager.create({ repository: fixture.repository, title: 'Dependencies only' })
+    await mkdir(join(created.path, 'packages', 'app', 'node_modules'), { recursive: true })
+    await writeFile(join(created.path, 'packages', 'app', 'node_modules', 'cache.txt'), 'cache\n')
+
+    await expect(manager.assessPreservation(created.id)).resolves.toMatchObject({
+      status: 'safe',
+      ignoredPaths: expect.arrayContaining(['packages/app/node_modules/']),
+    })
+  })
+
+  it('accepts exact-head squash merge proof only when its merge commit is on main', async () => {
+    let expectedHead = ''
+    let mergeCommit = ''
+    const github = {
+      findMergedPullRequest: async (_repository: string, _branch: string, headCommit: string) => {
+        if (headCommit !== expectedHead) return null
+        return {
+          number: 42,
+          url: 'https://github.test/pr/42',
+          mergedAt: '2026-09-01T00:00:00Z',
+          headCommit,
+          mergeCommit,
+        }
+      },
+    }
+    const { fixture, manager } = await setup(false, true, github)
+    const created = await manager.create({ repository: fixture.repository, title: 'Squash merged' })
+    await writeFile(join(created.path, 'feature.txt'), 'feature\n')
+    git(created.path, ['add', 'feature.txt'])
+    git(created.path, ['commit', '-m', 'feature'])
+    expectedHead = git(created.path, ['rev-parse', 'HEAD'])
+
+    const publisher = join(fixture.root, 'publisher')
+    git(fixture.root, ['clone', fixture.origin, publisher])
+    git(publisher, ['config', 'user.email', 'publisher@example.invalid'])
+    git(publisher, ['config', 'user.name', 'Publisher'])
+    await writeFile(join(publisher, 'feature.txt'), 'feature\n')
+    git(publisher, ['add', 'feature.txt'])
+    git(publisher, ['commit', '-m', 'squash feature'])
+    git(publisher, ['push', 'origin', 'main'])
+    mergeCommit = git(publisher, ['rev-parse', 'HEAD'])
+
+    await expect(manager.assessPreservation(created.id)).resolves.toMatchObject({
+      status: 'safe',
+      reason: 'PR #42 merged and contains this exact HEAD',
+      pullRequest: { number: 42, headCommit: expectedHead, mergeCommit },
+    })
+  })
+
+  it('marks a clean unmerged head unsafe and blocks guarded purge', async () => {
+    const github = { findMergedPullRequest: async () => null }
+    const { fixture, manager } = await setup(false, true, github)
+    const created = await manager.create({ repository: fixture.repository, title: 'Not merged' })
+    await writeFile(join(created.path, 'feature.txt'), 'feature\n')
+    git(created.path, ['add', 'feature.txt'])
+    git(created.path, ['commit', '-m', 'feature'])
+
+    await expect(manager.assessPreservation(created.id)).resolves.toMatchObject({
+      status: 'unsafe',
+      reason: expect.stringContaining('no matching merged pull request'),
+    })
+    await expect(manager.purge(created.id, { requirePreserved: true })).rejects.toMatchObject({ code: 'state-conflict' })
+    expect(existsSync(created.path)).toBe(true)
+  })
+
+  it('reports unknown when remote proof cannot be refreshed', async () => {
+    const { fixture, manager } = await setup(false)
+    const created = await manager.create({ repository: fixture.repository, title: 'Offline proof' })
+    git(fixture.repository, ['remote', 'remove', 'origin'])
+
+    await expect(manager.assessPreservation(created.id)).resolves.toMatchObject({
+      status: 'unknown',
+      reason: expect.stringContaining('could not refresh origin'),
+    })
+  })
+
   it('creates from freshly fetched origin default without touching a dirty primary checkout', async () => {
     const { fixture, manager } = await setup(false)
     await writeFile(join(fixture.repository, 'README.md'), 'dirty primary\n')

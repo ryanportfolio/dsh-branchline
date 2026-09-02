@@ -85,6 +85,7 @@ const task = (): TaskView => ({
     changeToken: 'c'.repeat(64),
   },
   changes: { dirty: false, staged: 0, unstaged: 0, untracked: 0, commitsAhead: 1 },
+  ignoredPaths: [],
   exists: true,
   changeToken: 'c'.repeat(64),
 })
