@@ -183,7 +183,7 @@ async function resolveWorktree(ctx, cwd) {
 }
 
 async function countOtherSessions(ctx, worktreePath, exceptSessionId) {
-  const key = canonicalKey(worktreePath)
+  const key = await canonicalize(worktreePath)
   const prefix = key + separator()
   const records = await ctx.sessionQuery.listSessions()
   let count = 0
