@@ -42,6 +42,10 @@ The permanent `dsh-openrouter-sync` and `dsh-session-extras` companions enhance 
 
 Opening the model pane reads validated cached prices and context windows. That read never contacts OpenRouter and still gets context windows from the configured OpenRouter model list when the price cache is empty. Network refreshes happen only through the OpenRouter Sync settings page or its enabled daily refresh. Re-enter the model pane, or use **Retry**, to load newly refreshed metadata.
 
+OpenRouter Sync also imports each model's advertised reasoning levels into the existing composer **Effort** menu, including the new-session composer. The first enabled refresh after this update backfills those levels even when the cached model list is recent. Automatic refresh opt-out remains respected.
+
+The live route's recognized levels (minimal, low, medium, high, xhigh, and max) replace an existing effort map on refresh, so choices follow current route support. An optional `none` level appears as **Off** and sends `none`. Explicit `reasoningEfforts: false` remains an opt-out; missing or unusable metadata preserves the configured map or adapter fallback, and configured-only models remain unchanged. **Default** uses the existing DSH adapter behavior: in 0.1.1rc2, with no explicit effort or profile default, optional models offering **Off** send `none`, while mandatory-reasoning Muse omits the reasoning field.
+
 ## Fresh remote base
 
 Leave **Base ref** empty. Branchline runs `git fetch origin --prune`, reads the branch advertised by `origin/HEAD`, resolves its remote-tracking commit, and records both the ref and commit.
