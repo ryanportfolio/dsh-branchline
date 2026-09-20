@@ -44,6 +44,9 @@ const MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 /** Hard cap on live entries kept, newest first, to bound the settings document. */
 const MAX_LIVE_MODELS = 800
 
+const REASONING_METADATA_VERSION = 1
+const REASONING_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"]
+
 let inFlight = null
 
 function dshHomeDir() {
@@ -113,6 +116,20 @@ function inputModalitiesOf(raw) {
   return input.length > 0 ? input : undefined
 }
 
+/** Only advertised, recognized levels become composer choices. */
+function reasoningEffortsOf(raw) {
+  const reasoning = isRecord(raw.reasoning) ? raw.reasoning : undefined
+  if (!reasoning || !Array.isArray(reasoning.supported_efforts)) return undefined
+  if (reasoning.mandatory !== undefined && typeof reasoning.mandatory !== "boolean") return undefined
+  const efforts = {}
+  for (const level of reasoning.supported_efforts) {
+    if (REASONING_LEVELS.includes(level)) efforts[level] = level
+    if (level === "none" && reasoning.mandatory !== true) efforts.off = "none"
+  }
+  // The installed adapter requires at least one thinking level beyond off.
+  return REASONING_LEVELS.some((level) => level in efforts) ? efforts : undefined
+}
+
 /**
  * Map one live OpenRouter listing entry to the harness model-entry shape.
  * Only fields the `llm-pi-ai` route schema accepts are carried.
@@ -125,12 +142,14 @@ function mapEntry(raw) {
   const top = raw.top_provider && typeof raw.top_provider === "object" ? raw.top_provider : undefined
   const maxTokens = top && isPosInt(top.max_completion_tokens) ? top.max_completion_tokens : undefined
   const input = inputModalitiesOf(raw)
+  const reasoningEfforts = reasoningEffortsOf(raw)
   return {
     id,
     ...(name !== id ? { name } : {}),
     ...(contextWindow === undefined ? {} : { contextWindow }),
     ...(maxTokens === undefined ? {} : { maxTokens }),
     ...(input === undefined ? {} : { input }),
+    ...(reasoningEfforts === undefined ? {} : { reasoningEfforts }),
   }
 }
 
@@ -156,7 +175,7 @@ function buildModelEntries(live, configured) {
     if (entry !== undefined && !byId.has(entry.id)) {
       const prior = configuredById.get(entry.id)
       byId.set(entry.id, {
-        entry: prior === undefined ? entry : { ...prior, ...entry },
+        entry: prior === undefined ? entry : { ...prior, ...entry, ...(prior.reasoningEfforts === false ? { reasoningEfforts: false } : {}) },
         created: typeof raw.created === "number" ? raw.created : 0,
       })
     }
@@ -352,9 +371,13 @@ export async function refreshOpenRouter(ctx) {
     if (settings && settings.writable === false) {
       return { ok: false, reason: "read-only", message: "the settings document is read-only in this session" }
     }
-    const before = configuredModels(route)
     const signal = timeoutSignal()
     const live = await fetchLive(signal)
+    // Settings may change while the request is pending. Merge the current list.
+    const currentRoute = storedRoute(ctx)
+    if (currentRoute === undefined) return { ok: false, reason: "no-route", message: "OpenRouter route was removed during refresh" }
+    if (settings?.writable === false) return { ok: false, reason: "read-only", message: "the settings document is read-only in this session" }
+    const before = configuredModels(currentRoute)
     const next = buildModelEntries(live, before)
     const costs = costsOf(live)
     const contexts = contextsOf(live)
@@ -368,7 +391,7 @@ export async function refreshOpenRouter(ctx) {
       await settings.update(NAMESPACE, { providers: { [PROVIDER]: { models: next } } })
     }
     const state = await readState()
-    await writeState({ ...state, lastRunAt: at, lastRunCount: next.length, lastAdded: added, lastRemoved: removed, costs, contexts, costsAt: at })
+    await writeState({ ...state, reasoningMetadataVersion: REASONING_METADATA_VERSION, lastRunAt: at, lastRunCount: next.length, lastAdded: added, lastRemoved: removed, costs, contexts, costsAt: at })
     return {
       ok: true,
       updated: !unchanged,
@@ -389,7 +412,7 @@ async function maybeAutoRefresh(ctx) {
   // Older state files only recorded the catalog refresh timestamp. Do not let
   // that timestamp suppress the one-time metadata backfill added later.
   const hasCostCache = typeof state.costsAt === "string"
-  if (hasCostCache && typeof state.lastRunAt === "string") {
+  if (hasCostCache && state.reasoningMetadataVersion === REASONING_METADATA_VERSION && typeof state.lastRunAt === "string") {
     const age = Date.now() - new Date(state.lastRunAt).getTime()
     if (Number.isFinite(age) && age >= 0 && age < STALE_AFTER_MS) return
   }
