@@ -270,14 +270,14 @@ describe('WorktreeQuickAction', () => {
   }
 
   /** Mutable structural fake of the composer input shell the toggle wraps. */
-  function fakeShell(initialDraft: string) {
+  function fakeShell(initialDraft: string, collections: { readonly attachmentIds?: unknown; readonly imageIds?: unknown } = { imageIds: [] }) {
     const shell = {
       draft: initialDraft,
       submitted: [] as (string | undefined)[],
       state: {
         getSnapshot: () => ({
           draft: shell.draft,
-          imageIds: [] as readonly unknown[],
+          ...collections,
           phase: 'plain' as const,
         }),
       },
@@ -319,6 +319,53 @@ describe('WorktreeQuickAction', () => {
     expect(next.submitted).toEqual(['queue'])
     // Stays armed across the launch; only a manual uncheck turns it off.
     await screen.findByRole('button', { name: 'Checked: your next submit creates a fresh worktree off origin/main and sends there' })
+  })
+
+  it.each([
+    ['current', { attachmentIds: [] }],
+    ['legacy', { imageIds: [] }],
+    ['both', { attachmentIds: [], imageIds: [] }],
+  ])('moves a text-only %s snapshot through the real submit hook', async (_version, collections) => {
+    const createTask = vi.fn().mockResolvedValue(task())
+    const startTaskSessionId = vi.fn().mockResolvedValue('session-2')
+    const source = fakeShell('plain text', collections)
+    const next = fakeShell('')
+    render(<WorktreeQuickAction {...quickProps({
+      createTask, startTaskSessionId,
+      composerShell: (id: string) => id === SESSION ? source : next,
+    })} />)
+    source.submit('queue')
+    await waitFor(() => { expect(next.submitted).toEqual(['queue']) })
+    expect(createTask).toHaveBeenCalledOnce()
+    expect(next.draft).toBe('plain text')
+    expect(source.draft).toBe('')
+    expect(source.submitted).toEqual([])
+  })
+
+  it.each([
+    ['current attachments', { attachmentIds: ['file-1', 'image-1'] }],
+    ['legacy images', { imageIds: ['image-1'] }],
+    ['mixed nonempty legacy', { attachmentIds: [], imageIds: ['image-1'] }],
+    ['mixed nonempty current', { attachmentIds: ['file-1'], imageIds: [] }],
+    ['absent collections', {}],
+    ['undefined current', { attachmentIds: undefined }],
+    ['null current', { attachmentIds: null }],
+    ['array-like current', { attachmentIds: { length: 0 } }],
+    ['string legacy', { imageIds: '' }],
+    ['malformed current with empty legacy', { attachmentIds: null, imageIds: [] }],
+    ['malformed legacy with empty current', { attachmentIds: [], imageIds: undefined }],
+  ])('passes %s through intact with the original submit mode', (_shape, collections) => {
+    const createTask = vi.fn()
+    const source = fakeShell('keep this draft', collections)
+    const snapshot = source.state.getSnapshot()
+    render(<WorktreeQuickAction {...quickProps({ createTask, composerShell: () => source })} />)
+    expect(() => source.submit('steer')).not.toThrow()
+    expect(source.submitted).toEqual(['steer'])
+    expect(source.state.getSnapshot()).toEqual(snapshot)
+    for (const key of ['attachmentIds', 'imageIds'] as const) {
+      expect(source.state.getSnapshot()[key]).toBe(snapshot[key])
+    }
+    expect(createTask).not.toHaveBeenCalled()
   })
 
   it('carries the source access mode into the worktree session before its first submit', async () => {
@@ -429,7 +476,7 @@ describe('WorktreeQuickAction', () => {
     expect(createTask).not.toHaveBeenCalled()
   })
 
-  it('passes submits through while the draft is empty or carries images', () => {
+  it('passes submits through while the draft is empty', () => {
     const createTask = vi.fn()
     const source = fakeShell('')
     const composerShell = vi.fn(() => source)

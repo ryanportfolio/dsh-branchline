@@ -4,7 +4,7 @@ import type {} from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { IconBranchOutline16, IconWarningOutline16, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TaskView } from '../types.ts'
-import type { StudioClientActions } from './api.ts'
+import type { ComposerShellFace, StudioClientActions } from './api.ts'
 import css from './WorktreeStudio.module.css'
 
 /** Slot-composed quick-action props. */
@@ -39,6 +39,16 @@ function permissionPresetOf(useProjection: unknown): string | undefined {
     | undefined
   const value = select?.currentValue
   return typeof value === 'string' && value !== 'custom' ? value : undefined
+}
+
+/** Only move drafts whose known attachment collections are all explicitly empty. */
+function hasNoAttachments(snapshot: ReturnType<ComposerShellFace['state']['getSnapshot']>): boolean {
+  const keys = ['attachmentIds', 'imageIds'] as const
+  const present = keys.filter(key => key in snapshot)
+  return present.length > 0 && present.every(key => {
+    const ids = snapshot[key]
+    return Array.isArray(ids) && ids.length === 0
+  })
 }
 
 /**
@@ -159,7 +169,7 @@ export function WorktreeQuickAction(props: WorktreeQuickActionProps): ReactNode 
       const movable = interceptableRef.current
         && busyRef.current === false
         && draft.trim() !== ''
-        && snapshot.imageIds.length === 0
+        && hasNoAttachments(snapshot)
         && snapshot.phase === 'plain'
       if (!movable) {
         original(mode)
