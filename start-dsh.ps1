@@ -199,19 +199,37 @@ function Get-DshLatestVersion {
 
 function Set-LauncherPinnedVersion {
     # Rewrites ONLY the $Version default line in this launcher script, so the
-    # pin survives restarts. Returns $true on success.
+    # pin survives restarts. Stages to a temp file, syntax-checks it, then
+    # swaps atomically. Returns $true on success.
     param([string]$NewVersion)
-    if ($NewVersion -notmatch '^[0-9A-Za-z][0-9A-Za-z\.\-]*$') { throw 'refusing to write an invalid version string' }
+    # npm dist-tag shape: digits + dots, optional -rc.N / -alpha.N suffix.
+    if ($NewVersion -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha)\.[0-9]+)?$') {
+        throw 'refusing to write an invalid version string'
+    }
     $path = $MyInvocation.MyCommand.Path
     if (-not $path) { $path = $PSCommandPath }
     if (-not $path) { throw 'cannot locate start-dsh.ps1 for pin update' }
     $text = Get-Content -LiteralPath $path -Raw
+    $evaluator = {
+        param($m)
+        return $m.Groups[1].Value + $NewVersion + $m.Groups[2].Value
+    }
     $updated = [regex]::Replace($text,
-        "(?m)^(\s*\[string\]\`$Version\s*=\s*')[^']*(')",
-        ('$1' + $NewVersion + '$2'),
+        '(?m)^(\s*\[string\]\$Version\s*=\s*'')[^'']*('')',
+        $evaluator,
         1)
     if ($updated -eq $text) { throw 'pinned $Version line not found; launcher unchanged' }
-    Set-Content -LiteralPath $path -Value $updated -Encoding UTF8
+    $tmp = [IO.Path]::GetTempFileName()
+    try {
+        Set-Content -LiteralPath $tmp -Value $updated -Encoding UTF8
+        $tokens = $null
+        $errors = $null
+        [void][System.Management.Automation.Language.Parser]::ParseFile($tmp, [ref]$tokens, [ref]$errors)
+        if ($errors.Count -gt 0) { throw ('rewritten launcher failed syntax check: ' + $errors[0].Message) }
+        Copy-Item -LiteralPath $tmp -Destination $path -Force
+    } finally {
+        Remove-Item -LiteralPath $tmp -ErrorAction SilentlyContinue
+    }
     return $true
 }
 
@@ -786,6 +804,7 @@ function New-LauncherGui {
     $commands = [pscustomobject]@{
         FindDshTargetPids     = Get-Command Find-DshTargetPids -CommandType Function
         FindPortSquatter      = Get-Command Find-PortSquatter -CommandType Function
+        GetDshLatestVersion   = Get-Command Get-DshLatestVersion -CommandType Function
         GetGitStatus          = Get-Command Get-GitStatus -CommandType Function
         GetListenMap          = Get-Command Get-ListenMap -CommandType Function
         InvokeDshUpgrade      = Get-Command Invoke-DshUpgrade -CommandType Function
@@ -869,6 +888,31 @@ function New-LauncherGui {
     }).GetNewClosure())
 
     $btnUpgrade.Add_Click(({
+        # Check-first: resolve npm latest BEFORE stopping anything, so an
+        # offline registry, current pin, or bad version leaves DSH running.
+        $btnUpgrade.Enabled = $false
+        $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
+        try {
+            $sel = $combo.SelectedItem
+            $latest = & $commands.GetDshLatestVersion
+            if (-not $latest) {
+                & $addLogLine 'npm registry unreachable; upgrade aborted, nothing changed.'
+                return
+            }
+            $pinned = $Script:Version
+            if (-not $pinned) { $pinned = $Version }
+            if ($latest -eq $pinned) {
+                & $addLogLine ('already on npm latest ({0}); nothing changed.' -f $pinned)
+                return
+            }
+            if ($latest -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha)\.[0-9]+)?$') {
+                & $addLogLine ('npm latest "{0}" has an unexpected shape; upgrade aborted, nothing changed.' -f $latest)
+                return
+            }
+        } finally {
+            $btnUpgrade.Enabled = $true
+            $form.Cursor = [System.Windows.Forms.Cursors]::Default
+        }
         if ($guiState.Proc -and -not $guiState.Proc.HasExited) {
             $answer = [System.Windows.Forms.MessageBox]::Show(
                 ('DSH is running. Upgrade stops it first.' + [Environment]::NewLine + [Environment]::NewLine +
@@ -893,7 +937,6 @@ function New-LauncherGui {
         $btnUpgrade.Enabled = $false
         $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
         try {
-            $sel = $combo.SelectedItem
             $newVersion = & $commands.InvokeDshUpgrade -Ws $sel -Log $addLogLine
             & $addLogLine ('DSH pin now {0}. Restart the launcher, then press Start.' -f $newVersion)
         } catch {
