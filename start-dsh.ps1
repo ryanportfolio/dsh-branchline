@@ -32,7 +32,8 @@
 param(
     [string]$Workspace,
     [string[]]$RepositoryRoot,
-    [string]$Version   = '0.1.1-rc.2',
+    [string]$Version,
+    [string]$SelectVersion,
     [int]$Port         = 3080,
     [switch]$NoOpen,
     [switch]$KeepExisting,
@@ -91,10 +92,16 @@ namespace DshLauncher
 # --- settings -------------------------------------------------------------
 
 function Get-LauncherSettings {
-    if (Test-Path $Script:SettingsFile) {
-        try { return Get-Content $Script:SettingsFile -Raw | ConvertFrom-Json } catch { }
+    if (-not (Test-Path -LiteralPath $Script:SettingsFile)) { return [pscustomobject]@{ lastWorkspace = '' } }
+    try {
+        $raw = Get-Content -LiteralPath $Script:SettingsFile -Raw
+        if (-not $raw -or -not $raw.TrimStart().StartsWith('{')) { throw 'settings must be a JSON object' }
+        $settings = $raw | ConvertFrom-Json
+        if ($settings -isnot [pscustomobject]) { throw 'settings must be a JSON object' }
+        return $settings
+    } catch {
+        throw "Cannot read launcher settings '$Script:SettingsFile'. Restore a valid backup, or move this file aside and run .\start-dsh.ps1 -SelectVersion <known-compatible-version>. $($_.Exception.Message)"
     }
-    return [pscustomobject]@{ lastWorkspace = '' }
 }
 
 function Save-LauncherSettings {
@@ -197,67 +204,70 @@ function Get-DshLatestVersion {
     }
 }
 
-function Set-LauncherPinnedVersion {
-    # Persist the runtime selection outside Git so upgrading leaves the
-    # plugin checkout clean for Sync-PluginSource.
+function New-LauncherVersionPreparation {
     param([string]$NewVersion)
-    if ($NewVersion -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha)\.[0-9]+)?$') {
-        throw 'refusing to write an invalid version string'
-    }
+    if ($NewVersion -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha)\.[0-9]+)?$') { throw 'refusing to write an invalid version string' }
+    $settings = Get-LauncherSettings
     $parent = Split-Path -Parent $Script:SettingsFile
-    if (-not (Test-Path -LiteralPath $parent)) {
-        [void](New-Item -ItemType Directory -Path $parent -Force)
-    }
-    $settings = if (Test-Path -LiteralPath $Script:SettingsFile) {
-        Get-Content -LiteralPath $Script:SettingsFile -Raw | ConvertFrom-Json
-    } else {
-        [pscustomobject]@{ lastWorkspace = '' }
-    }
+    if (-not (Test-Path -LiteralPath $parent)) { [void](New-Item -ItemType Directory -Path $parent -Force) }
     $settings | Add-Member -NotePropertyName pinnedDshVersion -NotePropertyValue $NewVersion -Force
     $settings.PSObject.Properties.Remove('updateCheck')
     $tmp = Join-Path $parent ('launcher-settings-' + [guid]::NewGuid().ToString('N') + '.tmp')
     try {
         $settings | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $tmp -Encoding UTF8
-        if (Test-Path -LiteralPath $Script:SettingsFile) {
-            [IO.File]::Replace($tmp, $Script:SettingsFile, [System.Management.Automation.Language.NullString]::Value)
-        } else {
-            Move-Item -LiteralPath $tmp -Destination $Script:SettingsFile
-        }
-    } finally {
+        return $tmp
+    } catch {
         if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp }
+        throw
     }
-    return $true
+}
+
+function Complete-LauncherVersionPreparation {
+    param([string]$PreparedFile)
+    if (Test-Path -LiteralPath $Script:SettingsFile) {
+        [IO.File]::Replace($PreparedFile, $Script:SettingsFile, [System.Management.Automation.Language.NullString]::Value)
+    } else { Move-Item -LiteralPath $PreparedFile -Destination $Script:SettingsFile }
+}
+
+function Set-LauncherPinnedVersion {
+    param([string]$NewVersion)
+    $tmp = New-LauncherVersionPreparation $NewVersion
+    try { Complete-LauncherVersionPreparation $tmp }
+    finally { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp } }
 }
 
 function Resolve-LauncherVersion {
     param([string]$DefaultVersion, [bool]$ExplicitVersion)
-    if ($ExplicitVersion) { return $DefaultVersion }
-    $settings = Get-LauncherSettings
-    $pin = [string]$settings.pinnedDshVersion
-    if ($pin -match '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha)\.[0-9]+)?$') {
-        return $pin
+    if ($ExplicitVersion) {
+        if ($DefaultVersion -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha)\.[0-9]+)?$') { throw 'Invalid -Version selection.' }
+        return $DefaultVersion
     }
-    return $DefaultVersion
+    $settings = Get-LauncherSettings
+    if ($settings.pinnedDshVersion -is [string] -and $settings.pinnedDshVersion -match '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha)\.[0-9]+)?$') { return $settings.pinnedDshVersion }
+    throw "No valid saved DSH version in '$Script:SettingsFile'. Run .\start-dsh.ps1 -SelectVersion <known-compatible-version> to save a selection without starting DSH; -Version is a one-launch override."
 }
 
 function Invoke-DshUpgrade {
-    # Save npm latest in launcher settings and clear the notice cache.
-    # The GUI caller handles stopping DSH; restart the launcher afterward
-    # so all callbacks use the saved version. Returns the new version.
-    param([string]$Ws, [scriptblock]$Log)
-    $write = if ($Log) { $Log } else { { param($text) Write-Host $text } }
+    # The GUI delegates the whole transaction here: never query again after stop.
+    param([string]$CurrentVersion, [scriptblock]$Confirm, [scriptblock]$Stop, [scriptblock]$Log)
     $latest = Get-DshLatestVersion
     if (-not $latest) { throw 'npm registry unreachable; upgrade aborted, nothing changed' }
-    if ($latest -eq $Version) {
-        & $write ('already on npm latest ({0}); nothing changed' -f $Version)
-        return $latest
+    if ($latest -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha)\.[0-9]+)?$') { throw 'npm latest has an invalid version; nothing changed' }
+    if ($latest -eq $CurrentVersion) {
+        if ($Log) { & $Log ('already on npm latest ({0}); nothing changed.' -f $CurrentVersion) }
+        return $null
     }
-    & $write ('upgrading DSH pin {0} -> {1}' -f $Version, $latest)
-    Set-LauncherPinnedVersion -NewVersion $latest | Out-Null
-    $Script:Version = $latest
-    $Version = $latest
-    & $write 'pin updated; restart the launcher, then press Start.'
-    return $latest
+    if ($Confirm -and -not (& $Confirm $latest)) { return $null }
+    $tmp = New-LauncherVersionPreparation $latest
+    try {
+        if ($Stop) {
+            try { & $Stop }
+            catch { throw "DSH stop failed; saved version unchanged. Check running processes before retrying. $($_.Exception.Message)" }
+        }
+        try { Complete-LauncherVersionPreparation $tmp }
+        catch { throw "DSH may be stopped, but the version commit failed. Inspect '$Script:SettingsFile' before restarting. $($_.Exception.Message)" }
+        return $latest
+    } finally { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp } }
 }
 
 function Stop-Gracefully {
@@ -282,6 +292,7 @@ function Stop-Gracefully {
             $ErrorActionPreference = $previousPreference
         }
         Start-Sleep -Milliseconds 500
+        if (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue) { throw "PID $ProcessId could not be stopped." }
     } else {
         Write-Host "PID $ProcessId closed."
     }
@@ -488,6 +499,13 @@ function Get-GitStatus {
 # aborts the launch instead of serving a mix. Use -SkipSync while developing
 # inside the checkout; when the plugin is finished and pushed to origin, the
 # next launch pulls it in and serves it.
+function Test-PluginDependencyChange {
+    param([string]$Repo, [string]$Before, [string]$After)
+    $result = Invoke-Git -C $Repo diff --name-only $Before $After '--' package.json pnpm-lock.yaml
+    if (-not $result.Ok) { throw ('Cannot compare dependency files across the fetched range: ' + ($result.Out -join ' ')) }
+    return @($result.Out | Where-Object { $_ }).Count -gt 0
+}
+
 function Sync-PluginSource {
     param([scriptblock]$Log)
     $write = if ($Log) { $Log } else { { param($text) Write-Host $text } }
@@ -540,8 +558,7 @@ function Sync-PluginSource {
             & git -C $repo merge --ff-only origin/main 2>&1 | ForEach-Object { $detail.Add($_) }
             if ($LASTEXITCODE -ne 0) { throw 'fast-forward to origin/main failed (local history diverged from origin?)' }
             & $write ('plugin source synced to origin/main @ ' + $remote.Substring(0, [Math]::Min(12, $remote.Length)))
-            $changed = @(& git -C $repo diff --name-only HEAD~1 HEAD 2>$null)
-            if ($changed -contains 'package.json' -or $changed -contains 'pnpm-lock.yaml') {
+            if (Test-PluginDependencyChange -Repo $repo -Before $local -After $remote) {
                 & $write 'plugin deps changed; reinstalling'
                 Push-Location $repo
                 try {
@@ -800,12 +817,11 @@ function New-LauncherGui {
 
     # GetNewClosure creates a dynamic module. Its $Script: scope is not this
     # launcher's script scope, so callbacks must capture shared objects directly.
-    $guiState = [pscustomobject]@{ Proc = $null }
+    $guiState = [pscustomobject]@{ Proc = $null; RestartRequired = $false }
     $logQueue = $Script:LogQueue
     $commands = [pscustomobject]@{
         FindDshTargetPids     = Get-Command Find-DshTargetPids -CommandType Function
         FindPortSquatter      = Get-Command Find-PortSquatter -CommandType Function
-        GetDshLatestVersion   = Get-Command Get-DshLatestVersion -CommandType Function
         GetGitStatus          = Get-Command Get-GitStatus -CommandType Function
         GetListenMap          = Get-Command Get-ListenMap -CommandType Function
         InvokeDshUpgrade      = Get-Command Invoke-DshUpgrade -CommandType Function
@@ -888,65 +904,41 @@ function New-LauncherGui {
         Start-Process ('http://127.0.0.1:{0}/' -f $Port)
     }).GetNewClosure())
 
-    $btnUpgrade.Add_Click(({
-        # Check-first: resolve npm latest BEFORE stopping anything, so an
-        # offline registry, current pin, or bad version leaves DSH running.
+    $upgradeClick = ({
         $btnUpgrade.Enabled = $false
         $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
         try {
-            $sel = $combo.SelectedItem
-            $latest = & $commands.GetDshLatestVersion
-            if (-not $latest) {
-                & $addLogLine 'npm registry unreachable; upgrade aborted, nothing changed.'
-                return
+            $confirm = ({
+                param($latest)
+                if (-not $guiState.Proc -or $guiState.Proc.HasExited) { return $true }
+                return [System.Windows.Forms.MessageBox]::Show(
+                    ('Stop DSH and select version ' + $latest + '?'), 'DSH Branchline',
+                    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                    [System.Windows.Forms.MessageBoxIcon]::Warning) -eq [System.Windows.Forms.DialogResult]::Yes
+            }).GetNewClosure()
+            $stop = ({
+                if ($guiState.Proc -and -not $guiState.Proc.HasExited) {
+                    & $commands.StopDshInstances -Port $Port -OwnProc $guiState.Proc -Log $addLogLine
+                    $guiState.Proc = $null
+                    $btnStop.Enabled = $false
+                    $btnBrowser.Enabled = $false
+                    $btnStart.Enabled = $true
+                }
+            }).GetNewClosure()
+            $newVersion = & $commands.InvokeDshUpgrade -CurrentVersion $Version -Confirm $confirm -Stop $stop -Log $addLogLine
+            if ($newVersion) {
+                & $addLogLine ('DSH pin now {0}. Restart the launcher before starting DSH.' -f $newVersion)
+                # Start callbacks capture the previous version; require reopening.
+                $btnStart.Enabled = $false
+                $guiState.RestartRequired = $true
             }
-            $pinned = $Script:Version
-            if (-not $pinned) { $pinned = $Version }
-            if ($latest -eq $pinned) {
-                & $addLogLine ('already on npm latest ({0}); nothing changed.' -f $pinned)
-                return
-            }
-            if ($latest -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha)\.[0-9]+)?$') {
-                & $addLogLine ('npm latest "{0}" has an unexpected shape; upgrade aborted, nothing changed.' -f $latest)
-                return
-            }
-        } finally {
-            $btnUpgrade.Enabled = $true
+        } catch { & $addLogLine ('upgrade error: ' + $_.Exception.Message) }
+        finally {
+            $btnUpgrade.Enabled = -not $guiState.RestartRequired
             $form.Cursor = [System.Windows.Forms.Cursors]::Default
         }
-        if ($guiState.Proc -and -not $guiState.Proc.HasExited) {
-            $answer = [System.Windows.Forms.MessageBox]::Show(
-                ('DSH is running. Upgrade stops it first.' + [Environment]::NewLine + [Environment]::NewLine +
-                 'Yes - stop DSH and upgrade the pin' + [Environment]::NewLine +
-                 'Cancel - stay here'),
-                'DSH Branchline',
-                [System.Windows.Forms.MessageBoxButtons]::YesNo,
-                [System.Windows.Forms.MessageBoxIcon]::Warning)
-            if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { return }
-            try {
-                & $commands.StopDshInstances -Port $Port -OwnProc $guiState.Proc -Log $addLogLine
-                $guiState.Proc = $null
-            } catch {
-                & $addLogLine ('stop error: ' + $_.Exception.Message)
-                return
-            } finally {
-                $btnStop.Enabled = $false
-                $btnBrowser.Enabled = $false
-                $btnStart.Enabled = $true
-            }
-        }
-        $btnUpgrade.Enabled = $false
-        $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
-        try {
-            $newVersion = & $commands.InvokeDshUpgrade -Ws $sel -Log $addLogLine
-            & $addLogLine ('DSH pin now {0}. Restart the launcher, then press Start.' -f $newVersion)
-        } catch {
-            & $addLogLine ('upgrade error: ' + $_.Exception.Message)
-        } finally {
-            $btnUpgrade.Enabled = $true
-            $form.Cursor = [System.Windows.Forms.Cursors]::Default
-        }
-    }).GetNewClosure())
+    }).GetNewClosure()
+    $btnUpgrade.Add_Click($upgradeClick)
 
     $btnStart.Add_Click(({
         $sel = $combo.SelectedItem
@@ -1042,13 +1034,20 @@ function New-LauncherGui {
     }).GetNewClosure())
 
     if ($SelfTest) {
-        $form.Tag = [pscustomobject]@{ TimerTick = $timerTick }
+        $form.Tag = [pscustomobject]@{ TimerTick = $timerTick; UpgradeClick = $upgradeClick }
     }
     $timer.Start()
     return $form
 }
 
 # --- main dispatch ----------------------------------------------------------
+
+if ($PSBoundParameters.ContainsKey('SelectVersion')) {
+    if ($PSBoundParameters.ContainsKey('Version')) { throw 'Use either -SelectVersion or -Version.' }
+    Set-LauncherPinnedVersion $SelectVersion
+    Write-Host "Saved DSH version $SelectVersion. No DSH process was started or stopped."
+    exit 0
+}
 
 $Version = Resolve-LauncherVersion -DefaultVersion $Version -ExplicitVersion ($PSBoundParameters.ContainsKey('Version'))
 

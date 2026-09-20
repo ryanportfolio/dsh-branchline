@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { collectTests } from './collect-tests.mjs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -25,15 +26,19 @@ const THEMES = {
 const MONO = "ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,'Liberation Mono',monospace"
 const esc = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
-const testFiles = fs.readdirSync(path.join(ROOT, 'tests')).filter(name => /\.spec\.tsx?$/u.test(name))
-const testCount = testFiles.reduce((sum, name) => {
-  const source = fs.readFileSync(path.join(ROOT, 'tests', name), 'utf8')
-  return sum + source.split(/\r?\n/u).filter(line => /^\s+it(?:\.|\()/u.test(line)).length
-}, 0)
+// Collection expands parameterized cases without running test bodies or hooks.
+// The runner loader avoids writing bundled config into node_modules.
+const collectedTests = await collectTests(ROOT)
+if (!Array.isArray(collectedTests) || collectedTests.length === 0 ||
+    collectedTests.some(test => typeof test.name !== 'string' || typeof test.file !== 'string')) {
+  throw new Error('Vitest discovery did not return a nonempty list of named tests and files')
+}
+const testCount = collectedTests.length
+const testFiles = new Set(collectedTests.map(test => test.file))
 const facts = {
   version: pkg.version,
   tests: testCount,
-  testFiles: testFiles.length,
+  testFiles: testFiles.size,
   dependencies: Object.keys(pkg.dependencies ?? {}).length,
   stages: items.length,
 }

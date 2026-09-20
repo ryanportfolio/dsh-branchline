@@ -50,6 +50,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh.exe -NoProfile -File .\scripts\test-launcher-upgrade.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-dsh.ps1 -SelfTest
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-launcher-sync.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pwsh.exe -NoProfile -File .\start-dsh.ps1 -SelfTest
+          pwsh.exe -NoProfile -File .\scripts\test-launcher-sync.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:DSH_LAUNCHER_HOME = Join-Path $env:RUNNER_TEMP 'dsh-launcher-selftest'
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-dsh.ps1 -SelfTest -Version '0.1.5-rc.2'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh.exe -NoProfile -File .\start-dsh.ps1 -SelfTest -Version '0.1.5-rc.2'

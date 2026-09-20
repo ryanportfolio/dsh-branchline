@@ -21,7 +21,9 @@ export interface ComposerShellFace {
   readonly state: {
     readonly getSnapshot: () => {
       readonly draft: string
-      readonly imageIds: readonly unknown[]
+      /** Host versions expose one of these collections; validate before moving a draft. */
+      readonly attachmentIds?: unknown
+      readonly imageIds?: unknown
       readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting'
     }
   }

@@ -10,7 +10,13 @@ cd dsh-branchline
 
 Setup installs dependencies, builds Branchline, and links the root plugin plus every permanent companion package under `packages/` into the DSH Web profile. Re-run it after pulling plugin updates.
 
-Start with `Start-Branchline.cmd`, or run:
+Choose a known compatible DSH version before the first launch. This saves the selection without starting or stopping DSH:
+
+```powershell
+.\start-dsh.ps1 -SelectVersion 0.1.5-rc.2
+```
+
+Then start with `Start-Branchline.cmd`, or run:
 
 ```powershell
 .\start-dsh.ps1 -Workspace C:\path\to\repo
@@ -21,6 +27,14 @@ The launcher remembers its last repository under `%LOCALAPPDATA%\DSH Branchline`
 ## Upgrading DSH
 
 Click **Upgrade DSH**, then restart the launcher and press **Start**. The selected version is saved in `launcher-settings.json` under `%LOCALAPPDATA%\DSH Branchline` (or `DSH_LAUNCHER_HOME` when set), so upgrades leave the plugin checkout clean. An explicit `-Version` argument overrides the saved selection for that launch.
+
+The launcher checks npm once per upgrade and prepares the settings file before stopping its DSH child process. Registry, validation, and preparation failures leave the running process and saved selection unchanged. Cancellation and an unchanged version also leave it running. After a successful selection, reopen the launcher to use it. A stop failure leaves the saved selection unchanged; a final disk failure may leave DSH stopped and requires checking the settings file before restarting.
+
+If settings are missing or contain no valid saved version, startup stops with recovery instructions instead of choosing an older default. Run `-SelectVersion <known-compatible-version>` to save an explicit choice. For malformed or unreadable settings, restore a valid backup, fix file access, or move the settings file aside before selecting again. Keep that backup for any workspace or cache values you want to recover. `-Version` remains a one-launch override and never saves the version selection.
+
+Choose a version compatible with your existing sessions. Selecting an older runtime does not migrate V3 session data and does not make downgrades safe.
+
+Plugin synchronization compares dependency files across the full fetched fast-forward range, including changes before the final pulled commit.
 
 ## Model metadata
 
