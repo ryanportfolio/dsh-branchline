@@ -18,6 +18,10 @@ Start with `Start-Branchline.cmd`, or run:
 
 The launcher remembers its last repository under `%LOCALAPPDATA%\DSH Branchline`. Set `DSH_REPO_ROOT` or pass `-RepositoryRoot` to add discovery roots. Browse works without either.
 
+## Upgrading DSH
+
+Click **Upgrade DSH**, then restart the launcher and press **Start**. The selected version is saved in `launcher-settings.json` under `%LOCALAPPDATA%\DSH Branchline` (or `DSH_LAUNCHER_HOME` when set), so upgrades leave the plugin checkout clean. An explicit `-Version` argument overrides the saved selection for that launch.
+
 ## Model metadata
 
 The permanent `dsh-openrouter-sync` and `dsh-session-extras` companions enhance the model picker with OpenRouter prices and minimum-context filters. The default **256k** filter keeps OpenRouter models with at least 256,000 context tokens; models from other providers are never hidden or priced using OpenRouter metadata.

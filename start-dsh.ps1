@@ -173,20 +173,92 @@ function Get-DshUpdateNoticeLines {
                     [pscustomobject]@{ lastWorkspace = '' }
                 }
             $settingsForWrite | Add-Member -NotePropertyName updateCheck -NotePropertyValue $state -Force
-            $settingsForWrite | Select-Object lastWorkspace, updateCheck |
+            $settingsForWrite |
                 ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $SettingsFile -Encoding UTF8
         } catch { }
     }
 
     if ($state.isNewer) {
         $lines += ('NOTICE: DSH update available - launcher pinned {0}, npm latest {1}.' -f $Version, $state.knownLatest)
-        $lines += '  Nothing was changed. To move up: edit $Version in start-dsh.ps1 (or pass -Version) and restart.'
+        $lines += '  Nothing was changed. To move up: use Upgrade DSH in the launcher (or pass -Version) and restart.'
         $lines += '  Plugins, sessions, and settings live under ~/.dsh and CoreWise, outside the package.'
     }
     return $lines
 }
 
-# --- process helpers ------------------------------------------------------
+function Get-DshLatestVersion {
+    # Read-only npm query for @deepseek-ai/dsh dist-tags.latest. Returns '' offline.
+    try {
+        $pkg = Invoke-RestMethod -Uri 'https://registry.npmjs.org/@deepseek-ai%2Fdsh' `
+            -Headers @{ 'User-Agent' = 'dsh-launcher-upgrade' } -TimeoutSec 10
+        return [string]$pkg.'dist-tags'.latest
+    } catch {
+        return ''
+    }
+}
+
+function Set-LauncherPinnedVersion {
+    # Persist the runtime selection outside Git so upgrading leaves the
+    # plugin checkout clean for Sync-PluginSource.
+    param([string]$NewVersion)
+    if ($NewVersion -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha)\.[0-9]+)?$') {
+        throw 'refusing to write an invalid version string'
+    }
+    $parent = Split-Path -Parent $Script:SettingsFile
+    if (-not (Test-Path -LiteralPath $parent)) {
+        [void](New-Item -ItemType Directory -Path $parent -Force)
+    }
+    $settings = if (Test-Path -LiteralPath $Script:SettingsFile) {
+        Get-Content -LiteralPath $Script:SettingsFile -Raw | ConvertFrom-Json
+    } else {
+        [pscustomobject]@{ lastWorkspace = '' }
+    }
+    $settings | Add-Member -NotePropertyName pinnedDshVersion -NotePropertyValue $NewVersion -Force
+    $settings.PSObject.Properties.Remove('updateCheck')
+    $tmp = Join-Path $parent ('launcher-settings-' + [guid]::NewGuid().ToString('N') + '.tmp')
+    try {
+        $settings | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $tmp -Encoding UTF8
+        if (Test-Path -LiteralPath $Script:SettingsFile) {
+            [IO.File]::Replace($tmp, $Script:SettingsFile, [System.Management.Automation.Language.NullString]::Value)
+        } else {
+            Move-Item -LiteralPath $tmp -Destination $Script:SettingsFile
+        }
+    } finally {
+        if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp }
+    }
+    return $true
+}
+
+function Resolve-LauncherVersion {
+    param([string]$DefaultVersion, [bool]$ExplicitVersion)
+    if ($ExplicitVersion) { return $DefaultVersion }
+    $settings = Get-LauncherSettings
+    $pin = [string]$settings.pinnedDshVersion
+    if ($pin -match '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha)\.[0-9]+)?$') {
+        return $pin
+    }
+    return $DefaultVersion
+}
+
+function Invoke-DshUpgrade {
+    # Save npm latest in launcher settings and clear the notice cache.
+    # The GUI caller handles stopping DSH; restart the launcher afterward
+    # so all callbacks use the saved version. Returns the new version.
+    param([string]$Ws, [scriptblock]$Log)
+    $write = if ($Log) { $Log } else { { param($text) Write-Host $text } }
+    $latest = Get-DshLatestVersion
+    if (-not $latest) { throw 'npm registry unreachable; upgrade aborted, nothing changed' }
+    if ($latest -eq $Version) {
+        & $write ('already on npm latest ({0}); nothing changed' -f $Version)
+        return $latest
+    }
+    & $write ('upgrading DSH pin {0} -> {1}' -f $Version, $latest)
+    Set-LauncherPinnedVersion -NewVersion $latest | Out-Null
+    $Script:Version = $latest
+    $Version = $latest
+    & $write 'pin updated; restart the launcher, then press Start.'
+    return $latest
+}
 
 function Stop-Gracefully {
     param([int]$ProcessId)
@@ -703,6 +775,11 @@ function New-LauncherGui {
     $btnBrowser.Size = New-Object System.Drawing.Size(110, 30)
     $btnBrowser.Enabled = $false
 
+    $btnUpgrade = New-Object System.Windows.Forms.Button
+    $btnUpgrade.Text = 'Upgrade DSH'
+    $btnUpgrade.Location = New-Object System.Drawing.Point(592, 116)
+    $btnUpgrade.Size = New-Object System.Drawing.Size(100, 30)
+
     $lblIsolation = New-Object System.Windows.Forms.Label
     $lblIsolation.Text = 'New tasks: fresh origin/HEAD -> isolated worktree'
     $lblIsolation.Location = New-Object System.Drawing.Point(312, 123)
@@ -717,7 +794,7 @@ function New-LauncherGui {
     $txtLog.WordWrap = $false
     $txtLog.Font = New-Object System.Drawing.Font('Consolas', 9)
 
-    foreach ($c in @($lblRepo, $combo, $btnBrowse, $rtbStatus, $btnStart, $btnStop, $btnBrowser, $lblIsolation, $txtLog)) {
+    foreach ($c in @($lblRepo, $combo, $btnBrowse, $rtbStatus, $btnStart, $btnStop, $btnBrowser, $btnUpgrade, $lblIsolation, $txtLog)) {
         [void]$form.Controls.Add($c)
     }
 
@@ -728,8 +805,10 @@ function New-LauncherGui {
     $commands = [pscustomobject]@{
         FindDshTargetPids     = Get-Command Find-DshTargetPids -CommandType Function
         FindPortSquatter      = Get-Command Find-PortSquatter -CommandType Function
+        GetDshLatestVersion   = Get-Command Get-DshLatestVersion -CommandType Function
         GetGitStatus          = Get-Command Get-GitStatus -CommandType Function
         GetListenMap          = Get-Command Get-ListenMap -CommandType Function
+        InvokeDshUpgrade      = Get-Command Invoke-DshUpgrade -CommandType Function
         SaveLauncherSettings = Get-Command Save-LauncherSettings -CommandType Function
         ShowGitStatusPane     = Get-Command Show-GitStatusPane -CommandType Function
         StartDshProc          = Get-Command Start-DshProc -CommandType Function
@@ -807,6 +886,66 @@ function New-LauncherGui {
 
     $btnBrowser.Add_Click(({
         Start-Process ('http://127.0.0.1:{0}/' -f $Port)
+    }).GetNewClosure())
+
+    $btnUpgrade.Add_Click(({
+        # Check-first: resolve npm latest BEFORE stopping anything, so an
+        # offline registry, current pin, or bad version leaves DSH running.
+        $btnUpgrade.Enabled = $false
+        $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
+        try {
+            $sel = $combo.SelectedItem
+            $latest = & $commands.GetDshLatestVersion
+            if (-not $latest) {
+                & $addLogLine 'npm registry unreachable; upgrade aborted, nothing changed.'
+                return
+            }
+            $pinned = $Script:Version
+            if (-not $pinned) { $pinned = $Version }
+            if ($latest -eq $pinned) {
+                & $addLogLine ('already on npm latest ({0}); nothing changed.' -f $pinned)
+                return
+            }
+            if ($latest -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha)\.[0-9]+)?$') {
+                & $addLogLine ('npm latest "{0}" has an unexpected shape; upgrade aborted, nothing changed.' -f $latest)
+                return
+            }
+        } finally {
+            $btnUpgrade.Enabled = $true
+            $form.Cursor = [System.Windows.Forms.Cursors]::Default
+        }
+        if ($guiState.Proc -and -not $guiState.Proc.HasExited) {
+            $answer = [System.Windows.Forms.MessageBox]::Show(
+                ('DSH is running. Upgrade stops it first.' + [Environment]::NewLine + [Environment]::NewLine +
+                 'Yes - stop DSH and upgrade the pin' + [Environment]::NewLine +
+                 'Cancel - stay here'),
+                'DSH Branchline',
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Warning)
+            if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+            try {
+                & $commands.StopDshInstances -Port $Port -OwnProc $guiState.Proc -Log $addLogLine
+                $guiState.Proc = $null
+            } catch {
+                & $addLogLine ('stop error: ' + $_.Exception.Message)
+                return
+            } finally {
+                $btnStop.Enabled = $false
+                $btnBrowser.Enabled = $false
+                $btnStart.Enabled = $true
+            }
+        }
+        $btnUpgrade.Enabled = $false
+        $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
+        try {
+            $newVersion = & $commands.InvokeDshUpgrade -Ws $sel -Log $addLogLine
+            & $addLogLine ('DSH pin now {0}. Restart the launcher, then press Start.' -f $newVersion)
+        } catch {
+            & $addLogLine ('upgrade error: ' + $_.Exception.Message)
+        } finally {
+            $btnUpgrade.Enabled = $true
+            $form.Cursor = [System.Windows.Forms.Cursors]::Default
+        }
     }).GetNewClosure())
 
     $btnStart.Add_Click(({
@@ -910,6 +1049,8 @@ function New-LauncherGui {
 }
 
 # --- main dispatch ----------------------------------------------------------
+
+$Version = Resolve-LauncherVersion -DefaultVersion $Version -ExplicitVersion ($PSBoundParameters.ContainsKey('Version'))
 
 if ($SelfTest) {
     Test-ProcessLogCapture
