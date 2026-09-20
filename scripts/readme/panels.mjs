@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { execFileSync } from 'node:child_process'
+import { collectTests } from './collect-tests.mjs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -28,10 +28,7 @@ const esc = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').
 
 // Collection expands parameterized cases without running test bodies or hooks.
 // The runner loader avoids writing bundled config into node_modules.
-const collectedTests = JSON.parse(execFileSync(process.execPath, [
-  path.join(ROOT, 'node_modules/vitest/vitest.mjs'),
-  'list', '--json', '--configLoader', 'runner', '--no-cache',
-], { cwd: ROOT, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }))
+const collectedTests = await collectTests(ROOT)
 if (!Array.isArray(collectedTests) || collectedTests.length === 0 ||
     collectedTests.some(test => typeof test.name !== 'string' || typeof test.file !== 'string')) {
   throw new Error('Vitest discovery did not return a nonempty list of named tests and files')
