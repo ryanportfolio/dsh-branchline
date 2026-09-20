@@ -173,14 +173,14 @@ function Get-DshUpdateNoticeLines {
                     [pscustomobject]@{ lastWorkspace = '' }
                 }
             $settingsForWrite | Add-Member -NotePropertyName updateCheck -NotePropertyValue $state -Force
-            $settingsForWrite | Select-Object lastWorkspace, updateCheck |
+            $settingsForWrite |
                 ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $SettingsFile -Encoding UTF8
         } catch { }
     }
 
     if ($state.isNewer) {
         $lines += ('NOTICE: DSH update available - launcher pinned {0}, npm latest {1}.' -f $Version, $state.knownLatest)
-        $lines += '  Nothing was changed. To move up: edit $Version in start-dsh.ps1 (or pass -Version) and restart.'
+        $lines += '  Nothing was changed. To move up: use Upgrade DSH in the launcher (or pass -Version) and restart.'
         $lines += '  Plugins, sessions, and settings live under ~/.dsh and CoreWise, outside the package.'
     }
     return $lines
@@ -198,46 +198,52 @@ function Get-DshLatestVersion {
 }
 
 function Set-LauncherPinnedVersion {
-    # Rewrites ONLY the $Version default line in this launcher script, so the
-    # pin survives restarts. Stages to a temp file, syntax-checks it, then
-    # swaps atomically. Returns $true on success.
+    # Persist the runtime selection outside Git so upgrading leaves the
+    # plugin checkout clean for Sync-PluginSource.
     param([string]$NewVersion)
-    # npm dist-tag shape: digits + dots, optional -rc.N / -alpha.N suffix.
     if ($NewVersion -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha)\.[0-9]+)?$') {
         throw 'refusing to write an invalid version string'
     }
-    $path = $MyInvocation.MyCommand.Path
-    if (-not $path) { $path = $PSCommandPath }
-    if (-not $path) { throw 'cannot locate start-dsh.ps1 for pin update' }
-    $text = Get-Content -LiteralPath $path -Raw
-    $evaluator = {
-        param($m)
-        return $m.Groups[1].Value + $NewVersion + $m.Groups[2].Value
+    $parent = Split-Path -Parent $Script:SettingsFile
+    if (-not (Test-Path -LiteralPath $parent)) {
+        [void](New-Item -ItemType Directory -Path $parent -Force)
     }
-    $updated = [regex]::Replace($text,
-        '(?m)^(\s*\[string\]\$Version\s*=\s*'')[^'']*('')',
-        $evaluator,
-        1)
-    if ($updated -eq $text) { throw 'pinned $Version line not found; launcher unchanged' }
-    $tmp = [IO.Path]::GetTempFileName()
+    $settings = if (Test-Path -LiteralPath $Script:SettingsFile) {
+        Get-Content -LiteralPath $Script:SettingsFile -Raw | ConvertFrom-Json
+    } else {
+        [pscustomobject]@{ lastWorkspace = '' }
+    }
+    $settings | Add-Member -NotePropertyName pinnedDshVersion -NotePropertyValue $NewVersion -Force
+    $settings.PSObject.Properties.Remove('updateCheck')
+    $tmp = Join-Path $parent ('launcher-settings-' + [guid]::NewGuid().ToString('N') + '.tmp')
     try {
-        Set-Content -LiteralPath $tmp -Value $updated -Encoding UTF8
-        $tokens = $null
-        $errors = $null
-        [void][System.Management.Automation.Language.Parser]::ParseFile($tmp, [ref]$tokens, [ref]$errors)
-        if ($errors.Count -gt 0) { throw ('rewritten launcher failed syntax check: ' + $errors[0].Message) }
-        Copy-Item -LiteralPath $tmp -Destination $path -Force
+        $settings | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $tmp -Encoding UTF8
+        if (Test-Path -LiteralPath $Script:SettingsFile) {
+            [IO.File]::Replace($tmp, $Script:SettingsFile, [System.Management.Automation.Language.NullString]::Value)
+        } else {
+            Move-Item -LiteralPath $tmp -Destination $Script:SettingsFile
+        }
     } finally {
-        Remove-Item -LiteralPath $tmp -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp }
     }
     return $true
 }
 
+function Resolve-LauncherVersion {
+    param([string]$DefaultVersion, [bool]$ExplicitVersion)
+    if ($ExplicitVersion) { return $DefaultVersion }
+    $settings = Get-LauncherSettings
+    $pin = [string]$settings.pinnedDshVersion
+    if ($pin -match '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha)\.[0-9]+)?$') {
+        return $pin
+    }
+    return $DefaultVersion
+}
+
 function Invoke-DshUpgrade {
-    # Pin-switch upgrade: set $Version to npm latest, bust the 6h notice cache,
-    # stop DSH, relaunch on the same workspace. Caller restarts the launcher
-    # itself when running as GUI (a script cannot rewrite its own running file
-    # reliably on all hosts). Returns the new version.
+    # Save npm latest in launcher settings and clear the notice cache.
+    # The GUI caller handles stopping DSH; restart the launcher afterward
+    # so all callbacks use the saved version. Returns the new version.
     param([string]$Ws, [scriptblock]$Log)
     $write = if ($Log) { $Log } else { { param($text) Write-Host $text } }
     $latest = Get-DshLatestVersion
@@ -250,11 +256,6 @@ function Invoke-DshUpgrade {
     Set-LauncherPinnedVersion -NewVersion $latest | Out-Null
     $Script:Version = $latest
     $Version = $latest
-    try {
-        $settings = Get-Content -LiteralPath $Script:SettingsFile -Raw | ConvertFrom-Json
-        if ($settings.updateCheck) { $settings.PSObject.Properties.Remove('updateCheck') }
-        $settings | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $Script:SettingsFile -Encoding UTF8
-    } catch { }
     & $write 'pin updated; restart the launcher, then press Start.'
     return $latest
 }
@@ -1048,6 +1049,8 @@ function New-LauncherGui {
 }
 
 # --- main dispatch ----------------------------------------------------------
+
+$Version = Resolve-LauncherVersion -DefaultVersion $Version -ExplicitVersion ($PSBoundParameters.ContainsKey('Version'))
 
 if ($SelfTest) {
     Test-ProcessLogCapture

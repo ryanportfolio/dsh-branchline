@@ -46,5 +46,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-launcher-upgrade.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh.exe -NoProfile -File .\scripts\test-launcher-upgrade.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-dsh.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh.exe -NoProfile -File .\start-dsh.ps1 -SelfTest
