@@ -1,6 +1,6 @@
 /** DeepSeek Harness Host plugin: permanent session deletion with worktree cleanup. */
 
-import { readFile, realpath, rename, rm, rmdir, writeFile } from 'node:fs/promises'
+import { readFile, readdir, realpath, rename, rm, rmdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
@@ -250,7 +250,7 @@ async function deleteSession(ctx, sessionId, { confirmation, force }) {
   if (summary.running) {
     throw new HttpError('session-running', 'stop the active session before deleting it', 409)
   }
-  const logTarget = locateSessionLog(ctx, record)
+  const logTarget = await locateSessionLog(ctx, record)
   if (summary.worktree !== null) {
     const blockers = summary.worktree.blockers
     if (summary.worktree.otherSessions > 0) {
@@ -390,23 +390,90 @@ function worktreeBlockers(view, preservation, otherSessions) {
 }
 
 /** Resolve and validate the durable log directory before any destructive worktree action. */
-function locateSessionLog(ctx, record) {
-  let location
-  try {
-    location = ctx.sessionPersistence.locate(record.header)
-  } catch (error) {
-    throw new HttpError('log-removal-failed', `cannot locate the session artifact: ${errorMessage(error)}`, 500)
+async function locateSessionLog(ctx, record) {
+  if (typeof ctx.sessionPersistence?.locate === 'function') {
+    let location
+    try {
+      location = ctx.sessionPersistence.locate(record.header)
+    } catch (error) {
+      throw new HttpError('log-removal-failed', `cannot locate the session artifact: ${errorMessage(error)}`, 500)
+    }
+    if (location === undefined || location === null || typeof location.path !== 'string' || location.path === '') {
+      return null
+    }
+    const sessionId = record?.header?.id
+    const sessionsRoot = resolve(dshHome(), 'sessions')
+    const dir = resolve(dirname(location.path))
+    const rel = relative(sessionsRoot, dir)
+    const outsideRoot = rel === '' || rel === '..' || rel.startsWith(`..${separator()}`) || isAbsolute(rel)
+    if (typeof sessionId !== 'string' || basename(dir) !== sessionId || outsideRoot) {
+      throw new HttpError('log-removal-failed', `session artifact layout is unexpected: ${location.path}`, 500)
+    }
+    return dir
   }
-  if (location === undefined || location === null || typeof location.path !== 'string' || location.path === '') {
-    return null
-  }
+  return await locateSessionLogFallback(record)
+}
+
+/** True only for classified absence; every other failure must throw, never read as no-artifact. */
+function isAbsentError(error) {
+  const code = error !== null && typeof error === 'object' ? error.code : undefined
+  return code === 'ENOENT' || code === 'ENOTDIR'
+}
+
+/** Fallback scan for the session log dir when sessionPersistence.locate is unavailable. */
+async function locateSessionLogFallback(record) {
   const sessionId = record?.header?.id
+  if (typeof sessionId !== 'string' || sessionId === '') return null
   const sessionsRoot = resolve(dshHome(), 'sessions')
-  const dir = resolve(dirname(location.path))
+  let parents
+  try {
+    parents = await readdir(sessionsRoot, { withFileTypes: true })
+  } catch (error) {
+    if (error instanceof HttpError) throw error
+    if (isAbsentError(error)) return null
+    throw new HttpError('log-removal-failed', 'cannot scan the session store: ' + errorMessage(error), 500)
+  }
+  const candidates = []
+  const direct = parents.find((entry) => entry.isDirectory() && entry.name === sessionId)
+  if (direct !== undefined) {
+    candidates.push(resolve(join(sessionsRoot, direct.name)))
+  }
+  for (const parent of parents) {
+    if (!parent.isDirectory()) continue
+    let children
+    try {
+      children = await readdir(join(sessionsRoot, parent.name), { withFileTypes: true })
+    } catch (error) {
+      if (error instanceof HttpError) throw error
+      if (isAbsentError(error)) continue
+      throw new HttpError('log-removal-failed', 'cannot scan the session store: ' + errorMessage(error), 500)
+    }
+    for (const child of children) {
+      if (!child.isDirectory() || child.name !== sessionId) continue
+      candidates.push(resolve(join(sessionsRoot, parent.name, child.name)))
+    }
+  }
+  const kept = []
+  for (const candidate of candidates) {
+    let entries
+    try {
+      entries = await readdir(candidate, { withFileTypes: true })
+    } catch (error) {
+      if (error instanceof HttpError) throw error
+      if (isAbsentError(error)) continue
+      throw new HttpError('log-removal-failed', 'cannot scan the session store: ' + errorMessage(error), 500)
+    }
+    if (entries.some((entry) => entry.isFile() && entry.name.startsWith('session.'))) kept.push(candidate)
+  }
+  if (kept.length === 0) return null
+  if (kept.length > 1) {
+    throw new HttpError('log-removal-failed', `multiple session artifacts for ${sessionId}`, 500)
+  }
+  const dir = kept[0]
   const rel = relative(sessionsRoot, dir)
   const outsideRoot = rel === '' || rel === '..' || rel.startsWith(`..${separator()}`) || isAbsolute(rel)
-  if (typeof sessionId !== 'string' || basename(dir) !== sessionId || outsideRoot) {
-    throw new HttpError('log-removal-failed', `session artifact layout is unexpected: ${location.path}`, 500)
+  if (outsideRoot) {
+    throw new HttpError('log-removal-failed', `session artifact layout is unexpected: ${dir}`, 500)
   }
   return dir
 }
