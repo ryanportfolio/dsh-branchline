@@ -186,7 +186,60 @@ function Get-DshUpdateNoticeLines {
     return $lines
 }
 
-# --- process helpers ------------------------------------------------------
+function Get-DshLatestVersion {
+    # Read-only npm query for @deepseek-ai/dsh dist-tags.latest. Returns '' offline.
+    try {
+        $pkg = Invoke-RestMethod -Uri 'https://registry.npmjs.org/@deepseek-ai%2Fdsh' `
+            -Headers @{ 'User-Agent' = 'dsh-launcher-upgrade' } -TimeoutSec 10
+        return [string]$pkg.'dist-tags'.latest
+    } catch {
+        return ''
+    }
+}
+
+function Set-LauncherPinnedVersion {
+    # Rewrites ONLY the $Version default line in this launcher script, so the
+    # pin survives restarts. Returns $true on success.
+    param([string]$NewVersion)
+    if ($NewVersion -notmatch '^[0-9A-Za-z][0-9A-Za-z\.\-]*$') { throw 'refusing to write an invalid version string' }
+    $path = $MyInvocation.MyCommand.Path
+    if (-not $path) { $path = $PSCommandPath }
+    if (-not $path) { throw 'cannot locate start-dsh.ps1 for pin update' }
+    $text = Get-Content -LiteralPath $path -Raw
+    $updated = [regex]::Replace($text,
+        "(?m)^(\s*\[string\]\`$Version\s*=\s*')[^']*(')",
+        ('$1' + $NewVersion + '$2'),
+        1)
+    if ($updated -eq $text) { throw 'pinned $Version line not found; launcher unchanged' }
+    Set-Content -LiteralPath $path -Value $updated -Encoding UTF8
+    return $true
+}
+
+function Invoke-DshUpgrade {
+    # Pin-switch upgrade: set $Version to npm latest, bust the 6h notice cache,
+    # stop DSH, relaunch on the same workspace. Caller restarts the launcher
+    # itself when running as GUI (a script cannot rewrite its own running file
+    # reliably on all hosts). Returns the new version.
+    param([string]$Ws, [scriptblock]$Log)
+    $write = if ($Log) { $Log } else { { param($text) Write-Host $text } }
+    $latest = Get-DshLatestVersion
+    if (-not $latest) { throw 'npm registry unreachable; upgrade aborted, nothing changed' }
+    if ($latest -eq $Version) {
+        & $write ('already on npm latest ({0}); nothing changed' -f $Version)
+        return $latest
+    }
+    & $write ('upgrading DSH pin {0} -> {1}' -f $Version, $latest)
+    Set-LauncherPinnedVersion -NewVersion $latest | Out-Null
+    $Script:Version = $latest
+    $Version = $latest
+    try {
+        $settings = Get-Content -LiteralPath $Script:SettingsFile -Raw | ConvertFrom-Json
+        if ($settings.updateCheck) { $settings.PSObject.Properties.Remove('updateCheck') }
+        $settings | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $Script:SettingsFile -Encoding UTF8
+    } catch { }
+    & $write 'pin updated; restart the launcher, then press Start.'
+    return $latest
+}
 
 function Stop-Gracefully {
     param([int]$ProcessId)
@@ -703,6 +756,11 @@ function New-LauncherGui {
     $btnBrowser.Size = New-Object System.Drawing.Size(110, 30)
     $btnBrowser.Enabled = $false
 
+    $btnUpgrade = New-Object System.Windows.Forms.Button
+    $btnUpgrade.Text = 'Upgrade DSH'
+    $btnUpgrade.Location = New-Object System.Drawing.Point(592, 116)
+    $btnUpgrade.Size = New-Object System.Drawing.Size(100, 30)
+
     $lblIsolation = New-Object System.Windows.Forms.Label
     $lblIsolation.Text = 'New tasks: fresh origin/HEAD -> isolated worktree'
     $lblIsolation.Location = New-Object System.Drawing.Point(312, 123)
@@ -717,7 +775,7 @@ function New-LauncherGui {
     $txtLog.WordWrap = $false
     $txtLog.Font = New-Object System.Drawing.Font('Consolas', 9)
 
-    foreach ($c in @($lblRepo, $combo, $btnBrowse, $rtbStatus, $btnStart, $btnStop, $btnBrowser, $lblIsolation, $txtLog)) {
+    foreach ($c in @($lblRepo, $combo, $btnBrowse, $rtbStatus, $btnStart, $btnStop, $btnBrowser, $btnUpgrade, $lblIsolation, $txtLog)) {
         [void]$form.Controls.Add($c)
     }
 
@@ -730,6 +788,7 @@ function New-LauncherGui {
         FindPortSquatter      = Get-Command Find-PortSquatter -CommandType Function
         GetGitStatus          = Get-Command Get-GitStatus -CommandType Function
         GetListenMap          = Get-Command Get-ListenMap -CommandType Function
+        InvokeDshUpgrade      = Get-Command Invoke-DshUpgrade -CommandType Function
         SaveLauncherSettings = Get-Command Save-LauncherSettings -CommandType Function
         ShowGitStatusPane     = Get-Command Show-GitStatusPane -CommandType Function
         StartDshProc          = Get-Command Start-DshProc -CommandType Function
@@ -807,6 +866,42 @@ function New-LauncherGui {
 
     $btnBrowser.Add_Click(({
         Start-Process ('http://127.0.0.1:{0}/' -f $Port)
+    }).GetNewClosure())
+
+    $btnUpgrade.Add_Click(({
+        if ($guiState.Proc -and -not $guiState.Proc.HasExited) {
+            $answer = [System.Windows.Forms.MessageBox]::Show(
+                ('DSH is running. Upgrade stops it first.' + [Environment]::NewLine + [Environment]::NewLine +
+                 'Yes - stop DSH and upgrade the pin' + [Environment]::NewLine +
+                 'Cancel - stay here'),
+                'DSH Branchline',
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Warning)
+            if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+            try {
+                & $commands.StopDshInstances -Port $Port -OwnProc $guiState.Proc -Log $addLogLine
+                $guiState.Proc = $null
+            } catch {
+                & $addLogLine ('stop error: ' + $_.Exception.Message)
+                return
+            } finally {
+                $btnStop.Enabled = $false
+                $btnBrowser.Enabled = $false
+                $btnStart.Enabled = $true
+            }
+        }
+        $btnUpgrade.Enabled = $false
+        $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
+        try {
+            $sel = $combo.SelectedItem
+            $newVersion = & $commands.InvokeDshUpgrade -Ws $sel -Log $addLogLine
+            & $addLogLine ('DSH pin now {0}. Restart the launcher, then press Start.' -f $newVersion)
+        } catch {
+            & $addLogLine ('upgrade error: ' + $_.Exception.Message)
+        } finally {
+            $btnUpgrade.Enabled = $true
+            $form.Cursor = [System.Windows.Forms.Cursors]::Default
+        }
     }).GetNewClosure())
 
     $btnStart.Add_Click(({
