@@ -1,0 +1,14 @@
+{
+  "name": "dsh-command-guard",
+  "version": "0.1.0",
+  "description": "Automatic host-side guard against broad process termination through the DSH shell.",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": { "default": "./lib/index.js" },
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
+}
