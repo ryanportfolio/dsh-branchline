@@ -124,6 +124,20 @@ The override script patches upstream runtime code in place and is never run by t
 
 Node may print an `ExperimentalWarning` for `stripTypeScriptTypes`. DSH 0.1.1 uses that Node API for its TypeScript code runtime. The warning is written to stderr and does not mean startup failed.
 
+## Automatic command guard
+
+The optional permanent `dsh-command-guard` host bundle rejects broad process termination before the shared shell executes any part of a command. This prevents an agent's `taskkill /F /IM node.exe` from stopping DSH along with a preview server. Once the bundle is installed in the Web profile, the guard runs automatically on `shell.run` and `shell.start`, including the regular PowerShell tool, RTK, and agent or nested code calls that use those services. It requires no model prompt or per-command approval.
+
+The guard recognizes `taskkill`, `Stop-Process`, stock aliases `spps` and `kill`, `pkill`, `killall`, pipelines, literal PowerShell or cmd wrappers, RTK command wrappers, and visible PowerShell `.Kill()` calls. Image names, filters, computed targets, encoded shell bodies, and compound termination commands are rejected. Ordinary reads pass unchanged; suspicious input is parsed by a trusted PowerShell helper receiving JSON on stdin. The helper parses command text as data and never executes it.
+
+To stop a preview, identify its PID from a fresh process listing and submit a standalone command such as `Stop-Process -Id 12345 -Force` or `taskkill /PID 12345 /F`, substituting the actual preview PID. Only one explicit numeric PID is accepted. A fresh read-only process snapshot must prove the target exists, has an identifiable command line, and is neither the DSH host, a host ancestor, nor another identifiable DSH runtime or launcher. `/T` also checks every descendant. Missing process metadata, failed inspection, or a missing host process blocks the command.
+
+Windows may retain the PID of an exited login process in the host's ancestry. When an upper ancestor is missing, the guard accepts only targets whose current parent chain reaches the DSH host without gaps or cycles; this also applies to every target affected by `/T`. External and orphaned previews remain blocked in that case. A numeric PID alone does not guarantee permission. Use DSH's existing `job_kill` for a background job it owns; internal subprocess cleanup remains available.
+
+This guard prevents common accidents. It is not an arbitrary-code sandbox: external scripts, custom aliases, indirect OS APIs, obfuscated code, persistent PTY executors, and calls that bypass `ctx.shell.run/start` are outside its coverage. PID reuse between inspection and execution is still an OS race. The bundle changes no Windows permissions, process protections, runtime files, or global shell commands. A wider sandbox request does not disable it.
+
+Install `packages/dsh-command-guard` as a linked dependency and add `dsh-command-guard` to the Web profile's `dsh.profile.bundles`, following the existing host-only RTK bundle pattern. Restart DSH when no agent work is running. The supplied bundle has no client code or settings toggle. Optional bundle config `statusEndpoint: true` enables `GET /api/dsh-command-guard/status` for loopback same-origin diagnostics. Its response reports attachment of both methods and contains no commands, process details, or user data; it cannot execute commands or disable protection. Disposing the last plugin owner restores the original method descriptors.
+
 ## Development
 
 ```powershell
