@@ -126,6 +126,18 @@ for (const [label, overrides] of [
   cs.followCurrent()
   assert.equal(sessions.get('a').openState, 'open', 'reopen on return')
   assert.deepEqual(opened, ['a', 'b', 'a', 'c', 'a'], 'stage moves call open()')
+  // Clearing the selection releases the stage: the old occupant parks, and reselecting it reopens.
+  snapshot = { ...snapshot, current: undefined }
+  cs.followCurrent()
+  assert.equal(cs.watched, undefined, 'empty stage clears watched')
+  assert.ok(cs.parkTimers.has('a'), 'cleared occupant scheduled')
+  await tick(40)
+  assert.equal(sessions.get('a').openState, 'cold', 'a parked after selection cleared')
+  snapshot = { ...snapshot, current: 'a' }
+  cs.followCurrent()
+  assert.equal(sessions.get('a').openState, 'open', 'reselect after clear reopens')
+  cs.followCurrent()
+  assert.equal(opened.at(-1), 'a')
   for (const t of cs.parkTimers.values()) clearTimeout(t)
 }
 

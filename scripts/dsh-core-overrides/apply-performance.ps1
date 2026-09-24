@@ -135,6 +135,14 @@ $patches = @(
 				this.sweepDeferred();
 '@
                 Replacement = @'
+				if (current === void 0 && this.watched !== void 0) {
+					// Stage emptied (no-session view): release it so the old occupant parks and a reselect reopens it.
+					const emptied = this.watched;
+					this.watched = void 0;
+					this.sweepDeferred();
+					this.schedulePark(emptied);
+					return;
+				}
 				if (current === void 0 || snapshot.byId[current] === void 0 || current === this.watched) return;
 				const previous = this.watched;
 				this.watched = current;
