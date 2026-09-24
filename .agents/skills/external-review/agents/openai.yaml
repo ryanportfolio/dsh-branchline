@@ -1,0 +1,5 @@
+interface:
+  display_name: "External Review"
+  short_description: "Single-context leaf review for launcher prompts"
+policy:
+  allow_implicit_invocation: false

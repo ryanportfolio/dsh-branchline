@@ -6,3 +6,7 @@
 *.ts text eol=lf
 *.tsx text eol=lf
 *.md text eol=lf
+
+# Harness
+*.sh text eol=lf
+*.yml text eol=lf

@@ -7,3 +7,13 @@ coverage/
 .DS_Store
 Thumbs.db
 .tmp/
+
+# Harness
+.claude/settings.local.json
+.claude/skills/perf/.localhost-*.pem
+.env
+.env.local
+.env.*.local
+dist/
+build/
+debug.log

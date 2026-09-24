@@ -1,0 +1,889 @@
+{
+  "version": 1,
+  "contracts": {
+    "independence": "Fresh independent context; missing capability is disclosed, never relabeled self-review.",
+    "evidence": "Bind claim-appropriate evidence to the actual run and source state, including dirty/generated artifacts.",
+    "authorization": "Preserve current explicit scope; installation, one-shot shipping and persistent modes are distinct.",
+    "proportion": "Scale process to uncertainty and continue already-authorized work without invented approval gates.",
+    "style": "Preserve meaning, exact evidence and explicit user voice; session replies and deliverables have distinct styles.",
+    "scope": "Preserve the requested outcome, constraints and runtime capability limits."
+  },
+  "skills": {
+    "addskill": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "addskill"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "authorization",
+        "proportion"
+      ],
+      "resources": [
+        ".claude/skills/addskill/references/authoring.md",
+        ".claude/skills/addskill/references/evaluation.md",
+        ".claude/skills/addskill/references/LICENSE",
+        ".agents/skills/addskill/references/authoring.md",
+        ".agents/skills/addskill/references/evaluation.md",
+        ".agents/skills/addskill/references/LICENSE"
+      ],
+      "exceptions": [
+        "Codex authors through built-in skill-creator; Claude uses packaged authoring guidance. Both use addskill for the full lifecycle."
+      ]
+    },
+    "adopt-repo": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "adopt-repo"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "authorization"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "advocate": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "advocate"
+      ],
+      "requiredTools": [
+        "fresh-context-review"
+      ],
+      "sharedContracts": [
+        "independence"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "arena": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "arena"
+      ],
+      "requiredTools": [
+        "fresh-context-review"
+      ],
+      "sharedContracts": [
+        "independence"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "astra-fullreview": {
+      "coverage": [
+        "claude"
+      ],
+      "owners": {
+        "claude": "source"
+      },
+      "entrypoints": [
+        "astra-fullreview"
+      ],
+      "requiredTools": [
+        "authenticated-codex-cli"
+      ],
+      "sharedContracts": [
+        "independence",
+        "evidence"
+      ],
+      "resources": [],
+      "exceptions": [
+        "Claude launcher for a full multi-agent Codex review on gpt-6-astra; from Codex use $impartial-review directly."
+      ]
+    },
+    "astra-review": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "astra-review"
+      ],
+      "requiredTools": [
+        "authenticated-codex-cli"
+      ],
+      "sharedContracts": [
+        "evidence"
+      ],
+      "resources": [],
+      "exceptions": [
+        "A Codex author and Astra reviewer share a vendor; the requested model must be verified or uncertainty disclosed."
+      ]
+    },
+    "babysit-ci": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "babysit-ci"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "authorization"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "brainstorming": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "brainstorming"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "proportion"
+      ],
+      "resources": [
+        ".claude/skills/brainstorming/LICENSE",
+        ".claude/skills/brainstorming/scripts/frame-template.html",
+        ".claude/skills/brainstorming/scripts/helper.js",
+        ".claude/skills/brainstorming/scripts/server.cjs",
+        ".claude/skills/brainstorming/scripts/start-server.sh",
+        ".claude/skills/brainstorming/scripts/stop-server.sh",
+        ".claude/skills/brainstorming/visual-companion.md",
+        ".agents/skills/brainstorming/LICENSE",
+        ".agents/skills/brainstorming/scripts/frame-template.html",
+        ".agents/skills/brainstorming/scripts/helper.js",
+        ".agents/skills/brainstorming/scripts/server.cjs",
+        ".agents/skills/brainstorming/scripts/start-server.sh",
+        ".agents/skills/brainstorming/scripts/stop-server.sh",
+        ".agents/skills/brainstorming/visual-companion.md",
+        ".claude/skills/brainstorming/references/shared-code-refactoring.md",
+        ".agents/skills/brainstorming/references/shared-code-refactoring.md"
+      ],
+      "exceptions": []
+    },
+    "bro": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "bro"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "style"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "caveman": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "caveman"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "style"
+      ],
+      "resources": [
+        ".claude/skills/caveman/references/diff-cleanup.md",
+        ".agents/skills/caveman/references/diff-cleanup.md"
+      ],
+      "exceptions": []
+    },
+    "claude-review": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "claude-review"
+      ],
+      "requiredTools": [
+        "subscription-routed-claude-cli"
+      ],
+      "sharedContracts": [
+        "evidence"
+      ],
+      "resources": [],
+      "exceptions": [
+        "Cross-vendor only when the author runtime uses a different vendor; subscription routing is proved locally."
+      ]
+    },
+    "codex-fullreview": {
+      "coverage": [
+        "claude"
+      ],
+      "owners": {
+        "claude": "source"
+      },
+      "entrypoints": [
+        "codex-fullreview"
+      ],
+      "requiredTools": [
+        "authenticated-codex-cli"
+      ],
+      "sharedContracts": [
+        "independence",
+        "evidence"
+      ],
+      "resources": [],
+      "exceptions": [
+        "Claude launcher for a full multi-agent Codex review; from Codex use $impartial-review directly."
+      ]
+    },
+    "codex-review": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "codex-review"
+      ],
+      "requiredTools": [
+        "authenticated-codex-cli"
+      ],
+      "sharedContracts": [
+        "evidence"
+      ],
+      "resources": [],
+      "exceptions": [
+        "A Codex author and Codex reviewer share a vendor; fresh context does not imply cross-vendor review."
+      ]
+    },
+    "dare": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "dare"
+      ],
+      "requiredTools": [
+        "fresh-context-review"
+      ],
+      "sharedContracts": [
+        "independence"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "enhance-prompt": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "enhance-prompt"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "proportion"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "external-review": {
+      "coverage": [
+        "codex"
+      ],
+      "owners": {
+        "codex": "native"
+      },
+      "entrypoints": [
+        "external-review"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "independence",
+        "evidence"
+      ],
+      "resources": [
+        ".agents/skills/external-review/agents/openai.yaml",
+        ".agents/skills/external-review/references/shared-code-refactoring.md"
+      ],
+      "exceptions": [
+        "Codex-only leaf review invoked by the codex-review and astra-review launchers in both runtimes; it has no Claude counterpart."
+      ]
+    },
+    "fable-mode": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "fable-mode"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "proportion"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "forge-repo-ui-skill": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "forge-repo-ui-skill"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "authorization"
+      ],
+      "resources": [
+        ".agents/skills/forge-repo-ui-skill/agents/openai.yaml",
+        ".agents/skills/forge-repo-ui-skill/references/repo-intake.md",
+        ".agents/skills/forge-repo-ui-skill/references/research.md",
+        ".agents/skills/forge-repo-ui-skill/references/synthesis-and-validation.md",
+        ".claude/skills/forge-repo-ui-skill/agents/openai.yaml",
+        ".claude/skills/forge-repo-ui-skill/references/repo-intake.md",
+        ".claude/skills/forge-repo-ui-skill/references/research.md",
+        ".claude/skills/forge-repo-ui-skill/references/synthesis-and-validation.md"
+      ],
+      "exceptions": []
+    },
+    "handoff-audit": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "handoff-audit"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "evidence"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "impartial-review": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "impartial-review"
+      ],
+      "requiredTools": [
+        "fresh-context-review"
+      ],
+      "sharedContracts": [
+        "independence",
+        "evidence"
+      ],
+      "resources": [
+        ".claude/skills/impartial-review/strict-quality-rubric.md",
+        ".claude/skills/impartial-review/references/shared-code-refactoring.md",
+        ".agents/skills/impartial-review/strict-quality-rubric.md",
+        ".agents/skills/impartial-review/references/shared-code-refactoring.md"
+      ],
+      "exceptions": [
+        "Codex may use authenticated leaf CLI processes when exposed agents are absent; fresh context remains required."
+      ]
+    },
+    "init-project": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "init-project"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "authorization"
+      ],
+      "resources": [
+        ".claude/skills/init-project/references/profiles.md",
+        ".agents/skills/init-project/references/profiles.md"
+      ],
+      "exceptions": [
+        "Claude hook management remains Claude-specific; Codex does not execute Claude hooks."
+      ]
+    },
+    "lab": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "lab"
+      ],
+      "requiredTools": [
+        "files",
+        "preview-server",
+        "browser"
+      ],
+      "sharedContracts": [
+        "scope"
+      ],
+      "resources": [
+        ".agents/skills/lab/templates.md",
+        ".claude/skills/lab/templates.md"
+      ],
+      "exceptions": []
+    },
+    "long-horizon": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "long-horizon"
+      ],
+      "requiredTools": [
+        "fresh-context-review"
+      ],
+      "sharedContracts": [
+        "independence",
+        "evidence"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "long-horizon-workflows": {
+      "coverage": [
+        "claude"
+      ],
+      "owners": {
+        "claude": "source"
+      },
+      "entrypoints": [
+        "long-horizon-workflows"
+      ],
+      "requiredTools": [
+        "fresh-context-review",
+        "workflow-tool"
+      ],
+      "sharedContracts": [
+        "independence",
+        "evidence"
+      ],
+      "resources": [],
+      "exceptions": [
+        "Claude Code only: rounds run through the Claude Code Workflow tool, which Codex does not expose; Codex uses long-horizon."
+      ]
+    },
+    "optimize-context": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "optimize-context"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "scope"
+      ],
+      "resources": [],
+      "exceptions": [
+        "Measure the executing runtime catalog/kernel and verify retrieval after relocation; Claude hook measurements are not Codex measurements."
+      ]
+    },
+    "perf-loop": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "perf-loop"
+      ],
+      "requiredTools": [
+        "fresh-context-review",
+        "repeatable-measurement"
+      ],
+      "sharedContracts": [
+        "independence",
+        "evidence"
+      ],
+      "resources": [
+        ".claude/skills/perf-loop/references/loading.md",
+        ".claude/skills/perf-loop/references/rendering.md",
+        ".claude/skills/perf-loop/references/services.md",
+        ".agents/skills/perf-loop/references/loading.md",
+        ".agents/skills/perf-loop/references/rendering.md",
+        ".agents/skills/perf-loop/references/services.md",
+        ".claude/skills/perf-loop/references/evidence-report.md",
+        ".agents/skills/perf-loop/references/evidence-report.md"
+      ],
+      "exceptions": []
+    },
+    "recall": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "recall"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "authorization"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "refine": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "refine"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "authorization",
+        "proportion"
+      ],
+      "resources": [
+        ".claude/skills/refine/references/evaluation.md",
+        ".agents/skills/refine/references/evaluation.md"
+      ],
+      "exceptions": []
+    },
+    "session-hub": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "session-hub"
+      ],
+      "requiredTools": [
+        "writable-hub-location"
+      ],
+      "sharedContracts": [
+        "scope"
+      ],
+      "resources": [
+        ".agents/skills/session-hub/template.html",
+        ".claude/skills/session-hub/template.html"
+      ],
+      "exceptions": []
+    },
+    "showpiece": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "showpiece"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "scope"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "sync-starter": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "sync-starter"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "authorization"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "why": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "why"
+      ],
+      "requiredTools": [
+        "fresh-context-review"
+      ],
+      "sharedContracts": [
+        "independence"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "wow-loop": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "wow-loop"
+      ],
+      "requiredTools": [
+        "fresh-context-review",
+        "visual-capture"
+      ],
+      "sharedContracts": [
+        "independence",
+        "evidence"
+      ],
+      "resources": [
+        ".agents/skills/wow-loop/references/state.md",
+        ".agents/skills/wow-loop/references/visual-review.md",
+        ".claude/skills/wow-loop/references/evidence-report.md",
+        ".agents/skills/wow-loop/references/evidence-report.md"
+      ],
+      "exceptions": []
+    },
+    "writing": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "writing"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "style"
+      ],
+      "resources": [
+        ".claude/skills/writing/NOTICE.md",
+        ".claude/skills/writing/patterns.md",
+        ".agents/skills/writing/NOTICE.md",
+        ".agents/skills/writing/patterns.md",
+        ".claude/skills/writing/LICENSE",
+        ".agents/skills/writing/LICENSE"
+      ],
+      "exceptions": []
+    },
+    "writing-plans": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "native"
+      },
+      "entrypoints": [
+        "writing-plans"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "proportion"
+      ],
+      "resources": [
+        ".claude/skills/writing-plans/LICENSE",
+        ".claude/skills/writing-plans/plan-document-reviewer-prompt.md",
+        ".agents/skills/writing-plans/LICENSE",
+        ".agents/skills/writing-plans/plan-document-reviewer-prompt.md",
+        ".claude/skills/writing-plans/references/shared-code-refactoring.md",
+        ".agents/skills/writing-plans/references/shared-code-refactoring.md"
+      ],
+      "exceptions": []
+    },
+    "dsh-plugin-permanent": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "adapter"
+      },
+      "entrypoints": [
+        "dsh-plugin-permanent"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "scope"
+      ],
+      "resources": [],
+      "exceptions": []
+    },
+    "dsh-upgrade-audit": {
+      "coverage": [
+        "claude",
+        "codex"
+      ],
+      "owners": {
+        "claude": "source",
+        "codex": "adapter"
+      },
+      "entrypoints": [
+        "dsh-upgrade-audit"
+      ],
+      "requiredTools": [],
+      "sharedContracts": [
+        "evidence",
+        "authorization"
+      ],
+      "resources": [],
+      "exceptions": []
+    }
+  },
+  "retired": {
+    "unslop": {
+      "replacements": [
+        "caveman",
+        "writing"
+      ],
+      "reason": "Caveman owns automatic chat cleanup and routes explicit code-diff cleanup to its scoped reference; Writing owns explicit prose cleanup."
+    },
+    "writing-skills": {
+      "replacements": [
+        "addskill"
+      ],
+      "reason": "Authoring and evaluation live in addskill; licensed legacy resources remain outside discovery."
+    },
+    "verify-this": {
+      "replacements": [
+        "fable-mode"
+      ],
+      "reason": "Claim classes and verdict words live in fable-mode; dare hands verification to fable-mode."
+    },
+    "automate-me": {
+      "replacements": [
+        "refine"
+      ],
+      "reason": "Preference evidence rules from transcripts live in refine."
+    }
+  }
+}
