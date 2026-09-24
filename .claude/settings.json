@@ -1,0 +1,71 @@
+{
+  "outputStyle": "caveman",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(grep *)",
+      "Bash(ls)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(find *)",
+      "Bash(rg *)",
+      "Bash(mkdir *)",
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(git log *)",
+      "Bash(git remote *)",
+      "Bash(git diff *)",
+      "Bash(git show *)",
+      "Bash(git ls-tree *)",
+      "Bash(git ls-files)",
+      "Bash(git ls-files *)",
+      "Bash(git branch)",
+      "Bash(git branch *)",
+      "Bash(git fetch)",
+      "Bash(git fetch *)",
+      "Bash(git blame *)",
+      "Bash(git rev-parse *)",
+      "Bash(git check-ignore *)",
+      "Bash(git worktree list)",
+      "Bash(git worktree list *)",
+      "Bash(git stash list)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr list)",
+      "Bash(gh pr list *)",
+      "Bash(gh pr diff *)",
+      "Bash(gh pr checks *)",
+      "Bash(gh pr status)",
+      "Bash(gh repo view *)",
+      "Bash(gh run list *)",
+      "Bash(gh run view *)",
+      "Bash(gh issue view *)",
+      "Bash(gh issue list *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push)",
+      "Bash(git push *)",
+      "Bash(git merge *)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr merge *)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(gh pr merge --admin*)"
+    ]
+  }
+}

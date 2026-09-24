@@ -1,0 +1,4 @@
+interface:
+  display_name: "Forge Repo UI Skill"
+  short_description: "Create one repo-specific UI design skill"
+  default_prompt: "Use $forge-repo-ui-skill to research current UI and design agent skills, then synthesize one lean skill for this repository."
