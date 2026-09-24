@@ -82,7 +82,7 @@ The unofficial [dsh-worktree](https://github.com/Eleven-is-cool/dsh-worktree) cr
 
 ## Verified surface
 
-211 tests across 12 files · 1 runtime dependency · PowerShell 5.1 and 7 launcher self-tests · local delivery disabled by default
+225 tests across 14 files · 1 runtime dependency · PowerShell 5.1 and 7 launcher self-tests · local delivery disabled by default
 
 ## Docs
 
