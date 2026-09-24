@@ -65,6 +65,9 @@ describe('PowerShell AST policy (parse only, never execution)', () => {
     "Start-Process ('taskk'+'ill') '/F /IM node.exe'", "$t = 'taskk'+'ill'; Start-Process -FilePath $t '/F /IM node.exe'",
     'start taskkill -ArgumentList "/F /IM node.exe"',
     'Set-Alias k taskkill; k /F /IM node.exe', "sal k ('taskk'+'ill'); k /F /IM node.exe", "New-Alias k ('Stop-Pro'+'cess')",
+    'Get-Process node | % -Verbose Kill', 'Get-Process node | % -InputObject $p Kil*', 'Get-Process node | % -MemberName:Kill',
+    'Get-Process node | % -e $member', 'Start-Job -ScriptBlock $block -ArgumentList 1',
+    '$t = "taskk"+"ill"; Get-ChildItem | % Name; Start-Process -WindowStyle Hidden -FilePath $t', 'Get-ChildItem | % Name; Start-Process -FilePath:$t',
   ])('blocks string-built or indirect form %s', (command) => {
     expect(() => assess(command)).toThrow('DSH command guard')
   })
@@ -80,6 +83,9 @@ describe('PowerShell AST policy (parse only, never execution)', () => {
     'Get-ChildItem | ForEach-Object Name', 'Get-ChildItem | % { $_.Name }', '$items.ForEach({ $_ * 2 })',
     '{ Get-Date }.Invoke()', "Get-ChildItem | % FullName; Start-Process -FilePath 'node' -ArgumentList 'server.mjs'",
     "$x = 'a' + 'b'; $x.Length", '$files | % { $_', "Write-Output 'taskk''ill'",
+    'Get-ChildItem | ForEach-Object { $_.Name } -ErrorAction:Stop',
+    'Start-Job -ScriptBlock { param($x) Write-Output $x } -ArgumentList $value',
+    'Get-ChildItem | ForEach-Object Name; Start-Process -WindowStyle Hidden -FilePath node -ArgumentList server.mjs',
   ])('passes safe read %s', (command) => {
     expect(assess(command)).toBeNull()
   })
