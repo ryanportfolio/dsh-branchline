@@ -1,7 +1,7 @@
-import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { MessageChannel, Worker, receiveMessageOnPort } from 'node:worker_threads'
 
 const helper = fileURLToPath(new URL('./inspect.ps1', import.meta.url))
 const MESSAGE = 'DSH command guard: process termination was blocked. Find the intended preview PID and use a standalone literal numeric PID command. Do not bypass this guard or retry with a wider sandbox.'
@@ -17,25 +17,114 @@ export function powershellPath() {
   return found
 }
 
-export function inspect(input) {
-  const result = spawnSync(powershellPath(), ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', helper], {
-    input: JSON.stringify(input), encoding: 'utf8', windowsHide: true, timeout: 15_000, maxBuffer: 8 * 1024 * 1024,
+// One long-lived PowerShell answers every inspection. A cold start costs about
+// 0.5-2.5 s on Windows, and the shell hook must block for it, so a process per
+// command would stall every DSH session. The caller still blocks synchronously:
+// Atomics.wait until the worker thread signals, then read the reply in place.
+let inspector
+let sequence = 0
+
+function startInspector() {
+  const signal = new Int32Array(new SharedArrayBuffer(4))
+  const { port1, port2 } = new MessageChannel()
+  const worker = new Worker(new URL('./inspector-worker.js', import.meta.url), {
+    workerData: { exe: powershellPath(), helper, port: port2, signal }, transferList: [port2],
   })
-  if (result.error || result.status !== 0) throw blocked('read-only inspection failed')
-  try { return JSON.parse(result.stdout.replace(/^\uFEFF/, '')) } catch { throw blocked('invalid inspection result') }
+  worker.unref()
+  worker.on('error', () => { if (inspector?.worker === worker) inspector = undefined })
+  return { worker, port: port1, signal }
+}
+
+/** Start PowerShell ahead of the first suspicious command. Failures surface on use. */
+export function warmInspector() {
+  try { inspector ??= startInspector() } catch {}
+}
+
+export function closeInspector() {
+  const current = inspector
+  inspector = undefined
+  if (!current) return
+  current.worker.postMessage({ close: true })
+  current.port.close()
+  setTimeout(() => void current.worker.terminate(), 5_000).unref()
+}
+
+export function inspect(input) {
+  // ASCII-only JSON, so console code pages cannot alter the command text.
+  const line = JSON.stringify(input).replace(/[\u007f-\uFFFF]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
+  inspector ??= startInspector()
+  const { worker, port, signal } = inspector
+  const id = ++sequence
+  Atomics.store(signal, 0, 0)
+  worker.postMessage({ id, line })
+  const deadline = Date.now() + 15_000
+  for (;;) {
+    for (let received; (received = receiveMessageOnPort(port));) {
+      const reply = received.message
+      if (reply.id !== id) continue
+      if (reply.fault) { closeInspector(); throw blocked('read-only inspection failed') }
+      let result
+      try { result = JSON.parse(reply.line) } catch {}
+      if (!result || typeof result !== 'object' || result.fault) throw blocked('invalid inspection result')
+      return result
+    }
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) { closeInspector(); throw blocked('read-only inspection failed') }
+    Atomics.wait(signal, 0, 0, remaining)
+    Atomics.store(signal, 0, 0)
+  }
 }
 
 const leaf = (name) => win32.basename(name || '').toLowerCase().replace(/\.exe$/, '')
 const kills = new Set(['taskkill', 'stop-process', 'spps', 'kill', 'pkill', 'killall'])
 const shells = new Set(['pwsh', 'powershell', 'cmd'])
+const keywords = /(?:taskkill|stop-process|\bspps\b|\b(?:p?kill|killall)\b|powershell|pwsh|\bcmd\b|\brtk\b|[`&])/i
+// PowerShell drops quotes inside a bareword: taskk''ill and task"kill" run taskkill.
+const quotes = /['"\u2018-\u201f]/g
+// Constructs that can reach a command or member whose name never appears
+// literally: the dot call operator, dynamic members (.$m(), .('Ki'+'ll')()),
+// evaluators, member-name ForEach, aliases, and dynamic Start-Process targets.
+const dynamic = new RegExp([
+  String.raw`(?:^|[\s;|({=,])\.(?=\s*[($'"\u2018-\u201f{])`,
+  String.raw`[\w)\]}'"]\s*\.\s*[$(]`,
+  String.raw`\b(?:iex|icm|sajb|sal|nal)\b|invoke-(?:expression|command)|start-(?:thread)?job|(?:set|new)-alias`,
+  String.raw`scriptblock|invokecommand|add(?:script|command)|\.(?:\w*invoke\w*|foreach)\s*\(`,
+  String.raw`foreach-object|\|\s*(?:%|foreach)(?=[\s(]|$)`,
+  String.raw`(?:start-process|\bsaps|(?:^|[\s;|&({])start)\s+(?:-f\w*[:\s]\s*)?[$(@]`,
+].join('|'), 'i')
+
+const named = (command) => keywords.test(command) || keywords.test(command.replace(quotes, ''))
+
+/** Cheap gate for the parser. Commands it rejects have no known route to a kill. */
+export function suspicious(command) {
+  return named(command) || dynamic.test(command)
+}
+
+const invokers = new Set(['foreach-object', '%', 'foreach'])
+const evaluators = new Set(['invoke-command', 'icm', 'start-job', 'sajb', 'start-threadjob'])
+const aliases = new Set(['set-alias', 'sal', 'new-alias', 'nal'])
+// Arguments PowerShell may run or resolve by name: anything but switches, script
+// block literals (their commands are in the AST already), and plain literals.
+const opaque = (e) => !e.literal && e.kind !== 'ScriptBlockExpressionAst'
+const launchers = new Set(['start-process', 'saps', 'start'])
+const guarded = new Set([...kills, ...shells, ...invokers, ...evaluators, ...aliases, ...launchers, 'invoke-expression', 'iex', 'rtk'])
 
 /** Parse every shell request; quoted examples and comments stay data in the AST. */
 export function assess(command, parse = (text) => inspect({ mode: 'parse', command: text }), depth = 0) {
   if (typeof command !== 'string' || command.length > 256 * 1024 || depth > 6) throw blocked('uninspectable command')
-  if (!/(?:taskkill|stop-process|\bspps\b|\b(?:p?kill|killall)\b|powershell|pwsh|\bcmd\b|\brtk\b|[`&])/i.test(command)) return null
+  if (!suspicious(command)) return null
   const ast = parse(command)
-  if (!Array.isArray(ast?.errors) || ast.errors.length || !Array.isArray(ast.commands)) throw blocked('unparseable command')
+  if (!Array.isArray(ast?.errors) || !Array.isArray(ast.commands)) throw blocked('unparseable command')
+  if (ast.errors.length) {
+    // PowerShell runs nothing from a script that fails to parse. Top-level commands
+    // routed only by a dynamic construct pass so pwsh reports the syntax error;
+    // named programs and wrapped bodies (cmd may still run them) fail closed.
+    if (depth > 0 || named(command)) throw blocked('unparseable command')
+    return null
+  }
   if (ast.killMembers) throw blocked('unverified process Kill invocation')
+  if (ast.dynamicMembers) throw blocked('dynamic member invocation')
+  if (ast.evaluators) throw blocked('dynamic script evaluation')
   let target = null
   for (const entry of ast.commands) {
     const elements = entry.elements
@@ -58,10 +147,22 @@ export function assess(command, parse = (text) => inspect({ mode: 'parse', comma
       const source = body.length === 1 ? body[0].value : command.slice(body[0].start, body.at(-1).end)
       if (name === 'cmd' && /[\^%!]/.test(source)) throw blocked('cmd expansion cannot be verified')
       if (assess(source, parse, depth + 1)) throw blocked('wrapped termination')
-    } else if (['start-process', 'saps', 'invoke-expression', 'iex'].includes(name)) {
+    } else if (launchers.has(name) && !named(command)) {
+      // Routed only by a dynamic construct elsewhere: a literal program still
+      // launches, but a computed one could be a string-built taskkill.
+      const file = /^-f/i.test(elements[1]?.value ?? '') ? elements[2] : elements[1]
+      if (!file?.literal || file.value.startsWith('-') || guarded.has(leaf(file.value))) throw blocked('Start-Process target must be a literal program path')
+    } else if (launchers.has(name) || ['invoke-expression', 'iex'].includes(name)) {
       // These launch/evaluate arguments rather than printing them. A suspicious
       // request cannot earn a PID allowance through this alternate entry point.
       throw blocked('uninspectable process or expression wrapper')
+    } else if (invokers.has(name)) {
+      // ForEach-Object Kil* calls Process.Kill through a wildcard member name.
+      if (elements.slice(1).some((e) => e.killName || opaque(e))) throw blocked('member invocation by name')
+    } else if (evaluators.has(name)) {
+      if (elements.slice(1).some(opaque)) throw blocked('dynamic script evaluation')
+    } else if (aliases.has(name)) {
+      if (elements.slice(1).some((e) => !e.literal || guarded.has(leaf(e.value)))) throw blocked('alias to a guarded command')
     } else if (name === 'rtk') {
       const args = elements.slice(1)
       if (args.some((e) => !e.literal)) throw blocked('dynamic RTK wrapper')

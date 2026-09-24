@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import { Context, Service } from '@deepseek-ai/cordis'
 // @ts-expect-error plain-JS permanent host package
 import { apply, installGuard } from '../packages/dsh-command-guard/lib/index.js'
 // @ts-expect-error plain-JS permanent host package
-import { assess, inspect, verifyTarget } from '../packages/dsh-command-guard/lib/policy.js'
+import { assess, closeInspector, inspect, suspicious, verifyTarget } from '../packages/dsh-command-guard/lib/policy.js'
 
 // Every original executor in this suite is a mock. Command strings are DATA.
 const recurrence = "Get-Process node -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '*node*' } | Select-Object Id,CommandLine; taskkill /F /IM node.exe 2>&1 | Select-Object -First 3; Start-Sleep -Seconds 2; Get-Process node -ErrorAction SilentlyContinue | Select-Object Id | Format-Table -AutoSize | Out-String; Rename-Item assets/originals assets/originals.HIDDEN; Test-Path assets/originals; Test-Path assets/originals.HIDDEN; git status --porcelain=v1 | Select-Object -First 10; git check-ignore -v assets/originals.HIDDEN 2>&1 | Select-Object -First 3; echo HIDDEN"
@@ -15,6 +15,8 @@ const rows = [
   { pid: 40, parent: 30, name: 'node.exe', command: 'node preview.mjs' },
   { pid: 50, parent: 30, name: 'node.exe', command: 'node C:/runtime/@deepseek-ai/dsh/bin.mjs' },
 ]
+
+afterAll(() => closeInspector())
 
 describe('PowerShell AST policy (parse only, never execution)', () => {
   it.each([
@@ -46,6 +48,27 @@ describe('PowerShell AST policy (parse only, never execution)', () => {
     expect(() => assess(command)).toThrow('DSH command guard')
   })
 
+  // PowerShell resolves these to a kill without the name appearing literally.
+  it.each([
+    "taskk''ill /F /IM node.exe", 'taskk""ill /F /IM node.exe', "task'kill' /F /IM node.exe",
+    "npm test && taskk''ill /F /IM node.exe", "Stop-Pro''cess -Name node", "s''pps node",
+    "taskk''ill /F /IM node.exe {",
+    ". ('Stop-Pro'+'cess') -Name node", ".('taskk'+'ill') /F /IM node.exe", '. $command /F /IM node.exe',
+    "iex ('taskk'+'ill /F /IM node.exe')", 'Invoke-Expression $env:CMD',
+    'Get-Process node | % Kill', 'Get-Process node | % Kil*', "Get-Process node | ForEach-Object -MemberName 'K?ll'",
+    'Get-Process node | foreach $member', "(Get-Process node).ForEach('Kill')", "(Get-Process node).ForEach('Ki'+'ll')",
+    "(Get-Process node).('Ki'+'ll')()", '(Get-Process node).$member()',
+    "icm ([scriptblock]::Create('taskk'+'ill /F /IM node.exe'))", "& ([scriptblock]::Create('Stop-Pro'+'cess -Name node'))",
+    "$ExecutionContext.InvokeCommand.InvokeScript('taskk'+'ill /F /IM node.exe')",
+    "[powershell]::Create().AddScript('taskk'+'ill /F /IM node.exe').Invoke()",
+    "[powershell]::Create().AddCommand('Stop-Pro'+'cess').Invoke()", 'Start-Job -ScriptBlock $block',
+    "Start-Process ('taskk'+'ill') '/F /IM node.exe'", "$t = 'taskk'+'ill'; Start-Process -FilePath $t '/F /IM node.exe'",
+    'start taskkill -ArgumentList "/F /IM node.exe"',
+    'Set-Alias k taskkill; k /F /IM node.exe', "sal k ('taskk'+'ill'); k /F /IM node.exe", "New-Alias k ('Stop-Pro'+'cess')",
+  ])('blocks string-built or indirect form %s', (command) => {
+    expect(() => assess(command)).toThrow('DSH command guard')
+  })
+
   it.each([
     'git status --short', 'Get-Process node | Select-Object Id,Path',
     'Write-Output "taskkill /F /IM node.exe"',
@@ -54,6 +77,9 @@ describe('PowerShell AST policy (parse only, never execution)', () => {
     'rtk rg "taskkill" .', 'Write-Output \'kill\'',
     'pwsh -NoProfile -Command "Get-Process node"',
     'cmd /c "echo taskkill /F /IM node.exe"',
+    'Get-ChildItem | ForEach-Object Name', 'Get-ChildItem | % { $_.Name }', '$items.ForEach({ $_ * 2 })',
+    '{ Get-Date }.Invoke()', "Get-ChildItem | % FullName; Start-Process -FilePath 'node' -ArgumentList 'server.mjs'",
+    "$x = 'a' + 'b'; $x.Length", '$files | % { $_', "Write-Output 'taskk''ill'",
   ])('passes safe read %s', (command) => {
     expect(assess(command)).toBeNull()
   })
@@ -69,6 +95,18 @@ describe('PowerShell AST policy (parse only, never execution)', () => {
     const ast = parse('Write-Output "taskkill $(1 + 2)"')
     expect(ast.commands[0].elements[1].literal).toBe(false)
     expect(ast.commands[0].elements[1].text).toContain('$(1 + 2)')
+  })
+  it.each([
+    'git commit -m "fix: keep quotes cheap"', "rg 'Stop' src", 'npm run build', 'git log --format=%H -3',
+    "node -e \"console.log('x' + 'y')\"", 'Get-Content README.md | Select-Object -First 5',
+  ])('keeps common agent command %s off the parser', (command) => {
+    expect(suspicious(command)).toBe(false)
+  })
+  it('keeps the persistent inspector usable after restart and preserves non-ASCII text', () => {
+    const text = 'Write-Output "‘x’ 😀"'
+    expect(parse(text).commands[0].elements[1].value).toBe('‘x’ 😀')
+    closeInspector()
+    expect(parse(text).commands[0].elements[1].value).toBe('‘x’ 😀')
   })
   it('does not start the parser for ordinary reads', () => {
     const parser = vi.fn()
@@ -138,7 +176,10 @@ describe('shared shell boundary and lifecycle', () => {
   it('blocks exact recurrence on foreground/background with zero original calls', () => {
     const f = shellFixture()
     const guard = installGuard(f.shell)
-    for (const method of ['run', 'start'] as const) expect(() => f.shell[method]({ command: recurrence } as never)).toThrow('Do not bypass')
+    for (const method of ['run', 'start'] as const) {
+      expect(() => f.shell[method]({ command: recurrence } as never)).toThrow('Do not bypass')
+      expect(() => f.shell[method]({ command: "taskk''ill /F /IM node.exe" } as never)).toThrow('Do not bypass')
+    }
     expect(f.run).not.toHaveBeenCalled()
     expect(f.start).not.toHaveBeenCalled()
     guard.dispose()
