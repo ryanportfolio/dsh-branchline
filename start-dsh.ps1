@@ -610,11 +610,44 @@ function Sync-PluginSource {
     foreach ($line in $detail) { & $write $line }
 }
 
+# --- DSH core overrides ---------------------------------------------------
+
+function Invoke-DshCoreOverrides {
+    # Best-effort: reapplies scripts\dsh-core-overrides to the npx cache right
+    # before DSH starts. Skipped while a DSH instance still serves from that
+    # cache. A failure or a not-yet-extracted package logs a warning and never
+    # blocks the launch.
+    param([bool]$InstanceRunning, [scriptblock]$Log)
+    $write = if ($Log) { $Log } else { { param($text) Write-Host $text } }
+    if ($InstanceRunning) {
+        & $write '[warn] DSH core overrides skipped: a DSH instance is still running.'
+        return
+    }
+    foreach ($name in @('apply-canonical-workspace-default.ps1', 'apply-performance.ps1')) {
+        $path = Join-Path $Script:ScriptRoot ('scripts\dsh-core-overrides\' + $name)
+        try {
+            if (-not (Test-Path -LiteralPath $path)) { throw 'script not found' }
+            # Streamed, so lines logged before a throw still reach the log.
+            & $path *>&1 | ForEach-Object {
+                if ($_ -is [System.Management.Automation.WarningRecord]) {
+                    & $write ('[warn] ' + $_.Message)
+                } else {
+                    & $write ([string]$_)
+                }
+            }
+        } catch {
+            & $write ('[warn] DSH core override {0} failed: {1}' -f $name, $_.Exception.Message)
+        }
+    }
+}
+
 # --- server spawn ---------------------------------------------------------
 
 function Start-DshProc {
     # Spawns npx dsh web detached from this console, output wired to LogQueue.
-    param([string]$Ws)
+    param([string]$Ws, [bool]$InstanceRunning)
+    $logQueue = $Script:LogQueue
+    Invoke-DshCoreOverrides -InstanceRunning $InstanceRunning -Log ({ param($text) $logQueue.Enqueue($text) }.GetNewClosure())
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $env:ComSpec
     $argStr = '/c npx -y "@deepseek-ai/dsh@' + $Version + '" web'
@@ -697,6 +730,8 @@ function Start-Headless {
     $npxArgs = @('-y', "@deepseek-ai/dsh@$Version", 'web')
     if ($NoOpen) { $npxArgs += '--no-open' }
     if ($DshArgs) { $npxArgs += $DshArgs }
+
+    Invoke-DshCoreOverrides -InstanceRunning ($KeepExisting -and $targets.Count -gt 0)
 
     Write-Host "Starting DSH web UI (workspace: $Ws)"
     Write-Host "Stop with Ctrl+C or close this window."
@@ -976,7 +1011,8 @@ function New-LauncherGui {
 
             # 3) launch
             & $addLogLine ('Starting DSH web UI in ' + $sel)
-            $guiState.Proc = & $commands.StartDshProc -Ws $sel
+            #    Start-DshProc reapplies core overrides unless a DSH instance survived step 1.
+            $guiState.Proc = & $commands.StartDshProc -Ws $sel -InstanceRunning ($known.Count -gt 0)
             $btnStop.Enabled = $true
             $btnBrowser.Enabled = $true
             & $addLogLine ('DSH starting at http://127.0.0.1:{0}/  (first run may download the package)' -f $Port)

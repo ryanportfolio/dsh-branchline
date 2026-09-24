@@ -61,7 +61,12 @@ window.__ModuleLoader__.load({
 			return pinState;
 		}
 
+		/** Minimum gap between focus-triggered refetches (each lists sessions host-side). */
+		const FOCUS_REFRESH_MS = 30_000;
+		let lastRefreshAt = 0;
+
 		async function refreshPins() {
+			lastRefreshAt = Date.now();
 			try {
 				const value = await api({ op: "list" });
 				pinState = { loaded: true, pins: Array.isArray(value && value.pins) ? value.pins : [] };
@@ -282,9 +287,14 @@ window.__ModuleLoader__.load({
 
 		function PinnedOverlay() {
 			const isOpen = react.useSyncExternalStore(overlayBus.subscribe, overlayBus.isOpen);
+			// Pin and session subscriptions live in the panel, so a closed overlay
+			// does not re-render on every sessions-list change.
+			return isOpen ? react.createElement(PinnedPanel) : null;
+		}
+
+		function PinnedPanel() {
 			const state = react.useSyncExternalStore(subscribePins, getPinSnapshot);
 			useSessionSignature(state.pins.map((p) => p.sessionId));
-			if (!isOpen) return null;
 			const pins = state.pins.filter((p) => {
 				const summary = sessionSummary(p.sessionId);
 				return summary == null || summary.blank !== true;
@@ -387,13 +397,19 @@ window.__ModuleLoader__.load({
 			sessionsService = ctx.sessions;
 			insertCss(CSS);
 
-			// Boot-time load plus a refetch whenever the window regains focus, so
-			// pins stay fresh across multiple open DSH tabs.
+			// Boot-time load plus a throttled refetch when a visible window regains
+			// focus, so pins stay fresh across multiple open DSH tabs.
 			refreshPins();
 			if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-				window.addEventListener("focus", () => {
-					refreshPins();
-				});
+				ctx.effect(() => {
+					const onFocus = () => {
+						if (typeof document !== "undefined" && document.hidden === true) return;
+						if (Date.now() - lastRefreshAt < FOCUS_REFRESH_MS) return;
+						refreshPins();
+					};
+					window.addEventListener("focus", onFocus);
+					return () => window.removeEventListener("focus", onFocus);
+				}, "dsh-session-pins.focus-refresh");
 			}
 
 			// Per-session pin toggle beside the breadcrumb actions.

@@ -4,6 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import * as React from 'react'
 
 type Model = { readonly id: string, readonly name: string, readonly description?: string }
@@ -302,5 +303,87 @@ describe('dsh-session-extras OpenRouter metadata', () => {
     render(React.createElement(settingsPage, {}))
     await screen.findByText('Unknown work')
     expect(screen.getByLabelText('Could not verify').textContent).toBe('?')
+  })
+})
+
+describe('dsh-session-extras context readout', () => {
+  it('refetches the context model on mount, session change, and finished turns only', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({ ok: true, value: { hasRun: false } }))
+    const PickerComponent = loadPicker(fetchMock)
+    let running = false
+    const listeners = new Set<() => void>()
+    const sessions = {
+      list: {
+        subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } },
+        getSnapshot: () => ({ byId: { 'session-1': { running }, 'session-2': { running: false } } }),
+      },
+    }
+    const setRunning = (value: boolean): void => {
+      running = value
+      React.act(() => { for (const listener of [...listeners]) listener() })
+    }
+    const contextCalls = (): unknown[] => fetchMock.mock.calls.filter(([, init]) => String(init?.body).includes('"op":"context"'))
+    const props = { ...pickerProps([]), sessions }
+    const view = render(React.createElement(PickerComponent, props))
+    await waitFor(() => expect(contextCalls()).toHaveLength(1))
+
+    setRunning(true)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(contextCalls()).toHaveLength(1)
+
+    setRunning(false)
+    await waitFor(() => expect(contextCalls()).toHaveLength(2))
+
+    view.rerender(React.createElement(PickerComponent, { ...props, sessionId: 'session-2' }))
+    await waitFor(() => expect(contextCalls()).toHaveLength(3))
+  })
+
+  it('shares one log read per session and reports the newest request context', async () => {
+    const plugin = await import(pathToFileURL(resolve('packages/dsh-session-extras/lib/index.js')).href) as {
+      readonly apply: (ctx: Record<string, unknown>) => void
+    }
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const readSession = vi.fn(async () => {
+      await gate
+      return {
+        events: [
+          { type: 'request/context', data: { provider: 'old', model: 'a', contextWindow: 1 } },
+          { type: 'request/context', data: { provider: 'new', model: 'b', contextWindow: 2 } },
+          { type: 'request/context', data: { provider: 42, model: 'ignored' } },
+          { type: 'message', data: {} },
+        ],
+      }
+    })
+    let handler: ((request: unknown, response: unknown) => Promise<void>) | undefined
+    const webCtx = {
+      sessionQuery: { readSession },
+      llm: { resolveModelInfo: async () => null },
+      webServer: { register: (route: { handler: typeof handler }) => { handler = route.handler; return () => undefined } },
+      effect: (fn: () => unknown) => { fn() },
+    }
+    plugin.apply({ inject: (_deps: string[], cb: (ctx: typeof webCtx) => void) => { cb(webCtx) } })
+    if (handler === undefined) throw new Error('context route was not registered')
+    const call = async (): Promise<unknown> => {
+      let body = ''
+      const response = { writeHead: () => undefined, end: (text: string) => { body = text } }
+      await handler!({
+        method: 'GET',
+        url: '/api/dsh-session-extras?op=context&sessionId=s1',
+        socket: { remoteAddress: '127.0.0.1' },
+        headers: { host: 'localhost:3000' },
+      }, response)
+      return JSON.parse(body)
+    }
+    const pending = [call(), call()]
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    release()
+    const results = await Promise.all(pending)
+    expect(readSession).toHaveBeenCalledTimes(1)
+    for (const result of results) {
+      expect(result).toEqual({ ok: true, value: { hasRun: true, provider: 'new', model: 'b', name: 'new/b', contextWindow: 2 } })
+    }
+    await call()
+    expect(readSession).toHaveBeenCalledTimes(2)
   })
 })

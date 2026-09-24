@@ -1,8 +1,15 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { LocalWorktreeStudioManager, type WorktreeStudioOptions } from '../src/manager.ts'
+import {
+  DASHBOARD_VIEW_CONCURRENCY,
+  LocalWorktreeStudioManager,
+  VIEW_VALIDATION_OUTPUT_CHARS,
+  mapLimit,
+  type WorktreeStudioOptions,
+} from '../src/manager.ts'
+import { GitClient } from '../src/git.ts'
 import { TaskStore } from '../src/store.ts'
 import { StudioError } from '../src/errors.ts'
 import { TaskId } from '../src/types.ts'
@@ -21,6 +28,7 @@ const managers: LocalWorktreeStudioManager[] = []
 const subprocesses: SubprocessFixture[] = []
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(managers.splice(0).map(manager => manager.close()))
   await Promise.all(subprocesses.splice(0).map(subprocess => subprocess.dispose()))
   await Promise.all(fixtures.splice(0).map(fixture => removeFixture(fixture.root)))
@@ -464,5 +472,171 @@ describe('LocalWorktreeStudioManager', () => {
     expect(record).toBeDefined()
     expect(record?.phase).toBe('recovery-needed')
     expect(record?.lastError).toContain('branch remains')
+  })
+})
+
+describe('LocalWorktreeStudioManager read performance', () => {
+  async function setupWithGit(github?: Pick<GitHubClient, 'findMergedPullRequest'>): Promise<{
+    readonly fixture: RepositoryFixture
+    readonly manager: LocalWorktreeStudioManager
+    readonly gitClient: GitClient
+  }> {
+    const fixture = await createRepositoryFixture()
+    fixtures.push(fixture)
+    const subprocess = await createSubprocessFixture()
+    subprocesses.push(subprocess)
+    const resolved = options(fixture, false, true)
+    const gitClient = new GitClient(
+      subprocess.subprocess,
+      resolved.gitTimeoutMs,
+      resolved.terminationGraceMs,
+      resolved.maxOutputBytes,
+    )
+    const manager = new LocalWorktreeStudioManager(resolved, subprocess.subprocess, gitClient, undefined, github)
+    managers.push(manager)
+    return { fixture, manager, gitClient }
+  }
+
+  it('bounds concurrent Git status reads during a dashboard read', async () => {
+    const { fixture, manager, gitClient } = await setupWithGit()
+    const count = DASHBOARD_VIEW_CONCURRENCY + 3
+    for (let index = 0; index < count; index += 1) {
+      await manager.create({ repository: fixture.repository, title: `Concurrent ${String(index)}` })
+    }
+    const original = gitClient.status.bind(gitClient)
+    let inFlight = 0
+    let peak = 0
+    vi.spyOn(gitClient, 'status').mockImplementation(async (path, baseCommit) => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      try {
+        await new Promise(resolve => setTimeout(resolve, 20))
+        return await original(path, baseCommit)
+      } finally {
+        inFlight -= 1
+      }
+    })
+
+    const dashboard = await manager.dashboard()
+
+    expect(dashboard.tasks).toHaveLength(count)
+    expect(dashboard.tasks.every(task => task.exists && task.headCommit !== null)).toBe(true)
+    expect(peak).toBe(DASHBOARD_VIEW_CONCURRENCY)
+  })
+
+  it('shares one remote refresh per repository within a display batch and reuses its views', async () => {
+    const { fixture, manager, gitClient } = await setupWithGit()
+    const created = []
+    for (let index = 0; index < 3; index += 1) {
+      created.push(await manager.create({ repository: fixture.repository, title: `Batch ${String(index)}` }))
+    }
+    const fetchSpy = vi.spyOn(gitClient, 'fetchDefaultBase')
+    const statusSpy = vi.spyOn(gitClient, 'status')
+
+    const batch = manager.openPreservationBatch()
+    await batch.dashboard()
+    const proofs = await Promise.all(created.map(task => batch.assessPreservation(task.id)))
+
+    expect(proofs.map(proof => proof.status)).toEqual(['safe', 'safe', 'safe'])
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    expect(statusSpy).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps guarded proof fresh outside a batch, even after a batch ran', async () => {
+    const github = { findMergedPullRequest: async () => null }
+    const { fixture, manager, gitClient } = await setupWithGit(github)
+    const created = await manager.create({ repository: fixture.repository, title: 'Fresh proof' })
+    const batch = manager.openPreservationBatch()
+    await batch.dashboard()
+    await expect(batch.assessPreservation(created.id)).resolves.toMatchObject({ status: 'safe' })
+    const fetchSpy = vi.spyOn(gitClient, 'fetchDefaultBase')
+    const statusSpy = vi.spyOn(gitClient, 'status')
+
+    await writeFile(join(created.path, 'feature.txt'), 'feature\n')
+    git(created.path, ['add', 'feature.txt'])
+    git(created.path, ['commit', '-m', 'feature'])
+
+    await expect(manager.assessPreservation(created.id)).resolves.toMatchObject({ status: 'unsafe' })
+    await expect(manager.assessPreservation(created.id)).resolves.toMatchObject({ status: 'unsafe' })
+    await expect(manager.purge(created.id, { requirePreserved: true })).rejects.toMatchObject({ code: 'state-conflict' })
+    expect(fetchSpy).toHaveBeenCalledTimes(3)
+    expect(statusSpy).toHaveBeenCalledTimes(3)
+    expect(existsSync(created.path)).toBe(true)
+  })
+
+  it('recomputes a batch view when the stored record changed after the batch dashboard', async () => {
+    const { fixture, manager, gitClient } = await setupWithGit()
+    const created = await manager.create({ repository: fixture.repository, title: 'Changed record' })
+    const batch = manager.openPreservationBatch()
+    await batch.dashboard()
+    const store = new TaskStore(fixture.statePath)
+    await store.update(state => ({
+      version: 1,
+      tasks: {
+        ...state.tasks,
+        [String(created.id)]: {
+          ...(state.tasks[String(created.id)] as NonNullable<(typeof state.tasks)[string]>),
+          updatedAt: new Date(Date.now() + 1000).toISOString(),
+        },
+      },
+    }))
+    const statusSpy = vi.spyOn(gitClient, 'status')
+
+    await batch.assessPreservation(created.id)
+
+    expect(statusSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends only the validation output tail to clients and keeps the stored capture whole', async () => {
+    const { fixture, manager } = await setup(false)
+    const created = await manager.create({ repository: fixture.repository, title: 'Loud validation' })
+    const stdout = `${'a'.repeat(VIEW_VALIDATION_OUTPUT_CHARS * 3)}TAIL`
+    const store = new TaskStore(fixture.statePath)
+    await store.update(state => ({
+      version: 1,
+      tasks: {
+        ...state.tasks,
+        [String(created.id)]: {
+          ...(state.tasks[String(created.id)] as NonNullable<(typeof state.tasks)[string]>),
+          lastValidation: {
+            command: ['node', '--version'],
+            exitCode: 1,
+            timedOut: false,
+            passed: false,
+            startedAt: '2026-09-01T00:00:00.000Z',
+            completedAt: '2026-09-01T00:00:01.000Z',
+            stdout,
+            stderr: 'short error',
+            changeToken: 'stale',
+          },
+        },
+      },
+    }))
+
+    const view = (await manager.dashboard()).tasks[0]
+
+    expect(view?.lastValidation?.stdout.startsWith('[earlier output trimmed]\n')).toBe(true)
+    expect(view?.lastValidation?.stdout.endsWith('TAIL')).toBe(true)
+    expect(view?.lastValidation?.stdout.length).toBe('[earlier output trimmed]\n'.length + VIEW_VALIDATION_OUTPUT_CHARS)
+    expect(view?.lastValidation?.stderr).toBe('short error')
+    const stored = (await store.read()).tasks[String(created.id)]
+    expect(stored?.lastValidation?.stdout).toBe(stdout)
+  })
+})
+
+describe('mapLimit', () => {
+  it('preserves order and never exceeds the limit', async () => {
+    let inFlight = 0
+    let peak = 0
+    const result = await mapLimit([5, 1, 4, 2, 3, 0], 2, async (value, index) => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      await new Promise(resolve => setTimeout(resolve, value * 3))
+      inFlight -= 1
+      return `${String(index)}:${String(value)}`
+    })
+    expect(result).toEqual(['0:5', '1:1', '2:4', '3:2', '4:3', '5:0'])
+    expect(peak).toBe(2)
+    await expect(mapLimit([], 4, async () => 1)).resolves.toEqual([])
   })
 })

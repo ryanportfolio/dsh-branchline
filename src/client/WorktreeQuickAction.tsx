@@ -41,6 +41,34 @@ function permissionPresetOf(useProjection: unknown): string | undefined {
   return typeof value === 'string' && value !== 'custom' ? value : undefined
 }
 
+/** Structural slice of one workspaces-store item this module reads. */
+interface WorkspaceSessions<K> {
+  readonly path: string
+  readonly sessionIds: readonly K[]
+}
+
+/**
+ * sessionId -> first owning workspace path, built once per workspaces snapshot
+ * (keyed by the items array identity) and shared by every mounted composer, so
+ * the per-render selector is a map lookup instead of a workspaces x sessions scan.
+ */
+const sessionPathIndexes = new WeakMap<object, Map<unknown, string>>()
+
+function sessionPathIndex<K>(items: readonly WorkspaceSessions<K>[]): Map<unknown, string> {
+  let index = sessionPathIndexes.get(items)
+  if (index === undefined) {
+    index = new Map()
+    for (const workspace of items) {
+      for (const id of workspace.sessionIds) {
+        // First match wins, as with the Array.find scan this replaces.
+        if (!index.has(id)) index.set(id, workspace.path)
+      }
+    }
+    sessionPathIndexes.set(items, index)
+  }
+  return index
+}
+
 /** Only move drafts whose known attachment collections are all explicitly empty. */
 function hasNoAttachments(snapshot: ReturnType<ComposerShellFace['state']['getSnapshot']>): boolean {
   const keys = ['attachmentIds', 'imageIds'] as const
@@ -79,8 +107,7 @@ export function WorktreeQuickAction(props: WorktreeQuickActionProps): ReactNode 
   // render for an existing session, so it anchors the gate while the
   // conversation scope's own bit is still at its initial true.
   const summaryBlank = useSessions(state => state.byId[sessionId]?.blank)
-  const workspacePath = useWorkspaces(state =>
-    state.items.find(workspace => workspace.sessionIds.includes(sessionId))?.path)
+  const workspacePath = useWorkspaces(state => sessionPathIndex(state.items).get(sessionId))
   const sessionCwd = useSessions(state => state.byId[sessionId]?.cwd)
   const repository = workspacePath ?? sessionCwd
   const interceptable = blank === true && summaryBlank === true

@@ -12,6 +12,8 @@ All notable changes to this project are documented in this file.
 - Permanent `dsh-openrouter-sync` companion package, installed with the other workspace companions and verified in CI.
 - OpenRouter cost chips and minimum-context filters in the enhanced model picker, defaulting to models with at least 256,000 context tokens.
 - `scripts/dsh-core-overrides/apply-canonical-workspace-default.ps1`, which reapplies the canonical-workspace-default overrides to the DSH client runtime bundle in the npx cache after cache eviction or a `dsh` version change.
+- `scripts/dsh-core-overrides/apply-performance.ps1`, which patches the dsh 0.1.5-rc.2 bundles in the npx cache: linear session list reconciliation (upstream 53046b21b4), off-stage sessions closing their history stream after 30 seconds, one abort promise per gateway stream read (upstream 4cfd292a7b), and released input-queue (upstream ba51e5483e) and right-sidebar store (upstream 490a79c693) subscriptions. Tested by `scripts/test-dsh-perf-overrides.ps1`.
+- The launcher reapplies both DSH core override scripts before it starts DSH. It skips them while a DSH instance kept by `-KeepExisting` is still running, and a failure only logs a warning.
 - `docs/settings-template.yaml`, a reference template for the `~/.dsh/settings.yaml` customizations this setup relies on: shell deadlines, OpenRouter retry policy and timeouts, pinned and custom models, default agent preset and model.
 
 ### Fixed

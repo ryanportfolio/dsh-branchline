@@ -6,7 +6,7 @@ import { dirname, resolve } from 'node:path'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { StudioError, errorMessage } from './errors.ts'
 import { assertCommand, assertPathInside, GitClient, samePath } from './git.ts'
-import type { GitStatus } from './git.ts'
+import type { GitStatus, RemoteBase } from './git.ts'
 import type { GitHubClient } from './github.ts'
 import { TaskStore, type StoreState } from './store.ts'
 import {
@@ -15,6 +15,7 @@ import {
   type DashboardView,
   type DoctorView,
   type MergePreview,
+  type PreservationBatch,
   type PurgeOptions,
   type PurgeOutcome,
   type ReviewView,
@@ -54,6 +55,17 @@ const DISPOSABLE_IGNORED_ROOTS = new Set([
   'build', 'coverage', 'dist', 'lib', 'node_modules', 'obj', 'out', 'target', 'venv',
 ])
 
+/** Tasks whose Git state a dashboard read inspects at once; each spawns about six Git processes. */
+export const DASHBOARD_VIEW_CONCURRENCY = 4
+
+/** Characters of each validation stream sent to clients; the store keeps the full capture. */
+export const VIEW_VALIDATION_OUTPUT_CHARS = 8 * 1024
+
+const VALIDATION_TRIM_MARKER = '[earlier output trimmed]\n'
+
+/** Remote proof lookup; guarded deletion always uses a fresh fetch. */
+type RemoteBaseReader = (repository: string) => Promise<RemoteBase>
+
 /** Local task manager. Every mutation is serialized in-process and cross-process. */
 export class LocalWorktreeStudioManager implements WorktreeStudioManager {
   private readonly git: GitClient
@@ -89,6 +101,39 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
   async assessPreservation(id: TaskId): Promise<WorktreePreservation> {
     const task = this.requireTask(await this.store.read(), id)
     return await this.assessTaskPreservation(task)
+  }
+
+  /**
+   * Display-only batch: views from the batch's dashboard read are reused while the
+   * stored record is unchanged, and each repository is fetched at most once.
+   */
+  openPreservationBatch(): PreservationBatch {
+    const views = new Map<string, TaskView>()
+    const bases = new Map<string, Promise<RemoteBase>>()
+    const readBase: RemoteBaseReader = repository => {
+      const key = canonicalKey(repository)
+      let pending = bases.get(key)
+      if (pending === undefined) {
+        pending = this.git.fetchDefaultBase(repository)
+        bases.set(key, pending)
+      }
+      return pending
+    }
+    return {
+      dashboard: async (repository?: string) => {
+        const dashboard = await this.dashboard(repository)
+        for (const view of dashboard.tasks) views.set(String(view.id), view)
+        return dashboard
+      },
+      assessPreservation: async (id: TaskId) => {
+        const task = this.requireTask(await this.store.read(), id)
+        const cached = views.get(String(id))
+        const view = cached !== undefined && cached.updatedAt === task.updatedAt && cached.path === task.path
+          ? cached
+          : undefined
+        return await this.assessTaskPreservation(task, view, readBase)
+      },
+    }
   }
 
   /** Create a branch-backed worktree and persist its recovery marker first. */
@@ -173,7 +218,7 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
     const records = Object.values(state.tasks)
       .filter(task => selectedCommon === undefined || samePath(task.commonDirectory, selectedCommon))
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-    const tasks = await Promise.all(records.map(task => this.view(task)))
+    const tasks = await mapLimit(records, DASHBOARD_VIEW_CONCURRENCY, task => this.view(task))
     const repositories = [...new Set(Object.values(state.tasks).map(task => task.repository))].sort()
     return {
       ...(selectedRepository === undefined ? {} : { repository: selectedRepository }),
@@ -575,7 +620,7 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
         ? 'active'
         : task.phase
       return {
-        ...task,
+        ...projectRecord(task),
         phase,
         headCommit: status.headCommit,
         currentBranch: status.branch,
@@ -587,7 +632,7 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
       }
     } catch (error) {
       return {
-        ...task,
+        ...projectRecord(task),
         phase: task.phase === 'archived' ? 'archived' : 'recovery-needed',
         lastError: errorMessage(error),
         headCommit: null,
@@ -601,9 +646,17 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
     }
   }
 
-  private async assessTaskPreservation(task: TaskRecord): Promise<WorktreePreservation> {
+  /**
+   * Classify whether deleting the worktree would lose work. Callers that authorize
+   * deletion pass no arguments, so the view and remote proof are always fresh.
+   */
+  private async assessTaskPreservation(
+    task: TaskRecord,
+    knownView?: TaskView,
+    readBase: RemoteBaseReader = repository => this.git.fetchDefaultBase(repository),
+  ): Promise<WorktreePreservation> {
     const checkedAt = new Date().toISOString()
-    const view = await this.view(task)
+    const view = knownView ?? await this.view(task)
     const common = {
       checkedAt,
       changeToken: view.changeToken,
@@ -627,7 +680,7 @@ export class LocalWorktreeStudioManager implements WorktreeStudioManager {
     }
     let base
     try {
-      base = await this.git.fetchDefaultBase(task.repository)
+      base = await readBase(task.repository)
     } catch (error) {
       return { status: 'unknown', reason: `could not refresh origin: ${errorMessage(error)}`, ...common }
     }
@@ -747,7 +800,7 @@ function fallbackToken(task: TaskRecord): string {
 
 function missingView(task: TaskRecord): TaskView {
   return {
-    ...task,
+    ...projectRecord(task),
     phase: task.phase === 'archived' ? 'archived' : 'orphaned',
     headCommit: null,
     currentBranch: null,
@@ -757,6 +810,43 @@ function missingView(task: TaskRecord): TaskView {
     changeToken: fallbackToken(task),
     workspacePath: task.path,
   }
+}
+
+/** Copy a record for a view payload, keeping only the tail of stored validation output. */
+function projectRecord(task: TaskRecord): TaskRecord {
+  const validation = task.lastValidation
+  if (validation === undefined) return task
+  const stdout = outputTail(validation.stdout)
+  const stderr = outputTail(validation.stderr)
+  if (stdout === validation.stdout && stderr === validation.stderr) return task
+  return { ...task, lastValidation: { ...validation, stdout, stderr } }
+}
+
+function outputTail(value: string): string {
+  if (value.length <= VIEW_VALIDATION_OUTPUT_CHARS) return value
+  let start = value.length - VIEW_VALIDATION_OUTPUT_CHARS
+  const code = value.charCodeAt(start)
+  if (code >= 0xdc00 && code <= 0xdfff) start += 1
+  return VALIDATION_TRIM_MARKER + value.slice(start)
+}
+
+/** Run `transform` over `values` with at most `concurrency` calls in flight, preserving order. */
+export async function mapLimit<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  transform: (value: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length)
+  let cursor = 0
+  async function worker(): Promise<void> {
+    while (cursor < values.length) {
+      const index = cursor
+      cursor += 1
+      results[index] = await transform(values[index] as T, index)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, concurrency), values.length) }, () => worker()))
+  return results
 }
 
 function isDisposableIgnoredPath(path: string): boolean {

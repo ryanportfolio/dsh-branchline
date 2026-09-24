@@ -136,7 +136,7 @@ async function previewFromRecord(ctx, record, snapshot) {
   if (cwd !== '') {
     const view = await resolveWorktree(ctx, cwd, snapshot)
     if (view !== null) {
-      const otherSessions = await countOtherSessions(ctx, view.path, sessionId, snapshot?.records)
+      const otherSessions = await countOtherSessions(ctx, view.path, sessionId, snapshot?.sessionPaths)
       let preservation
       try {
         preservation = await assessPreservation(ctx, view, snapshot)
@@ -177,12 +177,16 @@ async function previewFromRecord(ctx, record, snapshot) {
 async function readinessBatch(ctx, sessionIds) {
   const records = await ctx.sessionQuery.listSessions()
   const byId = new Map(records.map((record) => [record?.header?.id, record]))
-  const dashboard = await ctx.worktreeStudio.dashboard()
-  const worktrees = []
-  for (const view of dashboard.tasks) {
-    worktrees.push({ view, path: await canonicalize(view.path) })
-  }
-  const snapshot = { records, worktrees, preservation: new Map() }
+  // Display-only: the batch shares one fetch per repository. deleteSession never uses a snapshot.
+  const studio = ctx.worktreeStudio
+  const batch = typeof studio.openPreservationBatch === 'function' ? studio.openPreservationBatch() : null
+  const dashboard = await (batch ?? studio).dashboard()
+  const worktrees = await Promise.all(dashboard.tasks.map(async (view) => ({ view, path: await canonicalize(view.path) })))
+  const sessionPaths = await Promise.all(records.map(async (record) => {
+    const cwd = typeof record?.header?.cwd === 'string' ? record.header.cwd : ''
+    return { id: record?.header?.id, path: cwd === '' ? '' : await canonicalize(cwd) }
+  }))
+  const snapshot = { records, sessionPaths, worktrees, batch, preservation: new Map() }
   const sessions = await mapLimit(sessionIds, 4, async (sessionId) => {
     const record = byId.get(sessionId)
     if (record === undefined) {
@@ -353,28 +357,29 @@ function assessPreservation(ctx, view, snapshot) {
   const key = String(view.id)
   let pending = snapshot.preservation.get(key)
   if (pending === undefined) {
-    pending = Promise.resolve().then(() => ctx.worktreeStudio.assessPreservation(view.id))
+    const source = snapshot.batch ?? ctx.worktreeStudio
+    pending = Promise.resolve().then(() => source.assessPreservation(view.id))
     snapshot.preservation.set(key, pending)
   }
   return pending
 }
 
-async function countOtherSessions(ctx, worktreePath, exceptSessionId, knownRecords) {
+/** `knownPaths` is a batch's canonical session cwds, so each cwd is resolved once per batch. */
+async function countOtherSessions(ctx, worktreePath, exceptSessionId, knownPaths) {
   const key = await canonicalize(worktreePath)
   const prefix = key + separator()
-  const records = knownRecords ?? await ctx.sessionQuery.listSessions()
-  let count = 0
-  for (const record of records) {
-    if (record?.header?.id === exceptSessionId) continue
-    const cwd = typeof record?.header?.cwd === 'string' ? record.header.cwd : ''
-    if (cwd === '') continue
-    let canonical
-    try {
-      canonical = await canonicalize(cwd)
-    } catch {
-      continue
+  let paths = knownPaths
+  if (paths === undefined) {
+    paths = []
+    for (const record of await ctx.sessionQuery.listSessions()) {
+      const cwd = typeof record?.header?.cwd === 'string' ? record.header.cwd : ''
+      paths.push({ id: record?.header?.id, path: cwd === '' ? '' : await canonicalize(cwd) })
     }
-    if (canonical === key || canonical.startsWith(prefix)) count += 1
+  }
+  let count = 0
+  for (const entry of paths) {
+    if (entry.id === exceptSessionId || entry.path === '') continue
+    if (entry.path === key || entry.path.startsWith(prefix)) count += 1
   }
   return count
 }
