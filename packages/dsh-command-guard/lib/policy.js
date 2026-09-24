@@ -107,6 +107,32 @@ const aliases = new Set(['set-alias', 'sal', 'new-alias', 'nal'])
 // block literals (their commands are in the AST already), and plain literals.
 const opaque = (e) => !e.literal && e.kind !== 'ScriptBlockExpressionAst'
 const launchers = new Set(['start-process', 'saps', 'start'])
+const paramName = (e) => e.kind === 'CommandParameterAst' ? e.text.slice(1).split(':')[0].toLowerCase() : null
+const abbreviates = (name, params) => name.length > 0 && params.some((p) => p.startsWith(name))
+// Values PowerShell binds as data, never as code or a member name.
+const dataParams = ['argumentlist', 'inputobject', 'throttlelimit', 'timeoutseconds', 'computername', 'credential', 'session', 'workingdirectory', 'erroraction', 'warningaction', 'informationaction', 'progressaction', 'errorvariable', 'warningvariable', 'informationvariable', 'outvariable', 'outbuffer', 'pipelinevariable']
+const codeParams = ['membername', 'process', 'begin', 'end', 'remainingscripts', 'parallel', 'scriptblock', 'initializationscript', 'filepath']
+
+/** Arguments that may select code or a member. Only values of unambiguous data parameters are skipped. */
+function codeArgs(args) {
+  const out = []
+  for (let i = 0; i < args.length; i++) {
+    const name = paramName(args[i])
+    if (name === null) { out.push(args[i]); continue }
+    const data = abbreviates(name, dataParams) && !abbreviates(name, codeParams)
+    if (args[i].text.includes(':')) { if (!data) out.push(args[i]); continue }
+    // An unknown parameter may be a switch, so the next token stays checked.
+    if (data) i++
+  }
+  return out
+}
+
+/** Start-Process FilePath: the -FilePath value wherever it appears, else the first argument. */
+function launchTarget(args) {
+  const index = args.findIndex((e) => { const name = paramName(e); return name !== null && abbreviates(name, ['filepath']) })
+  if (index < 0) return paramName(args[0] ?? {}) === null ? args[0] : undefined
+  return args[index].text.includes(':') ? undefined : args[index + 1]
+}
 const guarded = new Set([...kills, ...shells, ...invokers, ...evaluators, ...aliases, ...launchers, 'invoke-expression', 'iex', 'rtk'])
 
 /** Parse every shell request; quoted examples and comments stay data in the AST. */
@@ -150,17 +176,17 @@ export function assess(command, parse = (text) => inspect({ mode: 'parse', comma
     } else if (launchers.has(name) && !named(command)) {
       // Routed only by a dynamic construct elsewhere: a literal program still
       // launches, but a computed one could be a string-built taskkill.
-      const file = /^-f/i.test(elements[1]?.value ?? '') ? elements[2] : elements[1]
-      if (!file?.literal || file.value.startsWith('-') || guarded.has(leaf(file.value))) throw blocked('Start-Process target must be a literal program path')
+      const file = launchTarget(elements.slice(1))
+      if (!file?.literal || paramName(file) !== null || guarded.has(leaf(file.value))) throw blocked('Start-Process target must be a literal program path')
     } else if (launchers.has(name) || ['invoke-expression', 'iex'].includes(name)) {
       // These launch/evaluate arguments rather than printing them. A suspicious
       // request cannot earn a PID allowance through this alternate entry point.
       throw blocked('uninspectable process or expression wrapper')
     } else if (invokers.has(name)) {
       // ForEach-Object Kil* calls Process.Kill through a wildcard member name.
-      if (elements.slice(1).some((e) => e.killName || opaque(e))) throw blocked('member invocation by name')
+      if (codeArgs(elements.slice(1)).some((e) => e.killName || opaque(e))) throw blocked('member invocation by name')
     } else if (evaluators.has(name)) {
-      if (elements.slice(1).some(opaque)) throw blocked('dynamic script evaluation')
+      if (codeArgs(elements.slice(1)).some(opaque)) throw blocked('dynamic script evaluation')
     } else if (aliases.has(name)) {
       if (elements.slice(1).some((e) => !e.literal || guarded.has(leaf(e.value)))) throw blocked('alias to a guarded command')
     } else if (name === 'rtk') {
