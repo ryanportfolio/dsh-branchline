@@ -103,14 +103,15 @@ See [architecture.md](architecture.md) for mutation tokens, process isolation, W
 
 ## Local DSH customizations
 
-Two repo files capture machine-level DSH tweaks that live outside the plugin:
+Three repo files capture machine-level DSH tweaks that live outside the plugin:
 
 | File | Purpose |
 | --- | --- |
-| `scripts/dsh-core-overrides/apply-canonical-workspace-default.ps1` | Reapplies the canonical-workspace-default overrides to the DSH client runtime bundle in the npx cache: recency prefers canonical folders over worktree checkouts, and New Session does not anchor to a worktree session. Rerun by hand after cache eviction or a `dsh` version change; idempotent, verified with `node --check`. |
+| `scripts/dsh-core-overrides/apply-canonical-workspace-default.ps1` | Reapplies the canonical-workspace-default overrides to the DSH client runtime bundle in the npx cache: recency prefers canonical folders over worktree checkouts, and New Session does not anchor to a worktree session. Idempotent, verified with `node --check`. |
+| `scripts/dsh-core-overrides/apply-performance.ps1` | Patches the dsh 0.1.5-rc.2 bundles in the npx cache for memory and CPU: linear session list reconciliation, an off-stage session closing its history stream after 30 seconds (drafts, queue and pending sends stay), one abort promise per gateway stream read, and released input-queue and right-sidebar store subscriptions. Other versions are skipped with a warning. Each patch has its own `dsh-core-override: perf-<name>` marker; a file whose original text has changed is left untouched. `-Root <dir>` targets a scratch copy instead of the npx cache. Tested by `scripts/test-dsh-perf-overrides.ps1 -Source <node_modules\@deepseek-ai dir>`. |
 | [settings-template.yaml](settings-template.yaml) | Reference template for `~/.dsh/settings.yaml`: shell deadlines, OpenRouter retry policy and timeouts, pinned and hand-defined models, default agent preset and model. |
 
-The override script patches upstream runtime code in place and is never run by the launcher; applying it stays a manual step.
+Both override scripts patch upstream code in place. The launcher runs them before it starts DSH, after any running instance is closed; with `-KeepExisting` and a DSH instance still running, it skips them. Failures, and a package that npx has not extracted yet, only log a warning and never block the launch. To run a script by hand, stop DSH first; the next start loads the patched bundles.
 
 ## Launcher controls
 

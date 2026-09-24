@@ -74,9 +74,13 @@ function makeHarness(options: {
   readonly trackHandle?: boolean
   readonly locateMode?: 'ok' | 'none' | 'throw' | 'weird'
   readonly preservation?: Record<string, unknown>
+  readonly batch?: boolean
 } = {}): {
   readonly request: (body: unknown) => Promise<SessionReply>
   readonly assessPreservation: ReturnType<typeof vi.fn>
+  readonly batchAssess: ReturnType<typeof vi.fn>
+  readonly batchDashboard: ReturnType<typeof vi.fn>
+  readonly openPreservationBatch: ReturnType<typeof vi.fn>
   readonly dashboard: ReturnType<typeof vi.fn>
   readonly disposeAgent: ReturnType<typeof vi.fn>
   readonly purge: ReturnType<typeof vi.fn>
@@ -97,6 +101,9 @@ function makeHarness(options: {
       : { status: 'safe', reason: 'PR #21 merged and contains this exact HEAD', checkedAt: '2026-09-01T00:00:00.000Z' }
   })
   const dashboard = vi.fn(async () => ({ tasks: options.tasks ?? [taskView()], repositories: [], deliveryEnabled: false }))
+  const batchAssess = vi.fn(async () => assessPreservation())
+  const batchDashboard = vi.fn(async () => dashboard())
+  const openPreservationBatch = vi.fn(() => ({ dashboard: batchDashboard, assessPreservation: batchAssess }))
   const setState = vi.fn(async () => undefined)
   const attached = new Set(options.attached ?? [])
   const agentById = new Map(Object.entries(options.agentStatus ?? {}).map(([id, status]) => [id, { id, status }]))
@@ -155,6 +162,7 @@ function makeHarness(options: {
       dashboard,
       assessPreservation,
       purge,
+      ...(options.batch === true ? { openPreservationBatch } : {}),
     },
     storageDomain: { get: () => undefined },
     sessions,
@@ -211,7 +219,18 @@ function makeHarness(options: {
     if (state.status === undefined || state.body === undefined) throw new Error('handler produced no response')
     return { status: state.status, body: state.body }
   }
-  return { request, assessPreservation, dashboard, disposeAgent, purge, resumeAgent: () => agents.resume(), setState }
+  return {
+    request,
+    assessPreservation,
+    batchAssess,
+    batchDashboard,
+    openPreservationBatch,
+    dashboard,
+    disposeAgent,
+    purge,
+    resumeAgent: () => agents.resume(),
+    setState,
+  }
 }
 
 describe('dsh-session-delete host route', () => {
@@ -258,6 +277,36 @@ describe('dsh-session-delete host route', () => {
     ])
     expect(dashboard).toHaveBeenCalledTimes(1)
     expect(assessPreservation).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads readiness through one display batch and counts sharing sessions from batch paths', async () => {
+    const THIRD = 'session-55555555-5555-4555-8555-555555555555'
+    const harness = makeHarness({
+      batch: true,
+      sessions: [
+        { header: { id: SESSION, cwd: worktreePath } },
+        { header: { id: OTHER, cwd: join(worktreePath, 'nested') } },
+        { header: { id: THIRD, cwd: repositoryPath } },
+      ],
+    })
+    const { body } = await harness.request({ op: 'readiness', sessionIds: [SESSION, OTHER, THIRD] })
+    expect(body.value.sessions).toEqual([
+      expect.objectContaining({ sessionId: SESSION, readiness: expect.objectContaining({ status: 'shared' }) }),
+      expect.objectContaining({ sessionId: OTHER, readiness: expect.objectContaining({ status: 'shared' }) }),
+      expect.objectContaining({ sessionId: THIRD, readiness: expect.objectContaining({ status: 'no-worktree' }) }),
+    ])
+    expect(harness.openPreservationBatch).toHaveBeenCalledTimes(1)
+    expect(harness.batchDashboard).toHaveBeenCalledTimes(1)
+    expect(harness.batchAssess).toHaveBeenCalledTimes(1)
+  })
+
+  it('never uses the display batch to authorize deletion', async () => {
+    const harness = makeHarness({ batch: true, locateMode: 'none' })
+    const { status } = await harness.request({ op: 'delete', sessionId: SESSION, confirmation: SESSION })
+    expect(status).toBe(200)
+    expect(harness.openPreservationBatch).not.toHaveBeenCalled()
+    expect(harness.assessPreservation).toHaveBeenCalledTimes(1)
+    expect(harness.purge).toHaveBeenCalledWith(TASK_ID, { requirePreserved: true })
   })
 
   it('reports unknown proof and blocks normal deletion while preserving explicit force', async () => {

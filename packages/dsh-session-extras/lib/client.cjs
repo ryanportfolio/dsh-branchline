@@ -217,10 +217,10 @@ window.__ModuleLoader__.load({
 			const sessions = props.sessions;
 			const sessionId = props.sessionId;
 
-			const state = react.useSyncExternalStore(
-				(fn) => directory.subscribe(fn),
-				() => directory.getSnapshot(),
-			);
+			// Stable store callbacks: an inline subscribe would resubscribe every render.
+			const subscribeDirectory = react.useCallback((fn) => directory.subscribe(fn), [directory]);
+			const getDirectorySnapshot = react.useCallback(() => directory.getSnapshot(), [directory]);
+			const state = react.useSyncExternalStore(subscribeDirectory, getDirectorySnapshot);
 
 			const [open, setOpen] = react.useState(false);
 			const [pane, setPane] = react.useState("root");
@@ -240,6 +240,15 @@ window.__ModuleLoader__.load({
 			const [metaReload, setMetaReload] = react.useState(0);
 			const [contextFilter, setContextFilter] = react.useState(loadFilter);
 
+			// Each read replays the whole session log host-side: fetch on mount and
+			// session change, then once per finished turn (running true -> false).
+			const [turnsFinished, setTurnsFinished] = react.useState(0);
+			const wasRunningRef = react.useRef(running);
+			react.useEffect(() => {
+				if (wasRunningRef.current && !running) setTurnsFinished((n) => n + 1);
+				wasRunningRef.current = running;
+			}, [running]);
+
 			react.useEffect(() => {
 				if (!available) return undefined;
 				let cancelled = false;
@@ -254,7 +263,7 @@ window.__ModuleLoader__.load({
 				return () => {
 					cancelled = true;
 				};
-			}, [available, sessionId, running]);
+			}, [available, sessionId, turnsFinished]);
 
 			react.useEffect(() => {
 				if (!open || pane !== "model") return undefined;
@@ -1205,16 +1214,35 @@ window.__ModuleLoader__.load({
 
 			react.useEffect(() => {
 				const onSelectionChange = () => considerSelection();
-				const onMove = () => considerSelection();
 				document.addEventListener("selectionchange", onSelectionChange);
+				return () => document.removeEventListener("selectionchange", onSelectionChange);
+			}, [considerSelection]);
+
+			// Scroll/resize only move an existing popup: listen while one is shown, and
+			// coalesce the layout reads to one per animation frame.
+			const hasMark = mark != null;
+			react.useEffect(() => {
+				if (!hasMark) return undefined;
+				let frame = null;
+				const onMove = () => {
+					if (typeof requestAnimationFrame !== "function") {
+						considerSelection();
+						return;
+					}
+					if (frame !== null) return;
+					frame = requestAnimationFrame(() => {
+						frame = null;
+						considerSelection();
+					});
+				};
 				window.addEventListener("scroll", onMove, true);
 				window.addEventListener("resize", onMove);
 				return () => {
-					document.removeEventListener("selectionchange", onSelectionChange);
 					window.removeEventListener("scroll", onMove, true);
 					window.removeEventListener("resize", onMove);
+					if (frame !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(frame);
 				};
-			}, [considerSelection]);
+			}, [hasMark, considerSelection]);
 
 			const reply = react.useCallback(() => {
 				if (mark == null) return;

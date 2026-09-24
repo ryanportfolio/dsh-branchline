@@ -73,7 +73,10 @@ export interface TaskRecord {
   readonly lastError?: string
 }
 
-/** A task plus fresh Git state for the Web and command consumers. */
+/**
+ * A task plus fresh Git state for the Web and command consumers.
+ * `lastValidation.stdout` and `stderr` carry only the output tail; the store keeps the full capture.
+ */
 export interface TaskView extends TaskRecord {
   readonly headCommit: string | null
   readonly currentBranch: string | null
@@ -198,6 +201,17 @@ export interface PurgeOutcome {
   readonly recordRemoved: boolean
 }
 
+/**
+ * Short-lived, display-only preservation reader for one batch of status badges.
+ * It reuses the views from its own dashboard read and refreshes each repository's
+ * remote at most once. Guarded deletion must use `assessPreservation` or `purge`
+ * with `requirePreserved`, which always refresh from scratch.
+ */
+export interface PreservationBatch {
+  dashboard(repository?: string): Promise<DashboardView>
+  assessPreservation(id: TaskId): Promise<WorktreePreservation>
+}
+
 /** Manager contract used by Host adapters and tests. */
 export interface WorktreeStudioManager {
   create(request: CreateTaskRequest): Promise<TaskView>
@@ -205,6 +219,8 @@ export interface WorktreeStudioManager {
   inspect(id: TaskId): Promise<{ readonly task: TaskView; readonly review: ReviewView }>
   previewMerge(id: TaskId, targetPath?: string): Promise<MergePreview>
   assessPreservation(id: TaskId): Promise<WorktreePreservation>
+  /** Open a display-only batch; never use its answers to authorize deletion. */
+  openPreservationBatch(): PreservationBatch
   validate(id: TaskId, changeToken: string, command?: readonly string[]): Promise<TaskView>
   deliver(id: TaskId, changeToken: string, targetPath?: string): Promise<TaskView>
   archive(request: TaskMutationRequest): Promise<TaskView>

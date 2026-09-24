@@ -28,6 +28,9 @@ describe('PowerShell AST policy (parse only, never execution)', () => {
     'Stop-Process -Id 40,50', 'Stop-Process -Id $target',
     'Stop-Process -Id 40; Write-Output done', 'Stop-Process -Id 40 > out.txt',
     'task`kill /F /IM node.exe', '& $command /F /IM node.exe',
+    // Quote-split names ("taskk''ill" parses as taskkill) evade the keyword
+    // pre-filter; a chained `&&` is what routes them to the parser.
+    "npm test && taskk''ill /F /IM node.exe",
     'cmd /c "taskkill /F /IM node.exe"', 'cmd /c taskkill /F /IM node.exe',
     'cmd /c "task^kill /F /IM node.exe"',
     'pwsh -NoProfile -Command "Stop-Process -Name node"',

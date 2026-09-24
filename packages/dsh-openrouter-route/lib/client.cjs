@@ -144,36 +144,63 @@ window.__ModuleLoader__.load({
 			}
 		}
 
+		/** Chips for the same model share one in-flight status read. */
+		const statusInflight = new Map();
+
+		function getStatusShared(model) {
+			const pending = statusInflight.get(model);
+			if (pending !== undefined) return pending;
+			const request = getStatus(model).finally(() => {
+				if (statusInflight.get(model) === request) statusInflight.delete(model);
+			});
+			statusInflight.set(model, request);
+			return request;
+		}
+
+		function subscribeSessionList(cb) {
+			return sessionsService != null && sessionsService.list != null ? sessionsService.list.subscribe(cb) : () => {};
+		}
+
 		function ProviderChip(props) {
-			const [sessionId, setSessionId] = react.useState(() => currentSessionId(props));
-			const [model, setModel] = react.useState(() => currentModel(currentSessionId(props)));
+			// Subscribe to the stores the readout depends on, so it tracks them without
+			// re-resolving on every owner render.
+			const sessionId = react.useSyncExternalStore(subscribeSessionList, () => currentSessionId(props));
+			const subscribeDirectory = react.useCallback(
+				(cb) => {
+					if (sessionId === null || modelDirectoriesService == null) return () => {};
+					try {
+						const directory = modelDirectoriesService.directoryFor(sessionId);
+						if (directory == null || directory.store == null) return () => {};
+						return directory.store.subscribe(cb);
+					} catch {
+						return () => {};
+					}
+				},
+				[sessionId],
+			);
+			const model = react.useSyncExternalStore(subscribeDirectory, () => currentModel(sessionId));
 			const [open, setOpen] = react.useState(false);
 			const [info, setInfo] = react.useState(null);
 			const [error, setError] = react.useState(null);
 			const [busy, setBusy] = react.useState(false);
 			const rootRef = react.useRef(null);
 
-			// Resolve session/model once the services settle, then on owner changes.
-			react.useEffect(() => {
-				const nextSession = currentSessionId(props);
-				setSessionId(nextSession);
-				setModel(currentModel(nextSession));
-			}, [props]);
-
 			const running = useRunning(sessionsService, sessionId);
 
 			const load = react.useCallback(() => {
 				if (model === null) return;
 				let cancelled = false;
-				getStatus(model).then(
+				let retry = null;
+				getStatusShared(model).then(
 					(value) => {
 						if (cancelled) return;
 						setInfo(value);
 						setError(null);
 						// Provider table still fetching host-side: one delayed retry.
 						if (value.providers.length === 0) {
-							setTimeout(() => {
-								getStatus(model).then(
+							retry = setTimeout(() => {
+								retry = null;
+								getStatusShared(model).then(
 									(late) => {
 										if (!cancelled) setInfo(late);
 									},
@@ -188,6 +215,7 @@ window.__ModuleLoader__.load({
 				);
 				return () => {
 					cancelled = true;
+					if (retry !== null) clearTimeout(retry);
 				};
 			}, [model]);
 

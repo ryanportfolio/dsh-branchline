@@ -101,21 +101,41 @@ async function archivedRestore(ctx, sessionId) {
   return { ok: true }
 }
 
+/**
+ * Concurrent reads for one session share a single log replay. sessionQuery
+ * exposes no cheap change marker (every read path clones the full log), so
+ * results are not cached past the in-flight read.
+ */
+const contextInflight = new Map()
+
 /** Resolve the last request/context model for one session (in-flight or last). */
-async function contextModel(ctx, sessionId) {
-  if (typeof sessionId !== 'string' || sessionId === '') return { hasRun: false }
+function contextModel(ctx, sessionId) {
+  if (typeof sessionId !== 'string' || sessionId === '') return Promise.resolve({ hasRun: false })
+  const pending = contextInflight.get(sessionId)
+  if (pending !== undefined && pending.ctx === ctx) return pending.promise
+  const promise = readContextModel(ctx, sessionId).finally(() => {
+    if (contextInflight.get(sessionId)?.promise === promise) contextInflight.delete(sessionId)
+  })
+  contextInflight.set(sessionId, { ctx, promise })
+  return promise
+}
+
+async function readContextModel(ctx, sessionId) {
   const loaded = await ctx.sessionQuery.readSession(sessionId)
   let provider
   let model
   let contextWindow
   const events = loaded == null ? [] : loaded.events
   if (Array.isArray(events)) {
-    for (const ev of events) {
+    // The newest matching event wins, so scan from the end.
+    for (let i = events.length - 1; i >= 0; i--) {
+      const ev = events[i]
       if (ev != null && ev.type === 'request/context' && ev.data != null) {
         if (typeof ev.data.provider === 'string' && typeof ev.data.model === 'string') {
           provider = ev.data.provider
           model = ev.data.model
           contextWindow = ev.data.contextWindow
+          break
         }
       }
     }
