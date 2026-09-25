@@ -97,11 +97,13 @@ function makeSession() {
   await session.open()
   assert.equal(session.openState, 'open')
   assert.equal(session.events.length, 3)
+  session.handleBlank(false) // host summary: this log has history
   session.handleMuxEnvelope('rpc-a', { type: 'approval/requested', sessionId: 's1', approvalId: 'a1' })
   assert.equal(session.getSnapshot().pending.length, 1, 'approval pending')
   assert.equal(session.park(), true, 'open session parks')
   assert.equal(session.openState, 'cold')
   assert.equal(session.events.length, 0, 'window released')
+  assert.equal(session.conversation.inputs.size, 0, 'assembled transcript released')
   assert.equal(session.getSnapshot().pending.length, 1, 'pending approval kept while parked')
   assert.equal(session.park(), false, 'cold session does not park twice')
   // Live events for a parked session are dropped, not assembled.
@@ -120,6 +122,16 @@ function makeSession() {
   assert.equal(session.openState, 'open', 'reopen after park')
   assert.equal(calls.history, 2)
   assert.deepEqual(session.events.map((e) => e.seq), [1, 2, 3, 4], 'reopen backfills from history')
+  assert.equal(session.conversation.inputs.size, 4, 'reopen rebuilds the assembled transcript')
+  // Hero screen keys off the host blank bit, not the (now empty) transcript.
+  for (const [hostBlank, expectHero] of [[false, false], [true, true]]) {
+    const { session: h } = makeSession()
+    await h.open()
+    h.handleBlank(hostBlank)
+    assert.equal(h.park(), true)
+    assert.equal(h.getSnapshot().pending.length + h.getSnapshot().queue.length, 0)
+    assert.equal(h.getSnapshot().composerPhase === 'blank', expectHero, 'parked hero state follows host blank bit (' + hostBlank + ')')
+  }
   // Guards.
   for (const [label, setup] of [
     ['loading older', (s) => { s.loadingOlder = true }],

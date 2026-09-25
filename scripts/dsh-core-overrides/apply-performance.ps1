@@ -434,6 +434,8 @@ $patchSets['0.1.1-rc.2'] = @(
 				this.baseSeq = 0;
 				this.liveBuffer = [];
 				this.parked = true;
+				// Release the assembled transcript too; open() rebuilds it through installWindow on return.
+				this.conversation.replaceWindow([], false);
 				this.notifier.markDirty();
 				return true;
 			}
