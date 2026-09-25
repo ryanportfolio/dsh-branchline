@@ -455,4 +455,38 @@ assert.ok(embeddedCss('dsh-client-ui-conversation').join('\n').includes('animati
   }
 }
 
+// --- subagent timing (host) -------------------------------------------------
+
+{
+  const source = readFileSync(join(scope, 'dsh-subagent', 'lib', 'index.js'), 'utf8')
+  assert.ok(source.includes('dsh-core-override: perf-subagent-timing-throttle'), 'dsh-subagent: timing throttle marker present')
+  // Lift the pure apply() out of the projection definition.
+  const start = source.indexOf('\tapply: (state, event) => {', source.indexOf('key: "subagentTiming"'))
+  assert.ok(start > 0, 'subagentTiming apply found')
+  let depth = 0
+  let end = source.indexOf('{', start)
+  for (; end < source.length; end++) {
+    if (source[end] === '{') depth++
+    else if (source[end] === '}' && --depth === 0) break
+  }
+  const apply = new Function(`return ${source.slice(source.indexOf('(state, event)', start), end + 1)}`)()
+  const run = (events) => {
+    let state = { descriptorSeen: true, settledMs: 0 }
+    const states = [state]
+    for (const event of events) states.push(state = apply(state, event))
+    return states
+  }
+  const chunks = Array.from({ length: 30 }, (_, i) => ({ type: 'assistant/chunk', time: 1000 + i * 100 }))
+  const states = run([{ type: 'turn/start', time: 1000 }, ...chunks, { type: 'turn/end', time: 4200 }])
+  const changes = states.slice(2, -1).filter((s, i) => s !== states[i + 1]).length
+  assert.ok(changes <= 3, `per-token chunks change state at most once per second (${changes} changes over 3 s)`)
+  const last = states.at(-2)
+  assert.ok(chunks.at(-1).time - last.active.through < 1000, 'through stays within one second of the last event')
+  assert.equal(states.at(-1).settledMs, 3200, 'turn/end settles the exact duration')
+  assert.equal(states.at(-1).active, undefined, 'turn/end closes the interval')
+  // Unchanged state is the same reference, so the registry skips the broadcast.
+  const quiet = run([{ type: 'turn/start', time: 0 }, { type: 'assistant/chunk', time: 10 }])
+  assert.equal(quiet[2], quiet[1], 'sub-second event returns the same state object')
+}
+
 console.log('smoke-performance-011: all checks passed')
