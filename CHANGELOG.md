@@ -13,11 +13,13 @@ All notable changes to this project are documented in this file.
 - OpenRouter cost chips and minimum-context filters in the enhanced model picker, defaulting to models with at least 256,000 context tokens.
 - `scripts/dsh-core-overrides/apply-canonical-workspace-default.ps1`, which reapplies the canonical-workspace-default overrides to the DSH client runtime bundle in the npx cache after cache eviction or a `dsh` version change.
 - `scripts/dsh-core-overrides/apply-performance.ps1`, which patches the dsh 0.1.5-rc.2 bundles in the npx cache: linear session list reconciliation (upstream 53046b21b4), off-stage sessions closing their history stream after 30 seconds, one abort promise per gateway stream read (upstream 4cfd292a7b), and released input-queue (upstream ba51e5483e) and right-sidebar store (upstream 490a79c693) subscriptions. Tested by `scripts/test-dsh-perf-overrides.ps1`.
+- A dsh 0.1.1-rc.2 set in `apply-performance.ps1`, whose patch table is now keyed by dsh version: off-stage sessions go cold after 30 seconds so their live events stop being assembled, the composer input shell republishes only on queue changes and releases its subscription, the Trajectory view snapshot is computed on first read, the session list views skip content-equal updates, per-chunk assembly skips a settled visibility scan, running row sweeps animate `transform` instead of `left`, and the running turn label and sidebar state dot are static. Checked by `scripts/dsh-core-overrides/smoke-performance-011.mjs`.
 - The launcher reapplies both DSH core override scripts before it starts DSH. It skips them while a DSH instance kept by `-KeepExisting` is still running, and a failure only logs a warning.
 - `docs/settings-template.yaml`, a reference template for the `~/.dsh/settings.yaml` customizations this setup relies on: shell deadlines, OpenRouter retry policy and timeouts, pinned and custom models, default agent preset and model.
 
 ### Fixed
 
+- `apply-canonical-workspace-default.ps1` found no original text on an unpatched bundle when the script was checked out with CRLF line endings; it now matches LF bundles, reads and writes UTF-8 without a BOM on Windows PowerShell 5.1, and accepts `-Root` for scratch copies.
 - Allow permanent deletion of idle sessions by closing client selection and disposing the exact tracked Agent lifecycle handle; active model or tool work remains blocked.
 - Raise the OpenRouter routing proxy request limit from 8 MiB to 64 MiB and return a descriptive 413 response when it is exceeded.
 - Show OpenRouter input/output prices without dollar signs and emphasize only the numeric values.

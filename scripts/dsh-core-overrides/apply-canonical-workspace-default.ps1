@@ -9,6 +9,14 @@
 # The npx cache drops the edits on cache eviction or a dsh version change; run
 # this script again after that happens. Idempotent: each patch is skipped when
 # its marker is already present.
+#
+#   .\apply-canonical-workspace-default.ps1              # every npx cache dir
+#   .\apply-canonical-workspace-default.ps1 -Root <dir>  # a node_modules\@deepseek-ai
+#                                                        # dir (tests use scratch copies)
+
+param(
+    [string]$Root
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -87,17 +95,31 @@ $replacementSession = @'
 				const target = workspaceId ?? currentWorkspaceId ?? workspace.recentWorkspaceId;
 '@
 
-$targets = Get-ChildItem "$env:LOCALAPPDATA\npm-cache\_npx" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-    Join-Path $_.FullName 'node_modules\@deepseek-ai\dsh-client-runtime\lib\client.js'
-} | Where-Object { Test-Path $_ }
+# The bundle uses LF; a CRLF checkout of this script puts CRLF in the here-strings.
+$originalRecent = $originalRecent.Replace("`r`n", "`n")
+$replacementRecent = $replacementRecent.Replace("`r`n", "`n")
+$originalSession = $originalSession.Replace("`r`n", "`n")
+$replacementSession = $replacementSession.Replace("`r`n", "`n")
+
+if ($Root) {
+    $targets = @(Join-Path $Root 'dsh-client-runtime\lib\client.js') | Where-Object { Test-Path $_ }
+} else {
+    $targets = Get-ChildItem "$env:LOCALAPPDATA\npm-cache\_npx" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        Join-Path $_.FullName 'node_modules\@deepseek-ai\dsh-client-runtime\lib\client.js'
+    } | Where-Object { Test-Path $_ }
+}
 
 if (-not $targets) {
     Write-Warning 'No dsh-client-runtime lib/client.js found under the npx cache.'
     exit 1
 }
 
+# Explicit UTF-8 without BOM: Windows PowerShell 5.1 defaults would re-encode
+# the bundle's non-ASCII text.
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+
 foreach ($file in $targets) {
-    $text = Get-Content $file -Raw
+    $text = [IO.File]::ReadAllText($file, $utf8)
     $changed = $false
 
     if (-not $text.Contains($marker)) {
@@ -119,7 +141,7 @@ foreach ($file in $targets) {
         continue
     }
 
-    Set-Content -Path $file -Value $text -NoNewline -Encoding UTF8
+    [IO.File]::WriteAllText($file, $text, $utf8)
     node --check $file
     if ($LASTEXITCODE -ne 0) { throw "syntax check failed after patching $file" }
     Write-Host "patched: $file"
