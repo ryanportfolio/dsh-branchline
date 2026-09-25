@@ -77,8 +77,9 @@ $suites = @{
             'dsh-client-ui-skill'        = @('lib\*.js')
             'dsh-client-ui-workspace'    = @('lib\*.js')
             'dsh-web-frontend'           = @('dist\assets\*.css')
+            'dsh-subagent'               = @('lib\*.js')
         }
-        Targets  = @('dsh-client-runtime\lib\client.js', 'dsh-client-ui-conversation\lib\client.js', 'dsh-client-ui-trajectory\lib\client.js', 'dsh-client-ui-tool\lib\client.js', 'dsh-client-ui-skill\lib\client.js', 'dsh-client-ui-workspace\lib\client.js', 'dsh-web-frontend\dist\assets\index-C6eRlFa6.css')
+        Targets  = @('dsh-client-runtime\lib\client.js', 'dsh-client-ui-conversation\lib\client.js', 'dsh-client-ui-trajectory\lib\client.js', 'dsh-client-ui-tool\lib\client.js', 'dsh-client-ui-skill\lib\client.js', 'dsh-client-ui-workspace\lib\client.js', 'dsh-web-frontend\dist\assets\index-C6eRlFa6.css', 'dsh-subagent\lib\index.js')
         Smoke    = 'smoke-performance-011.mjs'
         Tamper   = @{ File = 'dsh-client-runtime\lib\client.js'; From = 'deferredRemovals = /* @__PURE__ */ new Set();'; To = 'deferredRemovals = /* @__PURE__ */ new Set() ;'; Patch = 'perf-session-park' }
     }

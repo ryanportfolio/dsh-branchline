@@ -757,6 +757,41 @@ $patchSets['0.1.1-rc.2'] = @(
                 Replacement = '/* dsh-core-override: perf-state-dot-static */._cell_10orb_54{fill:currentColor;opacity:.6;animation:none}'
             }
         )
+    },
+    @{
+        # Host: subagentTiming advanced `through` on every event of a running
+        # turn (each streamed token), so every token broadcast a projection and
+        # every client rebuilt its whole session list. The only reader uses the
+        # live clock while running and whole seconds otherwise, so advance at
+        # most once per second; returning the same state suppresses the broadcast.
+        Package = 'dsh-subagent'
+        File    = 'lib\index.js'
+        Name    = 'subagent-timing-throttle'
+        Hunks   = @(
+            @{
+                Original = @'
+		if (state.active === void 0) return state;
+		return {
+			...state,
+			active: {
+				...state.active,
+				through: event.time
+			}
+		};
+'@
+                Replacement = @'
+		// Advance at most once per second: the reader shows whole seconds and uses the live clock while running. [dsh-core-override: perf-subagent-timing-throttle]
+		if (state.active === void 0 || event.time - state.active.through < 1e3) return state;
+		return {
+			...state,
+			active: {
+				...state.active,
+				through: event.time
+			}
+		};
+'@
+            }
+        )
     }
 )
 
