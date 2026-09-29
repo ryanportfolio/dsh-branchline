@@ -48,7 +48,7 @@ Give each reviewer a self-contained prompt and fresh context without the convers
 ```bash
 mkdir -p .tmp
 RUN=$(mktemp -d .tmp/impartial-review-XXXXXXXX)
-codex exec -m gpt-6-sol -c model_reasoning_effort=high -s read-only \
+codex exec -m gpt-6.1-sol -c model_reasoning_effort=high -s read-only \
   -o "$RUN/A.md" - < "$RUN/prompt-A.txt" > "$RUN/A.log" 2>&1
 ```
 
@@ -56,7 +56,7 @@ Write each bucket prompt to `$RUN/prompt-<bucket>.txt` and feed it on stdin with
 
 Give every run its own `$RUN` directory. Require each process to exit successfully with a non-empty new report, and record its exit status, report hash, and observed model/effort. A report with failed inspection has incomplete coverage despite exit 0. Recheck source identity before accepting findings. Follow `codex-review` for bounded process monitoring; log silence alone does not establish a stall.
 
-`gpt-6-sol` is an example configuration, not proof of availability. Inspect current local help/auth first. If a model is rejected, report the failure; any usage-consuming retry or fallback needs existing explicit authorization or user agreement. Record the requested and actually reported model separately, using "unverified" when the process does not reveal resolution. If neither agents nor an authenticated CLI can supply fresh context, disclose the missing independent review; self-review cannot replace it.
+`gpt-6.1-sol` is an example configuration, not proof of availability. Inspect current local help/auth first. If a model is rejected, report the failure; any usage-consuming retry or fallback needs existing explicit authorization or user agreement. Record the requested and actually reported model separately, using "unverified" when the process does not reveal resolution. If neither agents nor an authenticated CLI can supply fresh context, disclose the missing independent review; self-review cannot replace it.
 
 Reviewers spawned from Codex share the author's vendor, so this buys fresh context, not a cross-vendor second opinion. Say which one you ran rather than implying vendor independence.
 

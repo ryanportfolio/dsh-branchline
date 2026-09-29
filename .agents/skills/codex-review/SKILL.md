@@ -1,6 +1,6 @@
 ---
 name: "codex-review"
-description: "Second-opinion review. Drives OpenAI Codex CLI (codex exec review, gpt-6-sol, high reasoning) over a PR, branch, commit, or uncommitted diff, then verifies each finding. Trigger: $codex-review, \"have Codex/Sol review this\"."
+description: "Second-opinion review. Drives OpenAI Codex CLI (codex exec review, gpt-6.1-sol, high reasoning) over a PR, branch, commit, or uncommitted diff, then verifies each finding. Trigger: $codex-review, \"have Codex/Sol review this\"."
 ---
 
 # Codex review
@@ -13,7 +13,7 @@ The requested review does not authorize fixes, commits, pushes, PRs, merges, pub
 
 Inspect `codex --version`, `codex login status`, and `codex exec review --help` locally before inference. Verify current support for the selector, the custom `[PROMPT]` argument, model and effort configuration, and output options used below; examples are not product guarantees. Do not probe models by spending usage.
 
-**Model: always the newest Sol, named by its exact id.** `-m` takes a literal model id; there is no "latest Sol" alias, so the command pins one. The pin is `gpt-6-sol`. Before launch, check the `model` in `~/.codex/config.toml` and the Sol entries at developers.openai.com/api/docs/models. If a newer Sol exists, run with its exact id and tell the user the pin is stale. Do not edit pins during the review: bumping every copy that pins `gpt-6-sol` (the `.claude` and `.agents` copies of this skill, the global `~/.claude/skills/codex-review`, `codex-fullreview`, and the Codex example in `impartial-review`) is a separate change the user authorizes. An explicit user model choice still wins. `astra-review` is exempt: it stays on Astra.
+**Model: always the newest Sol, named by its exact id.** `-m` takes a literal model id; there is no "latest Sol" alias, so the command pins one. The pin is `gpt-6.1-sol`. Before launch, check the `model` in `~/.codex/config.toml` and the Sol entries at developers.openai.com/api/docs/models. If a newer Sol exists, run with its exact id and tell the user the pin is stale. Do not edit pins during the review: bumping every copy that pins `gpt-6.1-sol` (the `.claude` and `.agents` copies of this skill, the global `~/.claude/skills/codex-review`, `codex-fullreview`, and the Codex example in `impartial-review`) is a separate change the user authorizes. An explicit user model choice still wins. `astra-review` is exempt: it stays on Astra.
 
 Require the intended ChatGPT subscription authentication route. If logged out, ask the user to log in through their own terminal. If authentication or billing is ambiguous, stop before inference; never print credentials or switch to an API key or paid credits. A user-authorized alternative route must be explicit.
 
@@ -46,9 +46,9 @@ RUN=$(mktemp -d .tmp/codex-review-XXXXXXXX)
 git fetch origin main
 BASE=$(git merge-base origin/main HEAD); HEAD_SHA=$(git rev-parse HEAD)
 # External-review path (.agents/skills/external-review/SKILL.md exists):
-codex exec review "Read .agents/skills/external-review/SKILL.md completely and follow it for this review of the branch diff: base $BASE, head $HEAD_SHA. Read the diff with git diff $BASE $HEAD_SHA. Leaf review: no agents, no nested reviews, no edits." -m gpt-6-sol -c model_reasoning_effort=high -o "$RUN/report.md" < /dev/null > "$RUN/run.log" 2>&1
+codex exec review "Read .agents/skills/external-review/SKILL.md completely and follow it for this review of the branch diff: base $BASE, head $HEAD_SHA. Read the diff with git diff $BASE $HEAD_SHA. Leaf review: no agents, no nested reviews, no edits." -m gpt-6.1-sol -c model_reasoning_effort=high -o "$RUN/report.md" < /dev/null > "$RUN/run.log" 2>&1
 # Selector path (no external-review skill):
-codex exec review --base origin/main -m gpt-6-sol -c model_reasoning_effort=high -o "$RUN/report.md" < /dev/null > "$RUN/run.log" 2>&1
+codex exec review --base origin/main -m gpt-6.1-sol -c model_reasoning_effort=high -o "$RUN/report.md" < /dev/null > "$RUN/run.log" 2>&1
 ```
 
 On the external-review path each scope has its own complete prompt. Substitute the resolved SHAs; append only a focus the user requests (below):
