@@ -31,6 +31,10 @@ jobs:
           node-version: 22.19.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # pnpm can rewrite a drifted lockfile without failing; the launcher then
+      # finds a dirty checkout on users' machines.
+      - name: Verify lockfile is in sync
+        run: git diff --exit-code -- pnpm-lock.yaml
       - run: pnpm run typecheck
       - run: pnpm test
       - run: pnpm run build
