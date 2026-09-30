@@ -554,19 +554,53 @@ function Sync-PluginSource {
         $ahead = @(& git -C $repo rev-list --count 'origin/main..HEAD' 2>$null)
         if ($ahead.Count -gt 0 -and [int]$ahead[0] -gt 0) { throw ("plugin checkout is " + $ahead[0] + " commit(s) ahead of origin/main; push them first - the launcher serves origin/main only") }
         $remote = ([string](& git -C $repo rev-parse origin/main 2>$null)).Trim()
+
+        # pnpm can rewrite a drifted pnpm-lock.yaml even under --frozen-lockfile.
+        # The checkout was verified clean above, so restoring the committed copy
+        # loses nothing and keeps the next launch from refusing a dirty checkout.
+        $install = {
+            Push-Location $repo
+            try {
+                & $pnpmName @pnpmLead install --frozen-lockfile 2>&1 | ForEach-Object { $detail.Add($_) }
+                $installExit = $LASTEXITCODE
+            } finally {
+                Pop-Location
+            }
+            $lockState = Invoke-Git -C $repo status --porcelain -- pnpm-lock.yaml
+            if ($lockState.Ok -and @($lockState.Out | Where-Object { $_ }).Count -gt 0) {
+                $restore = Invoke-Git -C $repo checkout -- pnpm-lock.yaml
+                if (-not $restore.Ok) { throw ('could not restore pnpm-lock.yaml: ' + ($restore.Out -join ' ')) }
+                & $write '[warn] pnpm rewrote pnpm-lock.yaml; restored the committed copy. The lockfile on main is out of sync with package.json.'
+            }
+            if ($installExit -ne 0) { throw 'pnpm install failed' }
+        }
+
+        # Build through the checkout's own binaries: pnpm lifecycle scripts
+        # invoke `pnpm` internally, which is not guaranteed on PATH. The local
+        # tsc/tsdown shims avoid the dependency entirely. Returns the failure
+        # message, or $null on success.
+        $build = {
+            Push-Location $repo
+            try {
+                & .\node_modules\.bin\tsc.cmd -p tsconfig.build.json 2>&1 | ForEach-Object { $detail.Add($_) }
+                if ($LASTEXITCODE -ne 0) { return 'plugin type build failed' }
+                & .\node_modules\.bin\tsdown.cmd 2>&1 | ForEach-Object { $detail.Add($_) }
+                if ($LASTEXITCODE -ne 0) { return 'plugin bundle build failed' }
+                return $null
+            } catch {
+                return ('plugin build could not run: ' + $_.Exception.Message)
+            } finally {
+                Pop-Location
+            }
+        }
+
         if ($local -ne $remote) {
             & git -C $repo merge --ff-only origin/main 2>&1 | ForEach-Object { $detail.Add($_) }
             if ($LASTEXITCODE -ne 0) { throw 'fast-forward to origin/main failed (local history diverged from origin?)' }
             & $write ('plugin source synced to origin/main @ ' + $remote.Substring(0, [Math]::Min(12, $remote.Length)))
             if (Test-PluginDependencyChange -Repo $repo -Before $local -After $remote) {
                 & $write 'plugin deps changed; reinstalling'
-                Push-Location $repo
-                try {
-                    & $pnpmName @pnpmLead install --frozen-lockfile 2>&1 | ForEach-Object { $detail.Add($_) }
-                    if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
-                } finally {
-                    Pop-Location
-                }
+                & $install
             }
         } else {
             & $write ('plugin source already at origin/main @ ' + $local.Substring(0, [Math]::Min(12, $local.Length)))
@@ -577,27 +611,24 @@ function Sync-PluginSource {
         $shims = @('tsc.cmd', 'tsdown.cmd') | ForEach-Object { Join-Path $repo "node_modules\.bin\$_" }
         if (@($shims | Where-Object { -not (Test-Path $_) }).Count -gt 0) {
             & $write 'plugin node_modules missing or incomplete; installing'
-            Push-Location $repo
-            try {
-                & $pnpmName @pnpmLead install --frozen-lockfile 2>&1 | ForEach-Object { $detail.Add($_) }
-                if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
-            } finally {
-                Pop-Location
-            }
+            & $install
         }
 
-        # Build through the checkout's own binaries: pnpm lifecycle scripts
-        # invoke `pnpm` internally, which is not guaranteed on PATH. The local
-        # tsc/tsdown shims avoid the dependency entirely.
         & $write 'plugin bundle rebuild'
-        Push-Location $repo
-        try {
-            & .\node_modules\.bin\tsc.cmd -p tsconfig.build.json 2>&1 | ForEach-Object { $detail.Add($_) }
-            if ($LASTEXITCODE -ne 0) { throw 'plugin type build failed' }
-            & .\node_modules\.bin\tsdown.cmd 2>&1 | ForEach-Object { $detail.Add($_) }
-            if ($LASTEXITCODE -ne 0) { throw 'plugin bundle build failed' }
-        } finally {
-            Pop-Location
+        $failure = & $build
+        if ($failure) {
+            # main passed CI, so a local build failure most likely means damaged
+            # dependencies. Reinstall from scratch and retry once. rmdir removes
+            # pnpm's junctions without following them into the package store.
+            & $write ($failure + '; reinstalling plugin dependencies from scratch and retrying once')
+            $modules = Join-Path $repo 'node_modules'
+            if (Test-Path -LiteralPath $modules) {
+                & cmd.exe /d /c rmdir /s /q $modules 2>&1 | ForEach-Object { $detail.Add($_) }
+                if (Test-Path -LiteralPath $modules) { throw ('could not remove ' + $modules + '; close programs using it and retry') }
+            }
+            & $install
+            $failure = & $build
+            if ($failure) { throw $failure }
         }
         if (-not (Test-Path (Join-Path $repo 'lib\client.cjs'))) { throw 'plugin build produced no lib/client.cjs' }
         if (-not (Test-Path (Join-Path $repo 'lib\index.js'))) { throw 'plugin build produced no lib/index.js' }

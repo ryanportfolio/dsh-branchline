@@ -23,7 +23,13 @@ function git {
 function pnpm {
     if (($args -join ' ') -ne 'install --frozen-lockfile') { throw 'unexpected package-manager call' }
     $script:installs++
+    if ($script:onInstall) { & $script:onInstall }
     $global:LASTEXITCODE = 0
+}
+function Write-Shims([int]$ExitCode) {
+    New-Item -ItemType Directory $bin -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $bin 'tsc.cmd'), "@exit /b $ExitCode`r`n")
+    [IO.File]::WriteAllText((Join-Path $bin 'tsdown.cmd'), "@exit /b 0`r`n")
 }
 function Assert-Equal($Actual, $Expected, $Label) {
     if ($Actual -cne $Expected) { throw "$Label expected '$Expected', got '$Actual'" }
@@ -38,6 +44,8 @@ try {
     Git-Fixture config user.email 'fixture@example.invalid'
     [IO.File]::WriteAllText((Join-Path $fixture '.gitignore'), "node_modules/`nlib/`n")
     [IO.File]::WriteAllText((Join-Path $fixture 'package.json'), '{"version":"1.0.0"}')
+    $lockText = "lockfileVersion: '9.0'`n"
+    [IO.File]::WriteAllText((Join-Path $fixture 'pnpm-lock.yaml'), $lockText)
     Git-Fixture add .
     Git-Fixture commit -m baseline
     $baseline = (& $nativeGit -C $fixture rev-parse HEAD).Trim()
@@ -51,9 +59,7 @@ try {
     Git-Fixture update-ref refs/remotes/origin/main $tip
     Git-Fixture reset --hard $baseline
     $bin = Join-Path $fixture 'node_modules/.bin'
-    New-Item -ItemType Directory $bin -Force | Out-Null
-    [IO.File]::WriteAllText((Join-Path $bin 'tsc.cmd'), "@exit /b 0`r`n")
-    [IO.File]::WriteAllText((Join-Path $bin 'tsdown.cmd'), "@exit /b 0`r`n")
+    Write-Shims 0
     New-Item -ItemType Directory (Join-Path $fixture 'lib') | Out-Null
     [IO.File]::WriteAllText((Join-Path $fixture 'lib/client.cjs'), '// fixture build output')
     [IO.File]::WriteAllText((Join-Path $fixture 'lib/index.js'), '// fixture build output')
@@ -71,6 +77,32 @@ try {
     $script:installs = 0
     Sync-PluginSource -Log { param($text) Write-Host $text }
     Assert-Equal $script:installs 0 'docs-only range skips installation'
+
+    # From here HEAD equals origin/main, so only local repairs trigger installs.
+    Remove-Item -LiteralPath (Join-Path $bin 'tsc.cmd')
+    $script:installs = 0
+    $script:onInstall = {
+        [IO.File]::AppendAllText((Join-Path $fixture 'pnpm-lock.yaml'), "  packages/new: {}`n")
+        Write-Shims 0
+    }
+    Sync-PluginSource -Log { param($text) Write-Host $text }
+    Assert-Equal $script:installs 1 'missing build shim triggers installation'
+    Assert-Equal ([IO.File]::ReadAllText((Join-Path $fixture 'pnpm-lock.yaml'))) $lockText 'lockfile rewritten by install is restored'
+    Assert-Equal ((& $nativeGit -C $fixture status --porcelain --untracked-files=no) -join '') '' 'checkout stays clean after install'
+
+    Write-Shims 1
+    $script:installs = 0
+    $script:onInstall = { Write-Shims 0 }
+    Sync-PluginSource -Log { param($text) Write-Host $text }
+    Assert-Equal $script:installs 1 'failed build reinstalls once and succeeds on retry'
+
+    Write-Shims 1
+    $script:installs = 0
+    $script:onInstall = { Write-Shims 1 }
+    $message = ''
+    try { Sync-PluginSource -Log { param($text) Write-Host $text } } catch { $message = $_.Exception.Message }
+    Assert-Equal $message 'plugin type build failed' 'build that still fails after reinstall aborts'
+    Assert-Equal $script:installs 1 'reinstall is attempted only once'
     Write-Host 'ALL SYNC CHECKS PASSED'
 } finally {
     $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
