@@ -572,8 +572,11 @@ function Sync-PluginSource {
             & $write ('plugin source already at origin/main @ ' + $local.Substring(0, [Math]::Min(12, $local.Length)))
         }
 
-        if (-not (Test-Path (Join-Path $repo 'node_modules'))) {
-            & $write 'plugin node_modules missing; installing'
+        # Check the build shims, not just the folder: an interrupted install or
+        # cleanup can leave node_modules present but empty.
+        $shims = @('tsc.cmd', 'tsdown.cmd') | ForEach-Object { Join-Path $repo "node_modules\.bin\$_" }
+        if (@($shims | Where-Object { -not (Test-Path $_) }).Count -gt 0) {
+            & $write 'plugin node_modules missing or incomplete; installing'
             Push-Location $repo
             try {
                 & $pnpmName @pnpmLead install --frozen-lockfile 2>&1 | ForEach-Object { $detail.Add($_) }
