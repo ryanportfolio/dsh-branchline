@@ -620,10 +620,18 @@ function Sync-PluginSource {
             # main passed CI, so a local build failure most likely means damaged
             # dependencies. Reinstall from scratch and retry once. rmdir removes
             # pnpm's junctions without following them into the package store.
+            # It runs inside the checkout on a constant relative name so CMD
+            # never parses the checkout path (a path with & would split the
+            # command and delete the wrong directory).
             & $write ($failure + '; reinstalling plugin dependencies from scratch and retrying once')
             $modules = Join-Path $repo 'node_modules'
             if (Test-Path -LiteralPath $modules) {
-                & cmd.exe /d /c rmdir /s /q $modules 2>&1 | ForEach-Object { $detail.Add($_) }
+                Push-Location -LiteralPath $repo
+                try {
+                    & cmd.exe /d /c 'rmdir /s /q node_modules' 2>&1 | ForEach-Object { $detail.Add($_) }
+                } finally {
+                    Pop-Location
+                }
                 if (Test-Path -LiteralPath $modules) { throw ('could not remove ' + $modules + '; close programs using it and retry') }
             }
             & $install

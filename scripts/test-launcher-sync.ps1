@@ -8,7 +8,9 @@ foreach ($name in @('Invoke-Git', 'Test-PluginDependencyChange', 'Sync-PluginSou
     if (-not $definition) { throw "Missing production function $name" }
     . ([scriptblock]::Create($definition.Extent.Text))
 }
-$fixture = Join-Path ([IO.Path]::GetTempPath()) ('dsh-sync-test-' + [guid]::NewGuid().ToString('N'))
+# The & keeps CMD from ever seeing the checkout path: the retry cleanup must
+# remove this fixture's node_modules, not a path split at the &.
+$fixture = Join-Path ([IO.Path]::GetTempPath()) ('dsh-sync-test-a&b-' + [guid]::NewGuid().ToString('N'))
 $nativeGit = (Get-Command git -CommandType Application | Select-Object -First 1).Source
 function Git-Fixture {
     & $nativeGit -C $fixture @args | Out-Null
