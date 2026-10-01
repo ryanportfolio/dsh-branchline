@@ -144,3 +144,15 @@ Python heredoc therefore produced a string literal split across two lines and a
 SyntaxError; a second heredoc "fix" did the same thing. Write files that need literal
 backslash sequences with the Edit or Write tool, or keep the sequence out of the command
 text (read it from a file).
+
+## `corepack pnpm run build` fails: scripts call bare `pnpm` (2026-10-01)
+
+`build` (`pnpm run build:types && pnpm run build:bundle`) and `pack:check`
+(`pnpm pack --dry-run`) call bare `pnpm`. On this machine `pnpm` is not on PATH, so
+even `corepack pnpm run build` fails with `'pnpm' is not recognized as an internal or
+external command` and `[ELIFECYCLE] Command failed with exit code 1`. CI is unaffected
+(`pnpm/action-setup` puts `pnpm` on PATH). Fix without touching the machine: a shim
+folder holding `pnpm` (`#!/bin/sh` + `exec corepack pnpm "$@"`) and `pnpm.cmd`
+(`@corepack pnpm %*`), prepended to PATH for the one command:
+`PATH="$(cd .tmp/shim; pwd):$PATH" corepack pnpm run build`. It covers every script that
+nests `pnpm`.
