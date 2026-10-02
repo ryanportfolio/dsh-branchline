@@ -10,6 +10,7 @@ This is the Codex boundary for repositories using the AI Operating System starte
 - When creating copy for a site, UI, or anything else: less is more. Simplicity is powerful. Complexity does not need to be complicated.
 - Read only `CLAUDE.md`'s What this project is, Verification, and Environment & Deploy Target sections for configured project facts. Use `.claude/reference/` for architecture, commands, deployment, and pitfalls. Other `CLAUDE.md` workflow rules are not Codex instructions.
 - Never execute `.claude/hooks/session-start.sh` in Codex.
+- No unit tests or type tests unless the user asks.
 
 ## Capabilities
 
