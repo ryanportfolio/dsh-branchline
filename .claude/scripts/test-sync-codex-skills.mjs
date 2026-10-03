@@ -80,14 +80,14 @@ for (const mode of ["--check", "--write"]) {
   }
 }
 
-test("a Claude skill with no Codex registration fails and names the skill", (t) => {
+test("a Claude skill with no Codex registration warns, names the skill, and exits 0", (t) => {
   const f = fixture(t);
   unregistered(f);
   f.write(".agents/skills/ordinary/SKILL.md", "Personal content\n");
   f.write(".claude/skills/resources-only/notes.md", "Shared notes\n");
   const result = f.run("--check");
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /ordinary has no entry in \.agents\/skill-modes\.json; write a native port under \.agents\/skills\/ordinary\/ and register it "native", or register ordinary "disabled"/);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /ordinary has no entry in \.agents\/skill-modes\.json; write a native port under \.agents\/skills\/ordinary\/ and register it "native", or register ordinary "disabled"/);
   assert.doesNotMatch(result.stdout + result.stderr, /resources-only/);
   assert.equal(f.read(".agents/skills/ordinary/SKILL.md"), "Personal content\n");
 });
@@ -96,31 +96,31 @@ test("--write creates no Codex SKILL.md for an unregistered skill", (t) => {
   const f = fixture(t);
   unregistered(f);
   const result = f.run("--write");
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /ordinary has no entry/);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /ordinary has no entry/);
   assert.equal(fs.existsSync(path.join(f.root, ".agents/skills/ordinary")), false);
 });
 
-test("a generated adapter anywhere under .agents/skills fails; one under a native skill stays", (t) => {
+test("a generated adapter anywhere under .agents/skills warns; one under a native skill stays", (t) => {
   for (const mode of ["--check", "--write"]) {
     const f = fixture(t);
     const target = ".agents/skills/long-horizon/SKILL.md";
     f.write(target, `${native}\n${marker}\n`);
     f.write(".agents/skills/ordinary/nested/SKILL.md", `${marker}\n`);
     const result = f.run(mode);
-    assert.notEqual(result.status, 0, mode);
-    assert.match(result.stderr, /long-horizon\/SKILL\.md: generated Codex adapter for long-horizon/);
-    assert.match(result.stderr, /ordinary\/nested\/SKILL\.md: generated Codex adapter for ordinary/);
+    assert.equal(result.status, 0, mode);
+    assert.match(result.stdout, /long-horizon\/SKILL\.md: generated Codex adapter for long-horizon/);
+    assert.match(result.stdout, /ordinary\/nested\/SKILL\.md: generated Codex adapter for ordinary/);
     assert.equal(f.read(target), `${native}\n${marker}\n`);
   }
 });
 
-test("the adapter ownership mode fails and names the skill", (t) => {
+test("the adapter ownership mode warns and names the skill", (t) => {
   const f = fixture(t);
   f.write(".agents/skill-modes.json", JSON.stringify({version: 1, skills: {"long-horizon": "native", ordinary: "adapter"}}));
   const result = f.run("--check");
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /ordinary uses mode "adapter"/);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout,/ordinary uses mode "adapter"/);
 });
 
 test("a recorded removal silences the missing-skill warning; an unrecorded one warns", (t) => {
@@ -157,27 +157,29 @@ test("a malformed removal record fails", (t) => {
 
 const sources = (f) => JSON.parse(f.read(".agents/skill-sources.json")).skills;
 
-test("a covered skill with no reviewed source hash fails in --check and --write", (t) => {
+test("a covered skill with no reviewed source hash warns in --check and --write", (t) => {
   for (const mode of ["--check", "--write"]) {
     const f = fixture(t);
     fs.unlinkSync(path.join(f.root, ".agents/skill-sources.json"));
     const result = f.run(mode);
-    assert.notEqual(result.status, 0, mode);
-    assert.match(result.stderr, /long-horizon has no reviewed Claude source hash; .*--baseline long-horizon/);
+    assert.equal(result.status, 0, mode);
+    assert.match(result.stdout,/long-horizon has no reviewed Claude source hash; .*--baseline long-horizon/);
   }
 });
 
-test("a changed Claude SKILL.md or reference file fails until the port is baselined", (t) => {
+const drift = /the Claude skill changed since its Codex port was last reviewed/;
+
+test("a changed Claude SKILL.md or reference file warns until the port is baselined", (t) => {
   for (const file of ["SKILL.md", "references/guide.md"]) {
     const f = fixture(t);
-    f.write(`.claude/skills/long-horizon/${file}`, "Changed Claude content.\n");
+    f.write(`.claude/skills/long-horizon/${file}`, "---\nname: long-horizon\ndescription: Changed Claude content.\n---\n");
     const result = f.run("--check");
-    assert.notEqual(result.status, 0, file);
-    assert.match(result.stderr, /long-horizon: the Claude skill changed since its Codex port was last reviewed; update \.agents\/skills\/long-horizon\/ to match, then run node \.claude\/scripts\/sync-codex-skills\.mjs --baseline long-horizon/);
+    assert.equal(result.status, 0, file);
+    assert.match(result.stdout,/long-horizon: the Claude skill changed since its Codex port was last reviewed; update \.agents\/skills\/long-horizon\/ to match, then run node \.claude\/scripts\/sync-codex-skills\.mjs --baseline long-horizon/);
     const recorded = f.run("--baseline", "long-horizon");
     assert.equal(recorded.status, 0, recorded.stderr);
     assert.match(recorded.stdout, /baseline: long-horizon [0-9a-f]{64}/);
-    assert.equal(f.run("--check").status, 0, file);
+    assert.doesNotMatch(f.run("--check").stdout, drift, file);
   }
 });
 
@@ -187,14 +189,63 @@ test("a line-ending-only change keeps the source hash", (t) => {
   f.write(skill, f.read(skill).replaceAll("\n", "\r\n"));
   const result = f.run("--check");
   assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, drift);
 });
 
-test("a stale source entry fails and asks for its removal", (t) => {
+// Reported bug: an ignored Thumbs.db in a skill folder counted as a Claude source change.
+test("a git-ignored file in a Claude skill folder keeps the source hash", (t) => {
+  const f = fixture(t);
+  const git = spawnSync("git", ["init", "-q"], { cwd: f.root, encoding: "utf8" });
+  if (git.error || git.status !== 0) return t.skip("git is not available");
+  f.write(".gitignore", "Thumbs.db\n");
+  const reviewed = sources(f)["long-horizon"];
+  f.write(".claude/skills/long-horizon/Thumbs.db", "thumbnail cache");
+  const result = f.run("--check");
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, drift);
+  assert.equal(f.run("--baseline", "long-horizon").status, 0);
+  assert.equal(sources(f)["long-horizon"], reviewed);
+});
+
+test("a tracked file replaced by a directory hashes the same staged or not", (t) => {
+  const f = fixture(t);
+  const git = (...args) => spawnSync("git", args, { cwd: f.root, encoding: "utf8" });
+  const init = git("init", "-q");
+  if (init.error || init.status !== 0) return t.skip("git is not available");
+  f.write(".gitignore", "Thumbs.db\n");
+  f.write(".claude/skills/long-horizon/notes", "file\n");
+  assert.equal(git("add", "-A").status, 0);
+  fs.rmSync(path.join(f.root, ".claude/skills/long-horizon/notes"));
+  f.write(".claude/skills/long-horizon/notes/guide.md", "directory\n");
+  f.write(".claude/skills/long-horizon/notes/Thumbs.db", "ignored\n");
+  assert.equal(f.run("--baseline", "long-horizon").status, 0);
+  const unstaged = sources(f)["long-horizon"];
+  assert.equal(git("add", "-A").status, 0);
+  assert.equal(f.run("--baseline", "long-horizon").status, 0);
+  assert.equal(sources(f)["long-horizon"], unstaged);
+});
+
+test("a malformed Claude skill still fails behind a warning", (t) => {
+  const f = fixture(t);
+  unregistered(f);
+  f.write(".claude/skills/ordinary/SKILL.md", "No frontmatter.\n");
+  let result = f.run("--check");
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /ordinary[\\/]SKILL\.md: missing YAML frontmatter/);
+  // A drifted covered skill is validated too.
+  f.write(".claude/skills/ordinary/SKILL.md", "---\ndescription: Valid.\n---\n");
+  f.write(".claude/skills/long-horizon/SKILL.md", "---\nname: long-horizon\n---\n");
+  result = f.run("--check");
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /long-horizon[\\/]SKILL\.md: missing description/);
+});
+
+test("a stale source entry warns and asks for its removal", (t) => {
   const f = fixture(t);
   f.write(".agents/skill-sources.json", JSON.stringify({ version: 1, skills: { ...sources(f), ordinary: "0".repeat(64) } }));
   const result = f.run("--check");
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /ordinary is stale; .*remove its entry/);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout,/ordinary is stale; .*remove its entry/);
 });
 
 test("a source entry for a deleted Claude skill warns and exits 0", (t) => {
@@ -226,6 +277,20 @@ test("a needed skill turned off in skillOverrides warns like a missing one", asy
   fs.mkdirSync(path.join(root, ".claude"), { recursive: true });
   fs.writeFileSync(path.join(root, ".claude/settings.json"), JSON.stringify({ skillOverrides: { "impartial-review": "off" } }));
   assert.equal(reviewRemovals(root, registered, []).length, 1);
+});
+
+test("a required skill deleted along with its registration still warns", async (t) => {
+  const { reviewRemovals } = await import("./removed-skills.mjs");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skill-required-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, ".agents"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".agents/template-manifest.json"), JSON.stringify({ version: 1, skills: { required: ["init-project"] } }));
+  const warnings = reviewRemovals(root, new Set(), []);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /init-project: the template treats it as required, but it is not installed in any runtime/);
+  fs.mkdirSync(path.join(root, ".agents/skills/init-project"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".agents/skills/init-project/SKILL.md"), "---\nname: init-project\n---\n");
+  assert.deepEqual(reviewRemovals(root, new Set(), []), []);
 });
 
 test("a template manifest with an unknown version or key fails the removal review", async (t) => {

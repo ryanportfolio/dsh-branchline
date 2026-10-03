@@ -3,7 +3,7 @@
 The `native` entries in `.agents/skill-modes.json` declare workflows maintained directly
 in `.agents/skills/<name>/`. These own their Codex instructions. Every Claude skill in
 `.claude/skills/` must be registered either `native`, with a maintained port, or `disabled`;
-sync generates nothing, and `--check` fails on an unregistered name or mode `adapter`.
+sync generates nothing, and `--check` warns about an unregistered name or mode `adapter`.
 A skill's source ownership is separate from whether it requires agents or explicit
 authorization.
 
@@ -19,9 +19,13 @@ Read the existing skill and its references. Edit the source for the intended run
 preserve the other runtime unless its behavior is also in scope. Register new standalone
 names and classify each active Codex skill in `.agents/CODEX-SKILL-COMPATIBILITY.md`.
 Keep the initial catalog within its checked budget.
-`.agents/skill-sources.json` records a hash of each covered Claude skill folder. After a
+`.agents/skill-sources.json` records a hash of each covered Claude skill folder, over the
+files git would commit, so ignored files such as `Thumbs.db` never count. After a
 change to a `native` skill's Claude source, update its Codex port to match, then run
-`node .claude/scripts/sync-codex-skills.mjs --baseline <name>`; `--check` fails until you do. `disabled` skills have no port and no entry; run `--check` only.
+`node .claude/scripts/sync-codex-skills.mjs --baseline <name>`; `--check` warns until you do.
+`--check` exits 1 only on broken input: unreadable or malformed JSON, a skill without
+frontmatter or a description, an invalid skill name or mode, or a deletion that would leave
+the repository. `disabled` skills have no port and no entry; run `--check` only.
 
 Run:
 
@@ -32,7 +36,7 @@ node .claude/scripts/test-codex-contract.mjs
 node --test .claude/scripts/test-sync-codex-skills.mjs .claude/scripts/test-codex-skill-sync.mjs .claude/scripts/test-codex-skill-copies.mjs
 ```
 
-Sync refuses missing or still-generated standalone entry points. It preserves handwritten
+Sync warns about missing or still-generated standalone entry points. It preserves handwritten
 content and never silently replaces it with a pointer. Validate referenced resources and
 meaningful decision scenarios separately; metadata checks cannot establish workflow quality.
 

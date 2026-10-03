@@ -5,6 +5,8 @@
 // remove skills, and the registry may catch up later. The checks warn instead:
 // - a missing skill listed in .agents/removed-skills.json is intentional and stays silent;
 // - a missing skill that is not listed gets a warning suggesting to record or restore it;
+// - a required skill (skills.required in the template manifest) with no SKILL.md in either
+//   runtime warns, whether or not it is registered or recorded;
 // - a present skill that needs a missing one (skills.dependencies in the template manifest)
 //   gets a warning naming both; a needed skill turned "off" in .claude/settings.json
 //   skillOverrides counts as missing, because the Codex sync then treats it as disabled and
@@ -129,6 +131,13 @@ export function reviewRemovals(root, registered = readRegisteredSkills(root), re
   }
   for (const name of registered) {
     if (!removed.includes(name) && !skillPresent(root, name)) warnings.push(`${name}: not installed in any runtime; record it in ${RECORD_PATH} or restore it`);
+  }
+  // A required skill whose folders and registration were both deleted. A registered one that is
+  // missing was reported by one of the two loops above.
+  for (const name of new Set(rules.required)) {
+    if (!registered.has(name) && !skillPresent(root, name)) {
+      warnings.push(`${name}: the template treats it as required, but it is not installed in any runtime; restore its skill folders and its ${MODES_PATH} entry from the template`);
+    }
   }
   for (const [name, needs] of Object.entries(rules.dependencies)) {
     if (!registered.has(name) || !skillPresent(root, name) || disabled.has(name)) continue;

@@ -31,17 +31,17 @@ test('native files survive sync byte-for-byte even when Claude changes', () => {
   assert.equal(f.read('.agents/skills/extra/SKILL.md'), body('extra'));
 });
 
-test('disabled generated adapters fail --check and --write removes them without deleting supporting files', () => {
+test('disabled generated adapters warn in --check and --write removes them without deleting supporting files', () => {
   const f = fixture(); f.modes({ bro: 'disabled' });
   f.write('.agents/skills/bro/SKILL.md', marker); f.write('.agents/skills/bro/notes.txt', 'retain');
   let result = f.run();
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /generated Codex adapter for bro; adapters are no longer supported, so --write deletes it/);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /generated Codex adapter for bro; adapters are no longer supported, so --write deletes it/);
   result = f.run('--write');
   assert.equal(result.status, 0, result.stderr);
   assert.equal(fs.existsSync(path.join(f.root, '.agents/skills/bro/SKILL.md')), false);
   assert.equal(f.read('.agents/skills/bro/notes.txt'), 'retain');
-  assert.equal(f.run().status, 0);
+  assert.doesNotMatch(f.run().stdout, /generated Codex adapter/);
 });
 
 test('Claude disabled choices are preserved and never silently reenabled', () => {
@@ -54,8 +54,8 @@ test('Claude disabled choices are preserved and never silently reenabled', () =>
 test('unowned and disabled native files are never overwritten or deleted', () => {
   const f = fixture(); f.write('.agents/skills/bro/SKILL.md', body('bro'));
   let result = f.run('--write');
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /bro has no entry in \.agents\/skill-modes\.json/);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /bro has no entry in \.agents\/skill-modes\.json/);
   assert.equal(f.read('.agents/skills/bro/SKILL.md'), body('bro'));
   f.modes({ bro: 'disabled' });
   result = f.run('--write');
@@ -64,13 +64,13 @@ test('unowned and disabled native files are never overwritten or deleted', () =>
   assert.equal(f.read('.agents/skills/bro/SKILL.md'), body('bro'));
 });
 
-test('native mode warns about missing files and mismatched names; generated wrappers fail', () => {
+test('native mode warns about missing files, mismatched names, and generated wrappers', () => {
   const f = fixture(); f.modes({ bro: 'native' }); f.baseline('bro');
   assert.match(f.run().stdout, /native Codex skill is missing; restore \.agents\/skills\/bro\//);
   f.write('.agents/skills/bro/SKILL.md', marker);
   let result = f.run('--write');
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /generated Codex adapter for bro/);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /generated Codex adapter for bro/);
   // The generated file is left alone rather than removed.
   assert.equal(f.read('.agents/skills/bro/SKILL.md'), marker);
   f.write('.agents/skills/bro/SKILL.md', body('wrong'));
@@ -154,9 +154,9 @@ test('--baseline clears drift for exactly the named skill', () => {
   assert.deepEqual(Object.keys(after), ['bro', 'other']);
   assert.ok(f.read('.agents/skill-sources.json').endsWith('}\n'));
   const result = f.run();
-  assert.notEqual(result.status, 0);
-  assert.doesNotMatch(result.stderr, /bro: the Claude skill changed/);
-  assert.match(result.stderr, /other: the Claude skill changed/);
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /bro: the Claude skill changed/);
+  assert.match(result.stdout, /other: the Claude skill changed/);
 });
 
 test('--baseline rejects uncovered and unknown names and records nothing', () => {
@@ -178,4 +178,12 @@ test('a Codex-only native skill needs no source entry', () => {
   const result = f.run();
   assert.equal(result.status, 0, result.stderr);
   assert.equal(fs.existsSync(path.join(f.root, '.agents/skill-sources.json')), false);
+});
+
+test('an unregistered Codex-only skill warns and exits 0', () => {
+  const f = fixture(); f.modes({ bro: 'disabled' });
+  f.write('.agents/skills/extra/SKILL.md', body('extra'));
+  const result = f.run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /extra: Codex-only skill has no \.agents\/skill-modes\.json entry; add "extra": "native"/);
 });

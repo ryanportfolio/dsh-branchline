@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -150,21 +151,74 @@ function generatedAdapter(filePath) {
   return fs.existsSync(filePath) && fs.readFileSync(filePath, "utf8").includes(MARKER);
 }
 
-// SHA-256 over every file under .claude/skills/<name>/, in sorted relative POSIX path order.
-// Each file contributes "<path>\0<byte length>\0<content>". Files without a NUL byte are text
-// and have CRLF folded to LF, so a line-ending-only change keeps the hash.
+// Every file on disk under directory, added to files as a POSIX path relative to base.
+function walk(directory, base, files) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const full = path.join(directory, entry.name);
+    if (fs.statSync(full).isDirectory()) walk(full, base, files);
+    else files.push(path.relative(base, full).split(path.sep).join("/"));
+  }
+}
+
+// Files git would commit under .claude/skills/, keyed by skill folder: tracked plus untracked
+// files that no .gitignore rule excludes. Null when git is unavailable or this checkout is not
+// the root of its own git repository; the hash then walks the folder on disk instead.
+let committable;
+function gitSkillFiles() {
+  if (committable !== undefined) return committable;
+  committable = null;
+  const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024 });
+  try {
+    if (git("rev-parse", "--show-prefix").trim() !== "") return committable;
+    const listed = git("ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ".claude/skills");
+    committable = new Map();
+    for (const file of listed.split("\0")) {
+      // A skill folder committed as a link lists as the folder itself ("" below).
+      const match = file.match(/^\.claude\/skills\/([^/]+)(?:\/(.+))?$/);
+      if (!match) continue;
+      if (!committable.has(match[1])) committable.set(match[1], new Set());
+      committable.get(match[1]).add(match[2] ?? "");
+    }
+  } catch {
+    committable = null;
+  }
+  return committable;
+}
+
+// SHA-256 over the files git would commit under .claude/skills/<name>/ (every file on disk when
+// git cannot say), in sorted relative POSIX path order, so ignored files such as Thumbs.db or
+// .DS_Store never change it. Each file contributes "<path>\0<byte length>\0<content>". Files
+// without a NUL byte are text and have CRLF folded to LF, so a line-ending-only change keeps the hash.
 function sourceHash(name) {
   const base = path.join(sourceRoot, name);
   const files = [];
-  (function walk(directory) {
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      const full = path.join(directory, entry.name);
-      if (fs.statSync(full).isDirectory()) walk(full);
-      else files.push(path.relative(base, full).split(path.sep).join("/"));
+  const listed = gitSkillFiles();
+  if (!listed) walk(base, base, files);
+  for (const relative of listed?.get(name) ?? []) {
+    const full = path.join(base, relative);
+    // A tracked file deleted from disk, or a link whose target is gone, is skipped. Any other stat
+    // error, such as a denied permission, fails rather than silently dropping the file from the hash.
+    let link, stats;
+    try {
+      link = fs.lstatSync(full);
+      stats = link.isSymbolicLink() ? fs.statSync(full) : link;
+    } catch (error) {
+      if (error.code === "ENOENT" || error.code === "ENOTDIR") continue;
+      throw error;
     }
-  })(base);
+    // A real directory here is a tracked file replaced on disk by a folder. Git already lists the
+    // folder's non-ignored files, so walking it would add ignored ones and make the hash depend on
+    // what is staged. Only a directory link (symlink or junction, including a "" entry for a linked
+    // skill folder) is walked, because git lists the link and not its contents.
+    if (stats.isDirectory()) {
+      if (link.isSymbolicLink()) walk(full, base, files);
+      continue;
+    }
+    files.push(relative);
+  }
   const hash = crypto.createHash("sha256");
-  for (const relative of files.sort()) {
+  // Each path counts once, however git and the walk listed it.
+  for (const relative of [...new Set(files)].sort()) {
     let content = fs.readFileSync(path.join(base, relative));
     if (!content.includes(0)) content = Buffer.from(content.toString("latin1").replaceAll("\r\n", "\n"), "latin1");
     hash.update(`${relative}\0${content.length}\0`);
@@ -186,11 +240,11 @@ function readSources() {
 
 const disabled = disabledSkills();
 const removed = removedSkills();
-// Missing or mismatched skills are warnings: projects add and remove skills freely. A Claude
-// skill with no Codex registration, a generated adapter, or the adapter mode is an error.
-// Unreadable files and writes that would escape the repository fail.
+// Registration and drift problems are warnings with exit 0: projects add, remove, and edit
+// skills freely, and each warning names its fix. Only broken input exits 1: unreadable or
+// malformed JSON, a registry with the wrong shape, a skill with no frontmatter or description,
+// an invalid skill name or mode, and a deletion that would reach outside the repository.
 const warnings = [];
-const errors = [];
 const port = (name) => `write a native port under .agents/skills/${name}/ and register it "native", or register ${name} "disabled" in .agents/skill-modes.json`;
 const modes = fs.existsSync(modesPath) ? parseJson(fs.readFileSync(modesPath, "utf8"), ".agents/skill-modes.json") : { version: 1, skills: {} };
 if (modes.version !== 1 || !modes.skills || typeof modes.skills !== "object" || Array.isArray(modes.skills)) {
@@ -200,7 +254,7 @@ for (const [name, ownership] of Object.entries(modes.skills)) {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) || !["native", "adapter", "disabled"].includes(ownership)) {
     throw new Error(`${modesPath}: invalid skill name or mode: ${name}`);
   }
-  if (ownership === "adapter") errors.push(`.agents/skill-modes.json: ${name} uses mode "adapter"; generated adapters are no longer supported, so ${port(name)}`);
+  if (ownership === "adapter") warnings.push(`.agents/skill-modes.json: ${name} uses mode "adapter"; generated adapters are no longer supported, so ${port(name)}`);
   if (ownership === "disabled") disabled.add(name);
 }
 // Retired skills and the skills that took over their behavior. A copy that reappears from an
@@ -274,25 +328,31 @@ if (fs.existsSync(sourceRoot)) {
     } else if (removed.has(entry.name)) {
       warnings.push(`${skillPath}: ${entry.name} is recorded in .agents/removed-skills.json but its Claude folder remains; delete the folder or register it in .agents/skill-modes.json`);
     } else {
-      errors.push(`${skillPath}: ${entry.name} has no entry in .agents/skill-modes.json; ${port(entry.name)}`);
+      // A warning must not hide broken input: readMetadata throws on missing frontmatter or description.
+      readMetadata(entry.name, skillPath);
+      warnings.push(`${skillPath}: ${entry.name} has no entry in .agents/skill-modes.json; ${port(entry.name)}`);
     }
   }
 }
 
-// A Claude skill that changed since its Codex port was last reviewed fails until the port is reviewed.
+// A Claude skill that changed since its Codex port was last reviewed warns until the port is reviewed.
+// Its Claude SKILL.md is validated first, so a drift warning never hides broken input.
 const baseline = (name) => `node .claude/scripts/sync-codex-skills.mjs --baseline ${name}`;
+const claudeValid = (name) => readMetadata(name, path.join(sourceRoot, name, "SKILL.md"));
 for (const name of covered) {
   if (!Object.hasOwn(sources, name)) {
-    errors.push(`.agents/skill-sources.json: ${name} has no reviewed Claude source hash; review .agents/skills/${name}/ against .claude/skills/${name}/, then run ${baseline(name)}`);
+    claudeValid(name);
+    warnings.push(`.agents/skill-sources.json: ${name} has no reviewed Claude source hash; review .agents/skills/${name}/ against .claude/skills/${name}/, then run ${baseline(name)}`);
   } else if (sources[name] !== sourceHash(name)) {
-    errors.push(`.agents/skill-sources.json: ${name}: the Claude skill changed since its Codex port was last reviewed; update .agents/skills/${name}/ to match, then run ${baseline(name)}`);
+    claudeValid(name);
+    warnings.push(`.agents/skill-sources.json: ${name}: the Claude skill changed since its Codex port was last reviewed; update .agents/skills/${name}/ to match, then run ${baseline(name)}`);
   }
 }
-// An entry for a deleted Claude skill only warns; one for a Claude skill that lost its port fails.
+// An entry for a deleted Claude skill, or for a Claude skill that lost its native port, warns.
 for (const name of Object.keys(sources)) {
   if (covered.includes(name)) continue;
   if (!fs.existsSync(path.join(sourceRoot, name))) warnings.push(`.agents/skill-sources.json: ${name} has no .claude/skills/${name}/ folder; its entry can be removed`);
-  else errors.push(`.agents/skill-sources.json: ${name} is stale; it is not a native Codex skill with a Claude source, so remove its entry`);
+  else warnings.push(`.agents/skill-sources.json: ${name} is stale; it is not a native Codex skill with a Claude source, so remove its entry`);
 }
 
 // --write deletes generated adapters, except under an enabled native skill.
@@ -308,11 +368,18 @@ if (fs.existsSync(targetRoot)) {
     if (disabled.has(entry.name) && fs.existsSync(adapterPath) && !generatedAdapter(adapterPath)) {
       warnings.push(`${adapterPath}: disabled native skill remains discoverable; move it outside .agents/skills explicitly`);
     }
+    // A hand-written Codex-only skill still needs a registration. One with a Claude source is
+    // reported by the Claude-side scan above.
+    if (!Object.hasOwn(modes.skills, entry.name) && !disabled.has(entry.name) && !Object.hasOwn(retired, entry.name)
+      && fs.existsSync(adapterPath) && !generatedAdapter(adapterPath) && !fs.existsSync(path.join(sourceRoot, entry.name, "SKILL.md"))) {
+      readMetadata(entry.name, adapterPath);
+      warnings.push(`${adapterPath}: ${entry.name}: Codex-only skill has no .agents/skill-modes.json entry; add "${entry.name}": "native"`);
+    }
     if (generatedAdapter(adapterPath)) actions.push({ type: "remove", skillDir: entry.name, adapterPath });
   }
 }
 
-// Any generated SKILL.md under .agents/skills is an error, at any depth and through links.
+// Any generated SKILL.md under .agents/skills warns, at any depth and through links.
 const pending = new Set(actions.map((action) => action.adapterPath));
 const visited = new Set();
 function scanAdapters(directory) {
@@ -327,7 +394,7 @@ function scanAdapters(directory) {
       if (mode === "--write" && pending.has(full)) continue;
       const name = path.relative(targetRoot, full).split(path.sep)[0];
       const fix = pending.has(full) ? "--write deletes it" : "delete it";
-      errors.push(`${full}: generated Codex adapter for ${name}; adapters are no longer supported, so ${fix}, then ${port(name)}`);
+      warnings.push(`${full}: generated Codex adapter for ${name}; adapters are no longer supported, so ${fix}, then ${port(name)}`);
     }
   }
 }
@@ -352,7 +419,6 @@ function shown(message) {
     : message;
 }
 for (const warning of warnings) console.log(`${ci ? "::warning::" : "WARN: "}${shown(warning)}`);
-for (const error of errors) console.error(`${ci ? "::error::" : "ERROR: "}${shown(error)}`);
 
 if (mode === "--write") {
   for (const action of actions) {
@@ -363,10 +429,6 @@ if (mode === "--write") {
   }
 }
 
-if (errors.length) {
-  console.error(`Codex skills invalid (${errors.length} error(s); ${native.size} native).`);
-  process.exit(1);
-}
 console.log(mode === "--write"
   ? `Codex skills synchronized (${native.size} native).`
   : `Codex skills current (${native.size} native${warnings.length ? `, ${warnings.length} warning(s)` : ""}).`);
