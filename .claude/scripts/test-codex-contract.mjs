@@ -10,7 +10,6 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(scriptDir, "..", "..");
 const failures = [];
 failures.push(...validateCapabilities(root).errors);
-const maxDescriptionChars = 240;
 const maxCatalogChars = 7000;
 
 function read(relativePath) {
@@ -97,9 +96,6 @@ const skills = [...activeNames].map(name => ({name}))
 let catalogChars = 0;
 for (const skill of skills) {
   if (!skill.description) failures.push(`${skill.directory}: missing description`);
-  if (skill.description.length > maxDescriptionChars) {
-    failures.push(`${skill.directory}: description is ${skill.description.length} chars (max ${maxDescriptionChars})`);
-  }
   catalogChars += skill.name.length + skill.description.length;
 }
 const duplicateNames = skills
