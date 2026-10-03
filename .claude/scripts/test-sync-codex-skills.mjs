@@ -22,50 +22,220 @@ function fixture(t) {
   for (const name of ["long-horizon", "ordinary"]) {
     write(`.claude/skills/${name}/SKILL.md`, `---\nname: ${name}\ndescription: Use when /${name} is requested.\n---\nClaude workflow.\n`);
   }
-  write(".agents/skill-modes.json", JSON.stringify({version: 1, skills: {"long-horizon": "native"}}));
+  write(".agents/skill-modes.json", JSON.stringify({version: 1, skills: {"long-horizon": "native", ordinary: "disabled"}}));
   write(".agents/skills/long-horizon/SKILL.md", native);
+  const run = (...args) => spawnSync(process.execPath, [path.join(root, ".claude/scripts/sync-codex-skills.mjs"), ...args], { encoding: "utf8" });
+  // The covered native skill starts reviewed, so each test sees only the drift it creates.
+  const baseline = run("--baseline", "long-horizon");
+  assert.equal(baseline.status, 0, baseline.stderr);
   return {
-    root, write,
+    root, write, run,
     read: (relative) => fs.readFileSync(path.join(root, relative), "utf8"),
-    run: (mode) => spawnSync(process.execPath, [path.join(root, ".claude/scripts/sync-codex-skills.mjs"), mode], { encoding: "utf8" }),
   };
 }
 
-test("sync preserves standalone bytes while creating and updating ordinary adapters", (t) => {
+const unregistered = (f) => f.write(".agents/skill-modes.json", JSON.stringify({version: 1, skills: {"long-horizon": "native"}}));
+
+test("sync preserves standalone bytes and writes nothing for disabled skills", (t) => {
   const f = fixture(t);
   const run = (mode) => { const result = f.run(mode); assert.equal(result.status, 0, result.stderr); };
   run("--write");
-  assert.match(f.read(".agents/skills/ordinary/SKILL.md"), /Codex Adapter/);
-  f.write(".claude/skills/ordinary/SKILL.md", "---\ndescription: Updated ordinary routing.\n---\n");
+  f.write(".claude/skills/long-horizon/SKILL.md", "---\ndescription: Updated Claude routing.\n---\n");
+  assert.equal(f.run("--baseline", "long-horizon").status, 0);
   run("--write");
   run("--check");
-  assert.match(f.read(".agents/skills/ordinary/SKILL.md"), /Updated ordinary routing/);
+  assert.equal(fs.existsSync(path.join(f.root, ".agents/skills/ordinary")), false);
   assert.equal(f.read(".agents/skills/long-horizon/SKILL.md"), native);
-  assert.match(f.read(".claude/skills/long-horizon/SKILL.md"), /Claude workflow/);
+  assert.match(f.read(".claude/skills/ordinary/SKILL.md"), /Claude workflow/);
 });
 
+test("--check and --write reject unreadable standalone content", (t) => {
+  for (const mode of ["--check", "--write"]) {
+    const f = fixture(t);
+    f.write(".agents/skills/long-horizon/SKILL.md", "---\nname: wrong-name\ndescription: \n---\n");
+    const result = f.run(mode);
+    assert.notEqual(result.status, 0, mode);
+    assert.match(result.stderr, /long-horizon/);
+    assert.equal(fs.existsSync(path.join(f.root, ".agents/skills/ordinary/SKILL.md")), false);
+  }
+});
+
+// A missing or misnamed standalone skill warns; the file is never overwritten.
 for (const mode of ["--check", "--write"]) {
-  for (const condition of ["missing", "generated", "invalid", "wrong-name"]) {
-    test(`${mode} rejects ${condition} standalone content before writing adapters`, (t) => {
+  for (const [condition, pattern] of [
+    ["missing", /native Codex skill is missing; restore \.agents\/skills\/long-horizon\/ or delete \.claude\/skills\/long-horizon\/ too/],
+    ["wrong-name", /native metadata should declare name: long-horizon/],
+  ]) {
+    test(`${mode} warns about ${condition} standalone content and exits 0`, (t) => {
       const f = fixture(t);
       const target = ".agents/skills/long-horizon/SKILL.md";
       if (condition === "missing") fs.unlinkSync(path.join(f.root, target));
-      if (condition === "generated") f.write(target, `${native}\n${marker}\n`);
-      if (condition === "invalid") f.write(target, "---\nname: wrong-name\ndescription: \n---\n");
       if (condition === "wrong-name") f.write(target, "---\nname: wrong-name\ndescription: Valid description.\n---\n");
+      const before = fs.existsSync(path.join(f.root, target)) ? f.read(target) : null;
       const result = f.run(mode);
-      assert.notEqual(result.status, 0);
-      assert.match(result.stderr, /long-horizon/);
-      assert.equal(fs.existsSync(path.join(f.root, ".agents/skills/ordinary/SKILL.md")), false);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, pattern);
+      assert.equal(fs.existsSync(path.join(f.root, target)) ? f.read(target) : null, before);
     });
   }
 }
 
-test("unregistered hand-authored adapters remain protected", (t) => {
+test("a Claude skill with no Codex registration fails and names the skill", (t) => {
   const f = fixture(t);
+  unregistered(f);
   f.write(".agents/skills/ordinary/SKILL.md", "Personal content\n");
+  f.write(".claude/skills/resources-only/notes.md", "Shared notes\n");
+  const result = f.run("--check");
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /ordinary has no entry in \.agents\/skill-modes\.json; write a native port under \.agents\/skills\/ordinary\/ and register it "native", or register ordinary "disabled"/);
+  assert.doesNotMatch(result.stdout + result.stderr, /resources-only/);
+  assert.equal(f.read(".agents/skills/ordinary/SKILL.md"), "Personal content\n");
+});
+
+test("--write creates no Codex SKILL.md for an unregistered skill", (t) => {
+  const f = fixture(t);
+  unregistered(f);
   const result = f.run("--write");
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /refusing to overwrite a hand-authored Codex skill/);
-  assert.equal(f.read(".agents/skills/ordinary/SKILL.md"), "Personal content\n");
+  assert.match(result.stderr, /ordinary has no entry/);
+  assert.equal(fs.existsSync(path.join(f.root, ".agents/skills/ordinary")), false);
+});
+
+test("a generated adapter anywhere under .agents/skills fails; one under a native skill stays", (t) => {
+  for (const mode of ["--check", "--write"]) {
+    const f = fixture(t);
+    const target = ".agents/skills/long-horizon/SKILL.md";
+    f.write(target, `${native}\n${marker}\n`);
+    f.write(".agents/skills/ordinary/nested/SKILL.md", `${marker}\n`);
+    const result = f.run(mode);
+    assert.notEqual(result.status, 0, mode);
+    assert.match(result.stderr, /long-horizon\/SKILL\.md: generated Codex adapter for long-horizon/);
+    assert.match(result.stderr, /ordinary\/nested\/SKILL\.md: generated Codex adapter for ordinary/);
+    assert.equal(f.read(target), `${native}\n${marker}\n`);
+  }
+});
+
+test("the adapter ownership mode fails and names the skill", (t) => {
+  const f = fixture(t);
+  f.write(".agents/skill-modes.json", JSON.stringify({version: 1, skills: {"long-horizon": "native", ordinary: "adapter"}}));
+  const result = f.run("--check");
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /ordinary uses mode "adapter"/);
+});
+
+test("a recorded removal silences the missing-skill warning; an unrecorded one warns", (t) => {
+  const f = fixture(t);
+  for (const runtime of [".claude", ".agents"]) fs.rmSync(path.join(f.root, runtime, "skills", "long-horizon"), { recursive: true });
+  f.write(".agents/skill-sources.json", JSON.stringify({ version: 1, skills: {} }));
+  let result = f.run("--check");
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /long-horizon[\\/]SKILL\.md: native skill is missing/);
+  f.write(".agents/removed-skills.json", JSON.stringify({ version: 1, removed: ["long-horizon"] }));
+  result = f.run("--write");
+  assert.equal(result.status, 0, result.stderr);
+  result = f.run("--check");
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /long-horizon/);
+  assert.equal(fs.existsSync(path.join(f.root, ".agents/skills/long-horizon")), false);
+});
+
+test("a recorded skill whose folder remains is synchronized normally", (t) => {
+  const f = fixture(t);
+  f.write(".agents/removed-skills.json", JSON.stringify({ version: 1, removed: ["long-horizon"] }));
+  const result = f.run("--write");
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(f.read(".agents/skills/long-horizon/SKILL.md"), native);
+});
+
+test("a malformed removal record fails", (t) => {
+  const f = fixture(t);
+  f.write(".agents/removed-skills.json", '{"removed": "long-horizon"}');
+  const result = f.run("--check");
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /removed-skills\.json: expected/);
+});
+
+const sources = (f) => JSON.parse(f.read(".agents/skill-sources.json")).skills;
+
+test("a covered skill with no reviewed source hash fails in --check and --write", (t) => {
+  for (const mode of ["--check", "--write"]) {
+    const f = fixture(t);
+    fs.unlinkSync(path.join(f.root, ".agents/skill-sources.json"));
+    const result = f.run(mode);
+    assert.notEqual(result.status, 0, mode);
+    assert.match(result.stderr, /long-horizon has no reviewed Claude source hash; .*--baseline long-horizon/);
+  }
+});
+
+test("a changed Claude SKILL.md or reference file fails until the port is baselined", (t) => {
+  for (const file of ["SKILL.md", "references/guide.md"]) {
+    const f = fixture(t);
+    f.write(`.claude/skills/long-horizon/${file}`, "Changed Claude content.\n");
+    const result = f.run("--check");
+    assert.notEqual(result.status, 0, file);
+    assert.match(result.stderr, /long-horizon: the Claude skill changed since its Codex port was last reviewed; update \.agents\/skills\/long-horizon\/ to match, then run node \.claude\/scripts\/sync-codex-skills\.mjs --baseline long-horizon/);
+    const recorded = f.run("--baseline", "long-horizon");
+    assert.equal(recorded.status, 0, recorded.stderr);
+    assert.match(recorded.stdout, /baseline: long-horizon [0-9a-f]{64}/);
+    assert.equal(f.run("--check").status, 0, file);
+  }
+});
+
+test("a line-ending-only change keeps the source hash", (t) => {
+  const f = fixture(t);
+  const skill = ".claude/skills/long-horizon/SKILL.md";
+  f.write(skill, f.read(skill).replaceAll("\n", "\r\n"));
+  const result = f.run("--check");
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test("a stale source entry fails and asks for its removal", (t) => {
+  const f = fixture(t);
+  f.write(".agents/skill-sources.json", JSON.stringify({ version: 1, skills: { ...sources(f), ordinary: "0".repeat(64) } }));
+  const result = f.run("--check");
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /ordinary is stale; .*remove its entry/);
+});
+
+test("a source entry for a deleted Claude skill warns and exits 0", (t) => {
+  const f = fixture(t);
+  f.write(".agents/skill-sources.json", JSON.stringify({ version: 1, skills: { ...sources(f), gone: "0".repeat(64) } }));
+  const result = f.run("--check");
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /skill-sources\.json: gone has no \.claude\/skills\/gone\/ folder; its entry can be removed/);
+});
+
+test("a needed skill turned off in skillOverrides warns like a missing one", async (t) => {
+  const { reviewRemovals } = await import("./removed-skills.mjs");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skill-deps-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  for (const name of ["codex-fullreview", "impartial-review"]) {
+    fs.mkdirSync(path.join(root, ".claude/skills", name), { recursive: true });
+    fs.writeFileSync(path.join(root, ".claude/skills", name, "SKILL.md"), `---\nname: ${name}\n---\n`);
+  }
+  const registered = new Set(["codex-fullreview", "impartial-review"]);
+  // Without a template manifest (a project older than it) no dependency rule applies.
+  assert.deepEqual(reviewRemovals(root, registered, [], new Set(["impartial-review"])), []);
+  fs.mkdirSync(path.join(root, ".agents"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".agents/template-manifest.json"), JSON.stringify({ version: 1, skills: { required: [], dependencies: { "codex-fullreview": ["impartial-review"] } } }));
+  assert.deepEqual(reviewRemovals(root, registered, [], new Set()), []);
+  const warnings = reviewRemovals(root, registered, [], new Set(["impartial-review"]));
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /codex-fullreview needs impartial-review, which \.claude\/settings\.json turns off in skillOverrides/);
+  assert.deepEqual(reviewRemovals(root, registered, [], new Set(["codex-fullreview", "impartial-review"])), []);
+  fs.mkdirSync(path.join(root, ".claude"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".claude/settings.json"), JSON.stringify({ skillOverrides: { "impartial-review": "off" } }));
+  assert.equal(reviewRemovals(root, registered, []).length, 1);
+});
+
+test("a template manifest with an unknown version or key fails the removal review", async (t) => {
+  const { reviewRemovals } = await import("./removed-skills.mjs");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skill-manifest-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, ".agents"), { recursive: true });
+  const manifest = path.join(root, ".agents/template-manifest.json");
+  fs.writeFileSync(manifest, JSON.stringify({ version: 2, skills: {} }));
+  assert.throws(() => reviewRemovals(root, new Set(), []), /template-manifest\.json: version 2 is not supported/);
+  fs.writeFileSync(manifest, JSON.stringify({ version: 1, skills: {}, extra: true }));
+  assert.throws(() => reviewRemovals(root, new Set(), []), /template-manifest\.json: unknown top-level key extra/);
 });
