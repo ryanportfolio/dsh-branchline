@@ -62,8 +62,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
+    // A native skill this project does not have (removed or never installed) has no repository copy to compare.
     const names = Object.entries(modes)
-      .filter(([name, mode]) => mode === "native" && overrides[name] !== "off")
+      .filter(([name, mode]) => mode === "native" && overrides[name] !== "off" && fs.existsSync(path.join(root, ".agents/skills", name)))
       .map(([name]) => name);
     let checked = 0;
     for (const target of targets) {

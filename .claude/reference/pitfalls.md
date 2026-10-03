@@ -127,9 +127,6 @@ repository". Start compound commands with `cd <repo> &&` or use `git -C`.
 opening a PR that touches those paths, and commit only the panels whose content changed
 (autocrlf marks the rest modified). `gh pr merge` does not block on a red check here (no
 required checks), so read `gh pr checks <n>` before merging; #132 landed red this way.
-Same root cause: `node .claude/scripts/check-skill-capabilities.mjs` reports "Capability
-catalog stale" on a CRLF checkout while CI (LF) passes; `--write` then produces a
-line-ending-only diff. Trust CI for that check, not the local run.
 Adding or removing a skill also breaks the pinned counts: `requiredCounts` in
 `scripts/readme/facts.mjs` and three `skillCount`/`tierCounts` assertions in
 `scripts/readme/readme.test.mjs` (the fixture there copies every skill into both runtimes,
