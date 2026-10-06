@@ -38,8 +38,9 @@ Browser rule, copied into every brief that renders or drives a page:
 - Launch headed Chrome on the real GPU through the repo's placed-Chrome launcher,
   `launchPlacedChrome()` in `scripts/lib/launch-chrome.mjs`. A headless, minimized, or
   software-rendered run is never evidence for GPU, WebGL, or animation claims. Static
-  media may render without it. Each session owns one browser; parallel or subagent
-  browser work starts its own isolated profile.
+  media may render without it. Each parallel subagent launches its own
+  `launchPlacedChrome()` instance; an MCP browser server is shared by the whole session,
+  so only one agent at a time may drive it.
 - Drive: tie every capture to exactly one action on the right page. Find the app's page by
   a marker in its DOM, such as a `data-*` root; zero hits means the target is unknown:
   print each open page's URL and title, pick from that printout, and record which one.
