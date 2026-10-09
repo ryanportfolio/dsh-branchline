@@ -186,6 +186,10 @@ describe('fresh process identity and ancestry checks', () => {
     expect([...list.ports].sort()).toEqual([3080, 3999, 4123])
     expect(list.markers).toEqual(['dsh\\lib\\bin.js'])
     expect([...protectList({}, join(dir, 'missing.txt')).ports]).toEqual([3080])
+    expect([...protectList({ DSH_WEB_URL: 'http://localhost:80/' }, join(dir, 'missing.txt')).ports]).toEqual([3080, 80])
+    expect([...protectList({ DSH_WEB_URL: 'https://localhost/' }, join(dir, 'missing.txt')).ports]).toEqual([3080, 443])
+    // A directory read fails with EISDIR, standing in for an access or sharing error.
+    expect(() => protectList({}, dir)).toThrow('protect list unreadable')
     rmSync(dir, { recursive: true })
   })
   it('allows external tree roots with missing ancestry and protects nested runtimes', () => {

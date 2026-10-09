@@ -239,9 +239,16 @@ const consoleHosts = /^(?:windowsterminal|openconsole|conhost)(?:\.exe)?$/i
 export function protectList(env = process.env, file = protectFile) {
   const ports = new Set([DSH_PORT])
   const markers = []
-  try { const port = Number(new URL(env.DSH_WEB_URL).port); if (port) ports.add(port) } catch {}
+  try {
+    const url = new URL(env.DSH_WEB_URL)
+    // URL drops a scheme's default port, even when written out.
+    const port = Number(url.port) || { 'http:': 80, 'https:': 443 }[url.protocol]
+    if (port) ports.add(port)
+  } catch {}
   let lines = []
-  try { lines = readFileSync(file, 'utf8').split(/\r?\n/) } catch {}
+  try { lines = readFileSync(file, 'utf8').split(/\r?\n/) } catch (error) {
+    if (error?.code !== 'ENOENT') throw blocked('protect list unreadable')
+  }
   for (const raw of lines) {
     const line = raw.trim()
     if (!line || line.startsWith('#')) continue
