@@ -3,7 +3,10 @@ import { Context, Service } from '@deepseek-ai/cordis'
 // @ts-expect-error plain-JS permanent host package
 import { apply, installGuard } from '../packages/dsh-command-guard/lib/index.js'
 // @ts-expect-error plain-JS permanent host package
-import { assess, closeInspector, inspect, suspicious, verifyTarget } from '../packages/dsh-command-guard/lib/policy.js'
+import { assess, closeInspector, inspect, protectList, suspicious, verifyTarget } from '../packages/dsh-command-guard/lib/policy.js'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // Every original executor in this suite is a mock. Command strings are DATA.
 const recurrence = "Get-Process node -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '*node*' } | Select-Object Id,CommandLine; taskkill /F /IM node.exe 2>&1 | Select-Object -First 3; Start-Sleep -Seconds 2; Get-Process node -ErrorAction SilentlyContinue | Select-Object Id | Format-Table -AutoSize | Out-String; Rename-Item assets/originals assets/originals.HIDDEN; Test-Path assets/originals; Test-Path assets/originals.HIDDEN; git status --porcelain=v1 | Select-Object -First 10; git check-ignore -v assets/originals.HIDDEN 2>&1 | Select-Object -First 3; echo HIDDEN"
@@ -141,8 +144,8 @@ describe('fresh process identity and ancestry checks', () => {
   it('allows a fully identifiable preview subtree', () => {
     expect(() => verifyTarget({ pid: 40, tree: true }, [...rows, { pid: 60, parent: 40, name: 'node.exe', command: 'node worker.js' }], 10)).not.toThrow()
   })
-  it('rejects unknown ancestry, unknown target command line, cycles and malformed snapshots', () => {
-    for (const snapshot of [null, [], rows.filter((r) => r.pid !== 20), [...rows, rows[0]], rows.map((r) => r.pid === 40 ? { ...r, command: null } : r), rows.map((r) => r.pid === 30 ? { ...r, parent: 10 } : r)]) {
+  it('rejects unknown target command line, cycles and malformed snapshots', () => {
+    for (const snapshot of [null, [], [...rows, rows[0]], rows.map((r) => r.pid === 40 ? { ...r, command: null } : r), rows.map((r) => r.pid === 30 ? { ...r, parent: 10 } : r)]) {
       expect(() => verifyTarget({ pid: 40 }, snapshot, 10)).toThrow()
     }
   })
@@ -155,16 +158,45 @@ describe('fresh process identity and ancestry checks', () => {
     expect(() => verifyTarget({ pid: 40 }, snapshot, 10)).not.toThrow()
     expect(() => verifyTarget({ pid: 20 }, snapshot, 10)).toThrow()
   })
-  it('rejects external and orphan targets when upper host ancestry is missing', () => {
+  it('allows external and orphan targets when upper host ancestry is missing', () => {
     const snapshot = rows.filter((r) => r.pid !== 30)
-    expect(() => verifyTarget({ pid: 40 }, snapshot, 10)).toThrow('only proven host descendants')
-    expect(() => verifyTarget({ pid: 40 }, snapshot.map((r) => r.pid === 40 ? { ...r, parent: 999 } : r), 10)).toThrow('External or orphan')
+    expect(() => verifyTarget({ pid: 40 }, snapshot, 10)).not.toThrow()
+    expect(() => verifyTarget({ pid: 40 }, snapshot.map((r) => r.pid === 40 ? { ...r, parent: 999 } : r), 10)).not.toThrow()
   })
-  it('requires a gap-free descendant proof for tree roots and protects nested runtimes', () => {
+  it('rejects a console host outside the host tree only when ancestry is missing', () => {
+    const terminal = { pid: 70, parent: 0, name: 'WindowsTerminal.exe', command: 'WindowsTerminal.exe' }
+    expect(() => verifyTarget({ pid: 70 }, [...rows, terminal], 10)).not.toThrow()
+    expect(() => verifyTarget({ pid: 70 }, [...rows.filter((r) => r.pid !== 30), terminal], 10)).toThrow('console host')
+    const ownConhost = { pid: 71, parent: 10, name: 'conhost.exe', command: 'conhost.exe 0x4' }
+    expect(() => verifyTarget({ pid: 71 }, [...rows.filter((r) => r.pid !== 30), ownConhost], 10)).not.toThrow()
+  })
+  it('protects listeners on DSH ports and processes matching protect-list markers', () => {
+    expect(() => verifyTarget({ pid: 40 }, rows, 10, { listeners: [{ port: 3080, pid: 40 }] })).toThrow('protected')
+    expect(() => verifyTarget({ pid: 40 }, rows, 10, { listeners: [{ port: 5173, pid: 40 }] })).not.toThrow()
+    expect(() => verifyTarget({ pid: 40 }, rows, 10, { listeners: [{ port: 4000, pid: 40 }], ports: new Set([4000]) })).toThrow('protected')
+    expect(() => verifyTarget({ pid: 40 }, rows, 10, { markers: ['preview.mjs'] })).toThrow('protected')
+    expect(() => verifyTarget({ pid: 40, tree: true }, [...rows, { pid: 60, parent: 40, name: 'node.exe', command: 'node dsh\\lib\\bin.js' }], 10, { markers: ['dsh\\lib\\bin.js'] })).toThrow('protected')
+    expect(() => verifyTarget({ pid: 40 }, rows, 10, { listeners: null as never })).toThrow('listener inspection')
+  })
+  it('reads DSH ports and markers from DSH_WEB_URL and the protect file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-guard-'))
+    const file = join(dir, 'servers-protect.txt')
+    writeFileSync(file, '# comment\r\n3080\r\n4123\r\ndsh\\lib\\bin.js\r\n')
+    const list = protectList({ DSH_WEB_URL: 'http://127.0.0.1:3999/' }, file)
+    expect([...list.ports].sort()).toEqual([3080, 3999, 4123])
+    expect(list.markers).toEqual(['dsh\\lib\\bin.js'])
+    expect([...protectList({}, join(dir, 'missing.txt')).ports]).toEqual([3080])
+    expect([...protectList({ DSH_WEB_URL: 'http://localhost:80/' }, join(dir, 'missing.txt')).ports]).toEqual([3080, 80])
+    expect([...protectList({ DSH_WEB_URL: 'https://localhost/' }, join(dir, 'missing.txt')).ports]).toEqual([3080, 443])
+    // A directory read fails with EISDIR, standing in for an access or sharing error.
+    expect(() => protectList({}, dir)).toThrow('protect list unreadable')
+    rmSync(dir, { recursive: true })
+  })
+  it('allows external tree roots with missing ancestry and protects nested runtimes', () => {
     const snapshot = rows.filter((r) => r.pid !== 30).map((r) => r.pid === 40 ? { ...r, parent: 10 } : r)
     const child = { pid: 60, parent: 40, name: 'node.exe', command: 'node worker.js' }
     expect(() => verifyTarget({ pid: 40, tree: true }, [...snapshot, child], 10)).not.toThrow()
-    expect(() => verifyTarget({ pid: 40, tree: true }, [...snapshot.map((r) => r.pid === 40 ? { ...r, parent: 999 } : r), child], 10)).toThrow()
+    expect(() => verifyTarget({ pid: 40, tree: true }, [...snapshot.map((r) => r.pid === 40 ? { ...r, parent: 999 } : r), child], 10)).not.toThrow()
     expect(() => verifyTarget({ pid: 40, tree: true }, [...snapshot.map((r) => r.pid === 50 ? { ...r, parent: 40 } : r), child], 10)).toThrow()
   })
   it('rejects missing host or any snapshot cycle even for an otherwise safe descendant', () => {
