@@ -1,4 +1,5 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { MessageChannel, Worker, receiveMessageOnPort } from 'node:worker_threads'
@@ -229,8 +230,29 @@ function literalTarget(name, args) {
   return { pid, tree }
 }
 
+const DSH_PORT = 3080
+const protectFile = join(homedir(), '.claude', 'servers-protect.txt')
+// A console host above a missing ancestor may own the DSH console window.
+const consoleHosts = /^(?:windowsterminal|openconsole|conhost)(?:\.exe)?$/i
+
+/** Ports and command-line markers that always mark a DSH process. Reread per kill. */
+export function protectList(env = process.env, file = protectFile) {
+  const ports = new Set([DSH_PORT])
+  const markers = []
+  try { const port = Number(new URL(env.DSH_WEB_URL).port); if (port) ports.add(port) } catch {}
+  let lines = []
+  try { lines = readFileSync(file, 'utf8').split(/\r?\n/) } catch {}
+  for (const raw of lines) {
+    const line = raw.trim()
+    if (!line || line.startsWith('#')) continue
+    if (/^\d+$/.test(line)) ports.add(Number(line))
+    else markers.push(line.toLowerCase())
+  }
+  return { ports, markers }
+}
+
 /** Fresh snapshot per kill; never cache PID approvals. PID reuse remains an OS race. */
-export function verifyTarget(target, processes, hostPid = process.pid) {
+export function verifyTarget(target, processes, hostPid = process.pid, { listeners = [], ports = new Set([DSH_PORT]), markers = [] } = {}) {
   if (!Array.isArray(processes) || !processes.length) throw blocked('process inspection unavailable')
   const rows = new Map()
   for (const row of processes) {
@@ -257,7 +279,11 @@ export function verifyTarget(target, processes, hostPid = process.pid) {
     if (!rows.has(current)) { incompleteAncestry = true; break }
     current = rows.get(current).parent
   }
+  if (!Array.isArray(listeners)) throw blocked('listener inspection unavailable')
+  for (const { port, pid } of listeners) if (ports.has(port)) protectedPids.add(pid)
   for (const row of rows.values()) {
+    const text = `${row.name || ''} ${row.command || ''}`.toLowerCase()
+    if (markers.some((marker) => text.includes(marker))) protectedPids.add(row.pid)
     if (/(?:deepseek[-\\/ ]?harness|@deepseek-ai[\\/]dsh|(?:^|[\\/\s"'])dsh(?:\.m?js|\.cjs|\.exe|\s|[\\/"']|$)|start-dsh|start-branchline)/i.test(`${row.name || ''} ${row.command || ''}`)) protectedPids.add(row.pid)
   }
   const targets = new Set([target.pid])
@@ -271,15 +297,17 @@ export function verifyTarget(target, processes, hostPid = process.pid) {
   for (const pid of targets) {
     const row = rows.get(pid)
     if (!row || typeof row.command !== 'string' || !row.command.trim() || protectedPids.has(pid)) throw blocked('target is protected, missing, or unidentifiable')
-    if (incompleteAncestry) {
+    // External PIDs are allowed. With a gap in host ancestry, the unseen ancestors
+    // may include the console hosting DSH, so only proven descendants may be one.
+    if (incompleteAncestry && consoleHosts.test(row.name || '')) {
       let cursor = row.parent
       while (cursor !== 0 && cursor !== hostPid && rows.has(cursor)) cursor = rows.get(cursor).parent
-      if (cursor !== hostPid) throw blocked('an upper host ancestor has exited; only proven host descendants are allowed. External or orphan targets are refused; use job_kill for a DSH-owned background job')
+      if (cursor !== hostPid) throw blocked('console host may own the DSH console')
     }
   }
 }
 
 export function checkCommand(command) {
   const target = assess(command)
-  if (target) verifyTarget(target, inspect({ mode: 'processes' }))
+  if (target) verifyTarget(target, inspect({ mode: 'processes' }), process.pid, { ...protectList(), listeners: inspect({ mode: 'listeners' }) })
 }

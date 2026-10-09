@@ -16,6 +16,13 @@ function Invoke-Inspection($inputData) {
         })
         return ConvertTo-Json -InputObject $rows -Depth 6 -Compress
     }
+    if ($inputData.mode -eq 'listeners') {
+        # Fails (and so blocks the kill) where the cmdlet is missing.
+        $rows = @(Get-NetTCPConnection -State Listen | ForEach-Object {
+            @{ port = [long]$_.LocalPort; pid = [long]$_.OwningProcess }
+        })
+        return ConvertTo-Json -InputObject $rows -Depth 4 -Compress
+    }
     if ($inputData.mode -ne 'parse' -or $inputData.command -isnot [string]) { throw 'invalid inspection input' }
     $tokens = $null
     $parseErrors = $null
