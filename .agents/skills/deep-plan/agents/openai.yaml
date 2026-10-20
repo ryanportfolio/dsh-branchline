@@ -1,0 +1,5 @@
+interface:
+  display_name: "Deep Plan"
+  short_description: "Interview a loose idea in rounds until the plan is clear"
+policy:
+  allow_implicit_invocation: false

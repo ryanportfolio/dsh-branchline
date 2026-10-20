@@ -1,6 +1,7 @@
 ---
 name: dare
 description: "Use for /dare, first principles, or questioning the problem: four fresh stages decompose, audit, recombine and test, preserving immutable goals and constraints."
+disable-model-invocation: true
 ---
 
 # dare: first-principles chain with fresh-context steps
@@ -24,7 +25,7 @@ Artifact chain: problem statement, decomposition tree, audit table, surviving bl
 
 Input: the immutable contract and the user's problem statement, verbatim.
 
-Dispatch instructions: decomposition only; advice, solutions, assumptions, and standard playbooks are out of scope and count against you. First check whether the stated problem hides a deeper objective; if so, name it in one sentence and stop there. Otherwise break the problem into its smallest useful parts: a clear hierarchy (problem, major components, elements inside each), using only dimensions that matter here (people, process steps, time, resources, costs). For each component: what it contains and how it connects upward. Stop splitting when each part can be examined on its own for hidden assumptions; that is what the parts are for. Mark every point where a choice will eventually be required (a smoothing approach, a data store, a boundary) as an open decision, without naming a winner: flagged decision points are the map's most valuable annotations. Temporal and process structure count as decomposition when the problem contains them (steps and their ordering as they exist); a prescribed action order is a plan and out of scope. No choosing, no evaluation, no fact-versus-assumption labels, no recommendations.
+Dispatch instructions: decomposition only; advice, solutions, assumptions, and standard playbooks are out of scope and count against you. First check whether the stated problem hides a deeper objective; if so, name it in one sentence and stop there. Otherwise break the problem into its smallest useful parts: a clear hierarchy, also called an issue tree (problem, major components, elements inside each), using only dimensions that matter here (people, process steps, time, resources, costs). For each component: what it contains and how it connects upward. Stop splitting when each part can be examined on its own for hidden assumptions; that is what the parts are for. Mark every point where a choice will eventually be required (a smoothing approach, a data store, a boundary) as an open decision, without naming a winner: flagged decision points are the map's most valuable annotations. Temporal and process structure count as decomposition when the problem contains them (steps and their ordering as they exist); a prescribed action order is a plan and out of scope. No choosing, no evaluation, no fact-versus-assumption labels, no recommendations.
 
 Gate: if a deeper problem surfaced, ask the user in plain numbered chat which problem to decompose, and do not continue until they choose. Never silently reframe. Rerun D on the chosen problem if it changed.
 

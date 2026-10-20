@@ -1,6 +1,7 @@
 ---
 name: optimize-context
 description: Use when the user asks to reduce per-turn context or token load, trim kernels, skills, or connectors, or propagate a generic context optimization to the starter.
+disable-model-invocation: true
 ---
 
 # Reduce measured context load
@@ -21,7 +22,7 @@ Cut duplication, stale facts, and filler. Preserve current explicit user prefere
 
 For skill visibility or connectors, inspect the actual runtime's supported controls, scope, and reload behavior first. Distinguish project, personal, plugin, and account-owned sources. Disabling a capability can affect other projects; describe that scope and use only authorized controls. Do not assume a file edit controls an account connector or plugin. Prefer changing precise discovery descriptions over hiding useful skills merely to lower a count.
 
-For Claude legacy visibility values or plugin commands, verify current schema/help and installation rather than relying on remembered enum values or scope claims. For Codex native bodies, reconcile registry changes with files and regenerate adapter-owned content only.
+For Claude legacy visibility values or plugin commands, verify current schema/help and installation rather than relying on remembered enum values or scope claims. For Codex, keep every Claude skill registered in `.agents/skill-modes.json` as `native` (with a maintained port in `.agents/skills/<name>/`) or `disabled`, and reconcile registry changes with files. After a change to a `native` skill's Claude source, update its Codex port to match and run `node .claude/scripts/sync-codex-skills.mjs --baseline <name>`; `--check` warns until both are done.
 
 ## Verify and report
 

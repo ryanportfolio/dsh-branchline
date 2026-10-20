@@ -13,7 +13,7 @@ inside the current task; it does not require a separate document, agent, or cere
 
 Read the applicable Codex instructions and relevant project facts. Define the output and
 how completion will be established. Separate observed facts from assumptions that could
-change the solution. For a defect that once worked, establish what changed since (a commit,
+change the solution. For a defect that once worked, establish what changed since the last known-good state (a commit,
 a dependency, a config, an input) before hypothesising about the code; with no known working
 state, say so and reproduce first. Run the cheapest useful probe before asking the user for
 an observable fact. Ask for missing preferences or consequential decisions when needed; continue work

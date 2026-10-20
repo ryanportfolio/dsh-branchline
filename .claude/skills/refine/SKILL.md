@@ -1,6 +1,6 @@
 ---
 name: refine
-description: "Use for an explicit workflow-improvement review, turning the user's preferences into rules or a skill, or recurring task friction that may justify a narrow change to skills or project references."
+description: "Use for an explicit workflow-improvement review, turning the user's preferences into rules or a skill, recurring task friction that may justify a narrow change to skills or project references, or the unattended weekly review (/refine weekly)."
 ---
 
 # Improve the working process
@@ -15,8 +15,16 @@ Run `node .claude/scripts/memory-audit.mjs` for the read-side view of reference 
 memory files, and skills: never-read files, dated entries older than six months, and retired
 lines old enough to prune are candidates to check, not verdicts.
 For each recurring problem, identify the smallest change that would have prevented it.
-Prefer an in-scope tool fix over documenting a workaround. A description change needs
-evidence that the trigger is wrong; an isolated misread can require no edit.
+Prefer an in-scope tool fix over documenting a workaround. For new guidance, use the first
+form that fits, cheapest first: a script for a deterministic step the agent got wrong or did
+slowly; a skill for a procedure with a recognizable trigger; a subagent for a bounded job
+whose input is large and whose answer is small; a hook only when the evidence shows a rule
+skipped more than once and a command can check it, because a hook also fires when it should
+not; always-on text (kernel, `CLAUDE.md`, `AGENTS.md`) last, for a short rule every session
+needs. Always-on text loads every turn, so adding lines to it means removing at least as many
+from the same file, or saying in the report why the file should grow. Codex can disable
+project hooks, so a rule a hook enforces keeps its wording in `AGENTS.md`. A description
+change needs evidence that the trigger is wrong; an isolated misread can require no edit.
 
 Only the user's own words count as evidence of a preference. Before reading deeply, grep
 the user's turns case-insensitively for phrases that set or repeat a standing rule:
@@ -55,8 +63,54 @@ does not authorize global edits or publication. Read before editing; preserve un
 work and a backup or diff for non-Git files. Route each confirmed change to one home: a
 cross-project personal rule to `~/.claude/CLAUDE.md`, a project-wide rule to the project
 kernel, a quirk to `.claude/reference/pitfalls.md` and other durable project facts to their
-reference file (both through recall), a repeatable procedure to a skill, or nowhere. Keep
+reference file (both through recall), a procedure or check to the form chosen above, or
+nowhere. Keep
 session events and discoverable code facts out.
+
+## Weekly mode
+
+`/refine weekly` runs the review above without the user present, usually from a scheduled
+task. Invoking it authorizes, for this repository only: reading the last 7 days of this
+project's sessions, editing repository files on a fresh branch from `origin/main`, pushing
+that branch, opening one pull request, and appending to the metrics history file named in
+step 2. It does not authorize merging, editing anything else outside the repository (such
+as `~/.claude/CLAUDE.md` or another repo), installing
+anything, or another provider's paid review.
+
+1. **Collect.** Read `~/.claude/projects/*/*.jsonl` files modified in the last 7 days whose
+   `cwd` is this repository or one of its worktrees. For a worktree that has since been
+   removed, keep the project folder only when its name is the main checkout's full path with
+   every non-alphanumeric character replaced by `-`, followed by `--claude-worktrees-`, as
+   `.claude/scripts/memory-audit.mjs` matches it; never match by repository folder name
+   alone, since another repository can share it. Skip
+   subagent transcripts and earlier weekly runs (their first user turn invokes
+   `/refine weekly`): an agent typed those user turns, so they are not the user's words.
+2. **Measure.** Count the sessions read; user turns that correct the agent or repeat an
+   instruction (the phrase grep above, plus "that's wrong", "not what I asked", "undo",
+   "revert"), per session, counting only turns timestamped inside the window; and comments the user wrote on pull requests merged in the
+   window (`gh pr list --state merged --search "merged:>=<date>"`, then the review and issue
+   comments of each, excluding bot authors), per merged pull request. Append one dated row
+   to `~/.claude/refine-weekly/<repo id>.md`, where `<repo id>` is the repository id: its `origin` URL without scheme, user and trailing `.git`,
+   lowercased, with every non-alphanumeric character replaced by `-`; with no `origin`, the
+   main checkout's full path in the same form.
+   Create the file with a header row if missing, and compare against the previous four rows. A phrase match is not always a
+   correction: report the direction of change, not precise rates.
+3. **Find.** Apply the review above to the collected sessions, but skip its
+   `memory-audit.mjs` run: that script reads every past transcript, beyond the window. In the new row's notes,
+   record each task the user asked for this week as a short neutral description with its
+   count of distinct sessions, including tasks below three, without quoting chat. A task whose
+   counts in this row and the previous four rows add up to three or more is a candidate for
+   a playbook skill.
+4. **Act.** Edit only what passes the evidence table's save row or the three failure checks,
+   and only repository files. Everything else goes in the report for the user: suggestions,
+   questions, contradictions, new skills, personal-rule changes, and any finding a project
+   or personal rule keeps out of a file. List findings that are not specific to this
+   repository in their own report section, as cross-project candidates.
+5. **Ship.** With edits: branch `refine/weekly-<date>`, commit, push, and open one pull
+   request whose body is the report. Without edits: no branch or pull request. Never merge.
+   The report holds counts and rule text only, under the privacy rule above, because the
+   pull request may be public. Final reply: the pull request URL or "no changes", this
+   week's metrics row with the trend, and the items that need the user.
 
 For skill authoring or installation, use addskill when available; Codex authoring uses
 built-in skill-creator. A standalone refinement can use the local evaluation resource

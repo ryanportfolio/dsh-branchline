@@ -1,23 +1,31 @@
 # Services and resources
 
-## Define comparable work
+## Comparable work
 
-Record dataset size and shape, operation mix, arrival rate or client concurrency, connection pools, process count, warmup, and cache hit/miss state. Use representative fixtures and isolate write workloads. Run local or approved test environments by default; production load and destructive data changes require authorization.
+Record dataset size + shape, operation mix, arrival rate or client concurrency, connection pools, process count, warmup, cache hit/miss state. Representative fixtures; isolate write workloads. Default: local or approved test envs; prod load + destructive data changes need authorization.
 
-Measure latency distributions with enough samples, completed useful operations per unit time, and errors/timeouts together. Count failed work in the result. Lower latency caused by rejecting work or serving incomplete results is a regression.
+Measure together: latency distributions w/ enough samples, completed useful ops per unit time, errors/timeouts. Count failed work in result. Lower latency from rejecting work or serving incomplete results = regression.
 
-Check that the load generator is not saturated. Record whether it sends at a fixed arrival rate or waits for responses; a client that waits can reduce offered load during stalls and hide queuing delay. Include queues and timed-out requests in the interpretation. Compare at equal load before exploring capacity limits.
+Check load generator not saturated. Record whether it sends at fixed arrival rate or waits for responses; waiting client lowers offered load during stalls → hides queuing delay (coordinated omission). Include queues + timed-out requests in interpretation. Compare at equal load before exploring capacity limits.
 
-## Locate the constraint
+## Locate constraint
 
-Use traces and profiles to separate application CPU, queueing, locks, network, database, and disk. Inspect query count, execution plans, returned rows, and payload only when they contribute to measured delay. Consider algorithmic scaling across representative data sizes when the small fixture hides the complaint.
+Traces + profiles → separate app CPU, queueing, locks, network, DB, disk. Inspect query count, execution plans, returned rows, payload only when they contribute to measured delay. Small fixture hides complaint → consider algorithmic scaling across representative data sizes.
 
-For memory, distinguish peak usage, retained usage after idle/collection where observable, and growth over repeated cycles. Compare equivalent lifecycle points. Allocation volume alone cannot establish a leak. Use a sustained scenario long enough to expose the suspected behavior and state the duration limitation.
+Memory: distinguish peak, retained after idle/collection where observable, growth over repeated cycles. Compare equivalent lifecycle points. Allocation volume alone ≠ leak. Sustained scenario long enough to expose suspected behavior; state duration limitation.
 
-Measure CPU time, I/O volume, cache size, and resource peaks when changes could shift costs. Faster responses achieved by unbounded memory, more workers, or extra infrastructure need an explicit tradeoff and representative capacity measurements.
+Change could shift costs → measure CPU time, I/O volume, cache size, resource peaks. Faster responses via unbounded memory, more workers, or extra infra → explicit tradeoff + representative capacity measurements.
 
-## Check correctness under pressure
+## Browser lifecycle and memory
 
-After changes to caching, concurrency, queries, or storage, verify relevant freshness, invalidation, permissions, ordering, pagination, cancellation, retries, and transaction behavior. Preserve persistence and isolation guarantees. Include repeated operations and failure paths where the change could alter their behavior.
+For an idle or retention complaint, pilot a representative navigation cycle early. Wait for actual transition/teardown completion; rapid interrupted navigation is a separate stress scenario. Sample equivalent points after warmup, then expand the cycle count if accumulation remains measurable. Keep natural-idle and forced-collection series separate.
 
-Record both startup and steady-state effects. Confirm that one faster endpoint has not pushed load onto a dependency or made another protected operation slower. Keep performance conclusions scoped to the measured load and data distribution.
+Distinguish three claims: old work stopped (callbacks/timers/listeners), resources disposed (scenes/textures/observers/workers), and objects collected. Balanced create/dispose counts, zero active loops or one heap drop cannot prove all three. Report each measured claim and its remaining limits; total process memory, JS heap and GPU allocations are not interchangeable.
+
+If historical objects persist, inspect retaining paths before further teardown edits. Check both application references and measurement references, including console variables, remote handles and diagnostic arrays. Release inspection handles before collection checks. WeakRefs surviving without a known collection opportunity do not alone prove a leak. If collection or retaining-path evidence is unavailable, bound the activity/disposal result and leave overall release unresolved.
+
+## Correctness under pressure
+
+After caching, concurrency, query, or storage changes → verify relevant freshness, invalidation, permissions, ordering, pagination, cancellation, retries, transaction behavior. Preserve persistence + isolation guarantees. Include repeated ops + failure paths where change could alter them.
+
+Record startup + steady-state effects. Confirm 1 faster endpoint hasn't pushed load onto a dependency or slowed another protected op. Scope perf conclusions to measured load + data distribution.

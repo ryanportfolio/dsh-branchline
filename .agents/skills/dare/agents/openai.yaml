@@ -1,0 +1,5 @@
+interface:
+  display_name: "Dare"
+  short_description: "First-principles pass over a problem in four fresh stages"
+policy:
+  allow_implicit_invocation: false

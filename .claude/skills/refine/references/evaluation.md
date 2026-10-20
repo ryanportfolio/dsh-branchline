@@ -4,7 +4,7 @@ Keep one compact record with the task's evidence, using the template below. Link
 
 Before trials, fix the predicted behavior, acceptance criteria, targeted scenario, and a neighboring scenario that could regress. Preserve the old state and fingerprint both versions, including the evaluator. Compare under the same relevant model, context, tools, inputs, and attempt/resource budget. Record unavailable conditions and confounds. If the candidate or criteria change, start a new comparison and keep the earlier result.
 
-Use fresh validation context when available; report the limit when it is unavailable. A changed evaluator needs an independent anchor against the original claim, such as unchanged external tests or separately judged raw outcomes. Easier grading cannot establish improvement. A passing baseline may remain passing; do not manufacture a failure.
+Use fresh validation context when available; report the limit when it is unavailable. When the expected outcome is known in advance (an answer key), keep it out of the run being evaluated: no agent doing the work sees it, and scoring happens in a separate step after the run's output is fixed. A run that saw its key can still show a failure, but it cannot establish a pass. A changed evaluator needs an independent anchor against the original claim, such as unchanged external tests or separately judged raw outcomes. Easier grading cannot establish improvement. A passing baseline may remain passing; do not manufacture a failure.
 
 Use the existing verification semantics directly, without requiring another skill:
 

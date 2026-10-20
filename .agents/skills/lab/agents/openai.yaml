@@ -1,0 +1,5 @@
+interface:
+  display_name: "Lab"
+  short_description: "Throwaway live-tuning prototype for a visual element"
+policy:
+  allow_implicit_invocation: false

@@ -70,7 +70,7 @@ State the rejection reason. Popularity is not evidence.
 
 Read [references/synthesis-and-validation.md](references/synthesis-and-validation.md) completely. Choose the canonical skill location from repository instructions; do not assume `.codex/skills`, `.agents/skills`, or `.claude/skills`.
 
-Select the authoring runtime explicitly from the request and repository ownership: Claude uses `$addskill` authoring guidance; Codex uses its built-in `skill-creator` through `$addskill`. For both runtimes, choose native versus adapter ownership deliberately and validate discovery in each target. Do not infer Claude-canonical or Codex-canonical ownership from this workflow's own location.
+Select the authoring runtime explicitly from the request and repository ownership: Claude uses `$addskill` authoring guidance; Codex uses its built-in `skill-creator` through `$addskill`. For both runtimes, follow the repository's runtime ownership rules deliberately (in Harness Firmware: register the skill in `.agents/skill-modes.json` as `native`, with a maintained port under `.agents/skills/<name>/`, or `disabled`) and validate discovery in each target. Do not infer Claude-canonical or Codex-canonical ownership from this workflow's own location.
 
 Prefer:
 
@@ -91,11 +91,11 @@ Inventory active design and UI skills and compare trigger descriptions. Recommen
 - add the new skill and disable a broader one;
 - replace the broader skill.
 
-Before replacement, name exact deleted or disabled paths, preserved capabilities, lost capabilities, and rollback route. Never silently delete a skill, edit a generated adapter, or overwrite unrelated user changes.
+Before replacement, name exact deleted or disabled paths, preserved capabilities, lost capabilities, and rollback route. Never silently delete a skill, hand-edit a file the repository generates, or overwrite unrelated user changes.
 
 ### 7. Validate and hand off
 
-Follow the validation suite in [references/synthesis-and-validation.md](references/synthesis-and-validation.md). Run repository-required adapter generators and checks. Never claim visual, runtime, security, or independent validation that did not occur.
+Follow the validation suite in [references/synthesis-and-validation.md](references/synthesis-and-validation.md). Run the repository's required skill sync and validation checks. Never claim visual, runtime, security, or independent validation that did not occur.
 
 Report:
 

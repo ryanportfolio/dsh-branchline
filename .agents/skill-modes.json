@@ -37,6 +37,17 @@
     "why": "native",
     "wow-loop": "native",
     "writing": "native",
-    "writing-plans": "native"
+    "writing-plans": "native",
+    "apply-firmware": "native",
+    "cache-loop": "native",
+    "codex-image-gen": "disabled",
+    "coordinate": "disabled",
+    "deep-plan": "native",
+    "design-prototypes": "native",
+    "merge": "disabled",
+    "redesign-concepts": "native",
+    "servers": "native",
+    "wrapup": "native",
+    "opus-fullreview": "native"
   }
 }

@@ -21,8 +21,8 @@ Create only files that earn their context and maintenance cost. Do not add a REA
 
 Determine location from repository instructions and tooling:
 
-- use the declared canonical library when adapters are generated elsewhere;
-- never hand-edit generated adapters;
+- use the declared canonical library; if the repository generates runtime copies elsewhere, never hand-edit them;
+- in Harness Firmware repositories, register the skill in `.agents/skill-modes.json` as `native`, with a maintained port under `.agents/skills/<name>/`, or `disabled`; after a change to a `native` skill's Claude source, update its Codex port and run `node .claude/scripts/sync-codex-skills.mjs --baseline <name>`;
 - run required sync/generation commands after canonical edits;
 - if no convention exists, prefer the runtime's repository-local skill directory and document the choice.
 
@@ -79,7 +79,7 @@ Replace:
 Preserved capabilities:
 Intentionally removed:
 Canonical paths affected:
-Generated adapters affected:
+Runtime copies or registrations affected:
 Rollback:
 ```
 
@@ -105,7 +105,7 @@ Run the target runtime's validator when available. Otherwise verify equivalently
 - no reference nesting deeper than one level;
 - main body stays below 500 lines and preferably below 5,000 words;
 - total size stays within the planned context budget;
-- generated adapters are current.
+- runtime copies and registrations pass the repository's sync check (in Harness Firmware: `node .claude/scripts/sync-codex-skills.mjs --check`).
 
 ## Scenario validation
 
@@ -125,7 +125,7 @@ Use a fresh independent agent only when the environment exposes one and the user
 
 Run:
 
-- required skill/adaptor sync check;
+- required skill sync check;
 - diff/format validation;
 - relevant targeted checks;
 - repository-mandated type/test gates when environment and authorization permit.
@@ -142,7 +142,7 @@ Replaced/disabled:
 Sources reviewed:
 Instructional size before/after:
 Structural validation:
-Adapter validation:
+Runtime sync validation:
 Repository checks:
 Scenario validation:
 Unverified:

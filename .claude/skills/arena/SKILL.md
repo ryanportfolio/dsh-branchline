@@ -30,13 +30,17 @@ No two workers share a writable path. The parent holds the letter-to-candidate m
 
 ## Workers
 
-**Candidates.** Three by default; more on request or when the options are many. Each brief names a different angle, such as minimal change, failure-proof, or end-user-first. Agent workers run with `isolation: "worktree"` on Opus, the latest Fable, or higher, never `sonnet` or `haiku`. A user-chosen model that meets that floor wins.
+**Candidates.** Three by default; more on request or when the options are many. Each brief names a different angle, such as minimal change, failure-proof, or end-user-first. Agent workers run on Opus, the latest Fable, or higher, never `sonnet` or `haiku`. A user-chosen model that meets that floor wins.
 
-Mix vendors without asking. If `codex login status` reports a ChatGPT (subscription) login, one candidate and the judge run through `codex exec` with the Sol model id that `codex-review` pins. Take flags from local `codex exec --help`, and never bypass approvals or the sandbox. Only the user's explicit request skips Codex. Logged out, logged in with an API key, or unclear billing: all workers run on Claude, noted; never switch Codex to an API key or paid credits.
+Never start a worker with `isolation: "worktree"`: where a hook rewrites `git` to `rtk git`, Claude Code refuses nearly every git command in an isolated agent. A candidate that needs no git writes only in its `cN/` folder. For one that needs git, the parent runs `git worktree add --detach <main checkout>/../_wt/<repo>/arena-<slug>-cN` before starting it, outside the repo folder because the desktop app refuses writes to other worktrees inside it. The worktree starts from the last commit, so the parent copies in every uncommitted file the brief depends on, and later merges kept results into its own files instead of copying over them. The brief gives that absolute path and says to use it on every call (`git -C <path>`, `cd <path> && ...`), because the Bash working directory resets between calls. A new worktree has no `node_modules`; the brief says to install them. After the verdict, the parent copies what it keeps and removes these worktrees.
+
+Mix vendors without asking. If Codex has an accepted route (a ChatGPT login or a `model_provider` gateway, as the `codex-review` preflight defines), one candidate and the judge run through `codex exec` with the Sol model id that `codex-review` pins. Take flags from local `codex exec --help`, and never bypass approvals or the sandbox. Only the user's explicit request skips Codex. No accepted route: all workers run on Claude, noted; never switch Codex to an API key or paid credits.
 
 For browser-rendered artifacts, each candidate brief includes the `CLAUDE.md` browser rule.
 
 A candidate that returns nothing, or a Codex run the sandbox blocks, is a dropout. Record it and continue with the rest.
+
+**Baseline.** When the task improves an artifact that already exists, copy the current version unchanged into `c0/` with no `rationale.md`. It goes to the judge under a neutral letter like any candidate, and picking it is a valid outcome. A new artifact has no baseline; never build a stand-in. If its style or history would identify it to the judge, record that as a blinding limit.
 
 **Judge.** Start it only after all candidates return. Fresh and read-only, it sees only `criteria.md` and `judge/`, and returns pass/fail per criterion with evidence for every letter, plus a recommended base.
 
@@ -44,7 +48,7 @@ A candidate that returns nothing, or a Codex run the sandbox blocks, is a dropou
 
 Read every candidate completely, low scorers included, and score the criteria yourself. Before overruling the judge, recheck the evidence it cited.
 
-The base is the candidate whose design the planned merges would disturb least; if still tied, the one with less code. Take at most one or two ideas from each other candidate and rewrite them to the base's conventions. A reader of the final artifact should not be able to tell where one candidate ends and another begins.
+The base is the candidate whose design the planned merges would disturb least; if still tied, the one with less code. Take at most one or two ideas from each other candidate and rewrite them to the base's conventions. A reader of the final artifact should not be able to tell where one candidate ends and another begins. When the baseline is chosen as the base, take an idea from another candidate only if that candidate passed a criterion the baseline failed; otherwise the current version stands unchanged.
 
 If the candidates split over a basic premise, `brief.md` has a gap: that gap gets fixed in the brief and a new round runs; a merge of both premises is never the answer. If they all agree, still run the checks.
 
@@ -56,7 +60,7 @@ One rerun total, spent on either a split premise or a verification failure trace
 
 The artifact passes the real checks it claims (tests, build, render, measurement), and `note.md` lists, in this order:
 
-1. A worker table: letter, model, vendor, angle, and outcome (returned, dropped, or blocked).
+1. A worker table: letter, model, vendor, angle, and outcome (returned, dropped, or blocked). A baseline appears as `c0`, angle "unchanged".
 2. Blinding limits and the judge's verdict.
 3. For each non-base candidate: every idea you looked at, marked taken or left, with the reason. Put the base choice and its reason at the top of this section.
 4. Check commands and their results.

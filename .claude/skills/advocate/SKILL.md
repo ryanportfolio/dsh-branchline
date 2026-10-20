@@ -71,12 +71,12 @@ The meat. Honest reasons not to do this, sharpened by the fresh reviewer + proje
 - **Concise.** Handful of lines, not an essay. Cut anything not changing how user sees the change.
 - **Adversarial but honest.** Job = voice the doubt build-momentum buried — but a change that genuinely should ship gets a clear "keep." Don't invent objections to look rigorous.
 - **Specific > generic.** No "consider the tradeoffs." Name the scope creep, the caller that breaks, the dep, the simpler diff.
-- **Render in caveman *full*** (default intensity) even when session runs caveman *ultra* — a review carries nuance ultra mangles. Resume session mode after. Session not in caveman → write plainly.
+- **Render as terse fragments without abbreviations or arrows** even when session runs caveman ultra; a review carries nuance ultra mangles. Resume session mode after. Session not in caveman → write plainly.
 - Skill **reviews — does not implement.** No file edits while running. Verdict revise/drop → separate follow-up user green-lights.
 
 ## Worked example
 
-Change under review: *added a `retryWithBackoff` wrapper around every outbound HTTP call in `client.ts`; goal was to stop one flaky webhook from failing.* Ideal `/advocate` response (caveman full):
+Change under review: *added a `retryWithBackoff` wrapper around every outbound HTTP call in `client.ts`; goal was to stop one flaky webhook from failing.* Ideal `/advocate` response (terse fragments):
 
 > **Change:** `retryWithBackoff` wrapped around all outbound calls in `client.ts`. Goal: stop one flaky webhook failing.
 >

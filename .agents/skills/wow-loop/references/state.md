@@ -14,8 +14,9 @@ Store large content manifests and reports separately and link them from state.
 |---|---|
 | task | Goal, scope, absolute workspace root, starting revision if applicable |
 | contract | Spec/bar paths, version, reference identities, user amendments |
+| target | The user's score wording, its amendment ID if any, whether it is standing policy; never sent to critics or judges |
 | artifact | Content-manifest path and digest identifying the inspected artifact |
-| modules | IDs, dependencies, phase, check IDs, attempt count |
+| modules | IDs, dependencies, items it contains, phase, check IDs, attempt count |
 | checks | IDs, status, contract/artifact versions, evidence paths |
 | findings | IDs, scope/check, severity, acceptance impact, observed defect, evidence, resolution |
 | rounds | Reserved attempt number, scope, approach, outcome, report paths, review retries |
