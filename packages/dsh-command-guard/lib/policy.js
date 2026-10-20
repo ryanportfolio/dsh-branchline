@@ -351,7 +351,47 @@ export function stopProtection() {
   protection = { state: 'off' }
 }
 
+// CloseMainWindow, SendMessage and PostMessage post WM_CLOSE, which needs no
+// terminate right, so protect.ps1 cannot stop them. Closing the launcher's
+// console window ends every process attached to it, DSH included.
+const CLOSE_MESSAGE = 'DSH command guard: closing a window was blocked. CloseMainWindow, SendMessage and PostMessage can close the console that hosts DSH. Stop the process with Stop-Process -Id <pid> -Force or taskkill /PID <pid> /F instead.'
+// Halves of the name too: ForEach-Object takes wildcards (CloseMain*, *MainWindow).
+const closers = /closemain|mainwindow|sendmessage|postmessage/i
+
+/** Literal body of a `pwsh -Command` or `cmd /c` wrapper, or null when there is none to read. */
+function shellBody(args, command) {
+  if (args.some((e) => !e.literal)) return null
+  const index = args.findIndex((e) => /^(?:-[cC](?:ommand)?|\/[cCkK])$/.test(e.value))
+  const body = index < 0 ? [] : args.slice(index + 1)
+  if (!body.length) return null
+  return body.length === 1 ? body[0].value : command.slice(body[0].start, body.at(-1).end)
+}
+
+/** Blocks window-close calls in either protection state. Quoted mentions stay data. */
+export function checkWindowClose(command, parse = (text) => inspect({ mode: 'parse', command: text }), depth = 0) {
+  if (typeof command !== 'string' || depth > 6) return
+  if (!closers.test(command) && !closers.test(command.replace(quotes, ''))) return
+  const ast = parse(command)
+  if (!Array.isArray(ast?.errors) || !Array.isArray(ast.commands)) throw new Error(`${CLOSE_MESSAGE} (unparseable command)`)
+  // PowerShell runs nothing that fails to parse; a cmd body might still run.
+  if (ast.errors.length) {
+    if (depth > 0) throw new Error(`${CLOSE_MESSAGE} (unparseable shell body)`)
+    return
+  }
+  if (ast.closeMembers) throw new Error(`${CLOSE_MESSAGE} (window close call)`)
+  for (const entry of ast.commands) {
+    const name = leaf(entry.name)
+    const args = Array.isArray(entry.elements) ? entry.elements.slice(1) : []
+    if (invokers.has(name) && codeArgs(args).some((e) => e.closeName)) throw new Error(`${CLOSE_MESSAGE} (window close by member name)`)
+    if (shells.has(name)) {
+      const body = shellBody(args, command)
+      if (body !== null) checkWindowClose(body, parse, depth + 1)
+    }
+  }
+}
+
 export function checkCommand(command) {
+  checkWindowClose(command)
   if (protection.state === 'active') return
   const target = assess(command)
   if (target) verifyTarget(target, inspect({ mode: 'processes' }), process.pid, { ...protectList(), listeners: inspect({ mode: 'listeners' }) })

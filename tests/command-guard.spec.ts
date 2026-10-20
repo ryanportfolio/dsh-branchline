@@ -3,7 +3,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 // @ts-expect-error plain-JS permanent host package
 import { apply, installGuard } from '../packages/dsh-command-guard/lib/index.js'
 // @ts-expect-error plain-JS permanent host package
-import { assess, closeInspector, inspect, protectList, suspicious, verifyTarget } from '../packages/dsh-command-guard/lib/policy.js'
+import { assess, checkWindowClose, closeInspector, inspect, protectList, suspicious, verifyTarget } from '../packages/dsh-command-guard/lib/policy.js'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -129,6 +129,29 @@ describe('PowerShell AST policy (parse only, never execution)', () => {
     for (const parser of [() => null, () => ({ errors: ['error'], commands: [] }), () => { throw new Error('inspection failed') }]) {
       expect(() => assess('taskkill /PID 40', parser)).toThrow()
     }
+  })
+})
+
+describe('window close calls (WM_CLOSE needs no terminate right)', () => {
+  it.each([
+    '(Get-Process -Id 6564).CloseMainWindow()', '(Get-Process cmd).closemainwindow()',
+    'Get-Process pwsh | ForEach-Object { $_.CloseMainWindow() }',
+    'Get-Process cmd | ForEach-Object CloseMainWindow', 'Get-Process cmd | % -MemberName CloseMain*',
+    'Get-Process cmd | ForEach-Object *MainWindow', '(Get-Process cmd).ForEach("CloseMainWindow")',
+    "npm test; (Get-Process cmd).'CloseMainWindow'()",
+    '[Win32]::PostMessage($h, 0x10, 0, 0)', '[Native]::SendMessage($h, 16, 0, 0) | Out-Null',
+    'pwsh -NoProfile -Command "(Get-Process cmd).CloseMainWindow()"',
+  ])('blocks %s', (command) => {
+    expect(() => checkWindowClose(command)).toThrow('closing a window was blocked')
+  })
+
+  it.each([
+    'git commit -m "Guard CloseMainWindow on the launcher console"',
+    'Write-Output "SendMessage and PostMessage are blocked"', 'rg -n CloseMainWindow packages',
+    '# (Get-Process cmd).CloseMainWindow()', 'Get-Process node | Select-Object Id, MainWindowHandle',
+    'taskkill /F /IM node.exe', '(Get-Process cmd).CloseMainWindow(',
+  ])('allows %s', (command) => {
+    expect(() => checkWindowClose(command)).not.toThrow()
   })
 })
 
