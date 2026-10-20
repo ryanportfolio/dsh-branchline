@@ -366,7 +366,8 @@ const rtkData = ['read', 'rg', 'grep', 'find', 'ls', 'git', 'log', 'diff', 'stat
 
 /** Blocks window-close calls in either protection state. Quoted mentions stay data. */
 export function checkWindowClose(command, parse = (text) => inspect({ mode: 'parse', command: text }), depth = 0) {
-  if (typeof command !== 'string' || depth > 6) return
+  if (typeof command !== 'string') return
+  if (depth > 6) throw closeBlocked('wrappers nested too deeply')
   const unquoted = command.replace(quotes, '')
   if (![closers, memberDispatch].some((gate) => gate.test(command) || gate.test(unquoted))) return
   const ast = parse(command)
@@ -394,8 +395,12 @@ export function checkWindowClose(command, parse = (text) => inspect({ mode: 'par
       const verb = leaf(args[0]?.value)
       if (args[0]?.literal && rtkData.includes(verb)) continue
       body = ['test', 'proxy'].includes(verb) ? args.slice(1) : args
+    } else if (['invoke-expression', 'iex'].includes(name)) {
+      body = args
     } else {
-      if (named && (launchers.has(name) || evaluators.has(name) || ['invoke-expression', 'iex'].includes(name))) throw closeBlocked('wrapped window close')
+      // Start-Process hands its arguments to another program; read them as text.
+      const text = args.filter((e) => e.kind !== 'ScriptBlockExpressionAst').map((e) => e.text).join(' ')
+      if ((launchers.has(name) || evaluators.has(name)) && [closers, memberDispatch].some((gate) => gate.test(text) || gate.test(text.replace(quotes, '')))) throw closeBlocked('wrapped window close')
       continue
     }
     // Read a literal body; one with variables or no body switch cannot be read.

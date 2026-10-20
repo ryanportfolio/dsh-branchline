@@ -156,6 +156,9 @@ describe('window close calls (WM_CLOSE needs no terminate right)', () => {
     "[ScriptBlock]::Create('(Get-Process cmd).CloseMainWindow()').Invoke()",
     '[Win32]::PostMessageW($h, 0x10, 0, 0)', '[Win32]::SendMessageA($h, 16, 0, 0)',
     '[Win32]::SendNotifyMessage($h, 16, 0, 0)',
+    "iex 'Get-Process | % C*Window'", "Invoke-Expression 'Get-Process cmd | ForEach-Object C*Window'",
+    'Start-Process pwsh -ArgumentList "-c Get-Process cmd | % C*Window"',
+    `${'rtk proxy '.repeat(6)}pwsh -c '(Get-Process cmd).CloseMainWindow()'`,
   ])('blocks %s', (command) => {
     expect(() => checkWindowClose(command)).toThrow('closing a window was blocked')
   })
@@ -169,7 +172,8 @@ describe('window close calls (WM_CLOSE needs no terminate right)', () => {
     '1..3 | % { $_ * 2 }', 'Get-Process | ForEach-Object Name', 'pwsh -Command "Get-Date"',
     'pwsh -Command "Write-Output $env:USERNAME"', 'foreach ($f in Get-ChildItem) { $f.Length }',
     'Get-Process node | ForEach-Object { $_.Kill() }', '(Get-Process node).ForEach({ $_.Kill() })',
-    'Send-MailMessage -To a@b.c -Subject hi',
+    'Send-MailMessage -To a@b.c -Subject hi', '@(1, 2).ForEach([string])',
+    "iex 'Get-ChildItem | ForEach-Object Name'",
   ])('allows %s', (command) => {
     expect(() => checkWindowClose(command)).not.toThrow()
   })

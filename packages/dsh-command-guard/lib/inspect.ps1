@@ -70,8 +70,9 @@ function Invoke-Inspection($inputData) {
             $first = @($node.Arguments)[0]
             if ($null -ne $first -and $first -isnot [System.Management.Automation.Language.ScriptBlockExpressionAst]) {
                 if ($first -isnot [System.Management.Automation.Language.StringConstantExpressionAst] -or (Test-KillName $first.Value)) { $killMembers++ }
-                # A computed name may be CloseMainWindow too.
-                if ($first -isnot [System.Management.Automation.Language.StringConstantExpressionAst] -or (Test-CloseName $first.Value)) { $closeMembers++ }
+                # A computed name may be CloseMainWindow too; .ForEach([type]) only converts.
+                if ($first -is [System.Management.Automation.Language.StringConstantExpressionAst]) { if (Test-CloseName $first.Value) { $closeMembers++ } }
+                elseif ($first -isnot [System.Management.Automation.Language.TypeExpressionAst]) { $closeMembers++ }
             }
         } elseif ($member -in @('InvokeScript', 'NewScriptBlock', 'ExpandString', 'GetCommand', 'GetCmdlet', 'GetCommandName', 'InvokeWithContext', 'AddScript', 'AddCommand')) { $evaluators++ }
         elseif ($member -eq 'Create' -and $node.Static -and $node.Expression -is [System.Management.Automation.Language.TypeExpressionAst] -and $node.Expression.TypeName.FullName -match '(?i)^(?:System\.Management\.Automation\.)?ScriptBlock$') { $evaluators++ }
