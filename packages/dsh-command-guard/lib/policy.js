@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, win32 } from 'node:path'
@@ -314,7 +315,38 @@ export function verifyTarget(target, processes, hostPid = process.pid, { listene
   }
 }
 
+// protect.ps1 makes Windows refuse to terminate the DSH host, its launcher chain,
+// and their console hosts. Once that is verified, no command can kill DSH by
+// accident, so every command runs unparsed. Until then, or if it fails, the
+// policy above stays in force.
+const protector = fileURLToPath(new URL('./protect.ps1', import.meta.url))
+let protection = { state: 'off' }
+let protectRun = 0
+export const protectionStatus = () => protection
+
+export function protectHost(pid = process.pid) {
+  const run = ++protectRun
+  if (process.platform !== 'win32') { protection = { state: 'unsupported' }; return }
+  let exe
+  try { exe = powershellPath() } catch { protection = { state: 'failed', error: 'PowerShell unavailable' }; return }
+  protection = { state: 'pending' }
+  execFile(exe, ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', protector, '-ProcessId', String(pid)], { windowsHide: true, timeout: 60_000 }, (error, stdout) => {
+    if (run !== protectRun) return
+    let report
+    try { report = JSON.parse(stdout) } catch {}
+    const pids = Array.isArray(report?.pids) ? report.pids : []
+    const failed = Array.isArray(report?.failed) ? report.failed : []
+    if (!error && !failed.length && pids.some((row) => row.pid === pid)) {
+      protection = { state: 'active', pids }
+      closeInspector()
+    } else {
+      protection = { state: 'failed', pids, failed, error: error ? error.message : undefined }
+    }
+  })
+}
+
 export function checkCommand(command) {
+  if (protection.state === 'active') return
   const target = assess(command)
   if (target) verifyTarget(target, inspect({ mode: 'processes' }), process.pid, { ...protectList(), listeners: inspect({ mode: 'listeners' }) })
 }
