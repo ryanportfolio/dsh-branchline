@@ -356,7 +356,7 @@ export function stopProtection() {
 // console window ends every process attached to it, DSH included.
 const CLOSE_MESSAGE = 'DSH command guard: closing a window was blocked. CloseMainWindow, SendMessage and PostMessage can close the console that hosts DSH. Stop the process with Stop-Process -Id <pid> -Force or taskkill /PID <pid> /F instead.'
 // Names, and halves of names split by quotes or written as wildcards.
-const closers = /closemain|mainwindow|sendmessage|postmessage/i
+const closers = /closemain|mainwindow|(?:send|post)\w*message/i
 // Member-by-name dispatch takes any wildcard (C*Window), so it is always parsed.
 const memberDispatch = /foreach|\|\s*%/i
 const closeBlocked = (reason) => new Error(`${CLOSE_MESSAGE} (${reason})`)
@@ -378,6 +378,8 @@ export function checkWindowClose(command, parse = (text) => inspect({ mode: 'par
   }
   if (ast.closeMembers) throw closeBlocked('window close call')
   if (ast.dynamicMembers && closers.test(unquoted)) throw closeBlocked('computed member name')
+  // InvokeScript, AddScript and ScriptBlock.Create run a string the parser sees only as data.
+  if (ast.evaluators && closers.test(unquoted)) throw closeBlocked('script evaluation')
   for (const entry of ast.commands) {
     const name = leaf(entry.name)
     const args = Array.isArray(entry.elements) ? entry.elements.slice(1) : []

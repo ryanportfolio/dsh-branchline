@@ -11,7 +11,8 @@ function Test-KillName($value) {
 
 function Test-CloseName($value) {
     # Members that post WM_CLOSE to a window, which needs no terminate right.
-    try { return [bool](@('CloseMainWindow', 'SendMessage', 'PostMessage') | Where-Object { $_ -like $value }) } catch { return $true }
+    $names = 'CloseMainWindow', 'SendMessage', 'SendMessageW', 'SendMessageA', 'PostMessage', 'PostMessageW', 'PostMessageA'
+    try { return [bool]($names | Where-Object { $_ -like $value }) } catch { return $true }
 }
 
 function Invoke-Inspection($inputData) {
@@ -62,13 +63,15 @@ function Invoke-Inspection($inputData) {
         if ($node.Member -isnot [System.Management.Automation.Language.StringConstantExpressionAst]) { $dynamicMembers++; continue }
         $member = $node.Member.Value
         if ($member -eq 'Kill') { $killMembers++ }
-        elseif ($member -in @('CloseMainWindow', 'SendMessage', 'PostMessage')) { $closeMembers++ }
+        # SendMessageW, SendNotifyMessage, PostThreadMessage and the like all deliver WM_CLOSE.
+        elseif ($member -eq 'CloseMainWindow' -or $member -match '^(?:Send|Post)\w*Message') { $closeMembers++ }
         elseif ($member -eq 'ForEach') {
             # .ForEach('Kill') invokes a member by name; only script blocks stay inspectable.
             $first = @($node.Arguments)[0]
             if ($null -ne $first -and $first -isnot [System.Management.Automation.Language.ScriptBlockExpressionAst]) {
                 if ($first -isnot [System.Management.Automation.Language.StringConstantExpressionAst] -or (Test-KillName $first.Value)) { $killMembers++ }
-                if ($first -is [System.Management.Automation.Language.StringConstantExpressionAst] -and (Test-CloseName $first.Value)) { $closeMembers++ }
+                # A computed name may be CloseMainWindow too.
+                if ($first -isnot [System.Management.Automation.Language.StringConstantExpressionAst] -or (Test-CloseName $first.Value)) { $closeMembers++ }
             }
         } elseif ($member -in @('InvokeScript', 'NewScriptBlock', 'ExpandString', 'GetCommand', 'GetCmdlet', 'GetCommandName', 'InvokeWithContext', 'AddScript', 'AddCommand')) { $evaluators++ }
         elseif ($member -eq 'Create' -and $node.Static -and $node.Expression -is [System.Management.Automation.Language.TypeExpressionAst] -and $node.Expression.TypeName.FullName -match '(?i)^(?:System\.Management\.Automation\.)?ScriptBlock$') { $evaluators++ }
