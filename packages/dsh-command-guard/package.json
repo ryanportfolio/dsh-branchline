@@ -1,7 +1,7 @@
 {
   "name": "dsh-command-guard",
   "version": "0.1.0",
-  "description": "Automatic host-side guard against broad process termination through the DSH shell.",
+  "description": "Makes the DSH host refuse termination so agent shells can stop any other process; falls back to a shell kill policy.",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",

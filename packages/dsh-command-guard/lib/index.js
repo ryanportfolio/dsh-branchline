@@ -1,5 +1,5 @@
 /** Permanent host-only shell guard. No subprocess hooks or global overrides. */
-import { checkCommand, blocked, closeInspector, warmInspector } from './policy.js'
+import { checkCommand, blocked, closeInspector, protectHost, protectionStatus, stopProtection, warmInspector } from './policy.js'
 
 export const name = 'dsh-command-guard'
 export const inject = ['shell']
@@ -70,7 +70,8 @@ export function apply(ctx, config = {}) {
   ctx.effect(() => {
     guard = installGuard(typeof ctx.get === 'function' ? ctx.get('shell') : ctx.shell)
     warmInspector()
-    return () => { guard.dispose(); closeInspector() }
+    if (config.protectHost !== false) protectHost()
+    return () => { guard.dispose(); stopProtection(); closeInspector() }
   }, 'dsh-command-guard.shell')
   if (config.statusEndpoint === true) {
     ctx.inject(['webServer'], (webCtx) => webCtx.effect(() => webCtx.webServer.register({
@@ -80,7 +81,7 @@ export function apply(ctx, config = {}) {
         const status = !allowed ? 403 : request.method !== 'GET' ? 405 : 200
         response.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' })
         response.end(JSON.stringify(status === 200
-          ? { name, version: 1, attached: guard?.attached() === true, methods: ['run', 'start'] }
+          ? { name, version: 1, attached: guard?.attached() === true, methods: ['run', 'start'], protection: protectionStatus() }
           : { error: status === 403 ? 'loopback same-origin access required' : 'GET required' }))
       },
     }), 'dsh-command-guard.status'))

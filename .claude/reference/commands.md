@@ -13,5 +13,6 @@
 | `node scripts/verify-companion-plugins.mjs` | Check companion plugins under `packages/` |
 | `powershell -NoProfile -File scripts/test-launcher-sync.ps1` | Launcher plugin-sync tests |
 | `powershell -NoProfile -File scripts/test-launcher-upgrade.ps1` | Launcher upgrade tests |
+| `powershell -NoProfile -File scripts/test-process-protection.ps1` | DSH kill protection against common kill commands (throwaway processes only) |
 | `.start-dsh.ps1 -SelfTest` | Build the launcher GUI off-screen and exit |
 | `.start-dsh.ps1` | Launch DSH (user action) |

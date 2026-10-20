@@ -272,6 +272,8 @@ function Invoke-DshUpgrade {
 
 function Stop-Gracefully {
     param([int]$ProcessId)
+    # dsh-command-guard makes the DSH chain refuse termination; lift that first.
+    try { & (Join-Path $Script:ScriptRoot 'packages\dsh-command-guard\lib\protect.ps1') -ProcessId $ProcessId -Release } catch { }
     $previousPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'

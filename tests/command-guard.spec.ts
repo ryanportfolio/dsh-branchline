@@ -297,7 +297,7 @@ describe('shared shell boundary and lifecycle', () => {
     const ctx = new Context()
     const provider = await ctx.plugin(FakeShell)
     const original = Object.getOwnPropertyDescriptors(FakeShell.prototype)
-    const plugin = await ctx.plugin({ name: 'test-guard', inject: ['shell'], apply })
+    const plugin = await ctx.plugin({ name: 'test-guard', inject: ['shell'], apply: (c: any) => apply(c, { protectHost: false }) })
     try {
       const caller = ctx.extend()
       const nested = caller.extend()
@@ -327,7 +327,7 @@ describe('opt-in read-only status', () => {
       inject: (_: string[], callback: (value: any) => void) => callback(ctx),
       webServer: { register: (value: unknown) => { route = value; return () => {} } },
     }
-    apply(ctx, config)
+    apply(ctx, { protectHost: false, ...config })
     return { route, cleanup: () => cleanup.reverse().forEach((f) => f()) }
   }
   it('has no endpoint by default', () => { const f = fixture({}); expect(f.route).toBeUndefined(); f.cleanup() })
@@ -342,7 +342,7 @@ describe('opt-in read-only status', () => {
     const response = { writeHead: vi.fn(), end: vi.fn() }
     f.route.handler({ method, socket: { remoteAddress }, headers: { host, origin } }, response)
     expect(response.writeHead.mock.calls[0]?.[0]).toBe(expected)
-    if (expected === 200) expect(JSON.parse(response.end.mock.calls[0]?.[0])).toEqual({ name: 'dsh-command-guard', version: 1, attached: true, methods: ['run', 'start'] })
+    if (expected === 200) expect(JSON.parse(response.end.mock.calls[0]?.[0])).toEqual({ name: 'dsh-command-guard', version: 1, attached: true, methods: ['run', 'start'], protection: { state: 'off' } })
     f.cleanup()
   })
 })
