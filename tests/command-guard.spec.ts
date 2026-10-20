@@ -141,6 +141,16 @@ describe('window close calls (WM_CLOSE needs no terminate right)', () => {
     "npm test; (Get-Process cmd).'CloseMainWindow'()",
     '[Win32]::PostMessage($h, 0x10, 0, 0)', '[Native]::SendMessage($h, 16, 0, 0) | Out-Null',
     'pwsh -NoProfile -Command "(Get-Process cmd).CloseMainWindow()"',
+    'Get-Process cmd | ForEach-Object C*Window', 'Get-Process cmd | % -MemberName:CloseMainWindow',
+    'Get-Process cmd | ForEach-Object $member',
+    'rtk proxy pwsh -Command "(Get-Process cmd).CloseMainWindow()"',
+    'rtk test pwsh -Command "(Get-Process cmd).CloseMainWindow()"',
+    'pwsh -Command "(Get-Process -Id $targetPid).CloseMainWindow()"',
+    'pwsh -COMMAND "(Get-Process cmd).CloseMainWindow()"', 'pwsh -Com "(Get-Process cmd).CloseMainWindow()"',
+    'cmd /C pwsh -c "(Get-Process cmd).CloseMainWindow()"',
+    'iex "(Get-Process cmd).CloseMainWindow()"',
+    'Start-Process pwsh -ArgumentList "-c (Get-Process cmd).CloseMainWindow()"',
+    "(Get-Process cmd).('Close'+'MainWindow')()",
   ])('blocks %s', (command) => {
     expect(() => checkWindowClose(command)).toThrow('closing a window was blocked')
   })
@@ -150,6 +160,9 @@ describe('window close calls (WM_CLOSE needs no terminate right)', () => {
     'Write-Output "SendMessage and PostMessage are blocked"', 'rg -n CloseMainWindow packages',
     '# (Get-Process cmd).CloseMainWindow()', 'Get-Process node | Select-Object Id, MainWindowHandle',
     'taskkill /F /IM node.exe', '(Get-Process cmd).CloseMainWindow(',
+    'rtk git commit -m "Guard CloseMainWindow"', 'Get-ChildItem | ForEach-Object { $_.Name }',
+    '1..3 | % { $_ * 2 }', 'Get-Process | ForEach-Object Name', 'pwsh -Command "Get-Date"',
+    'pwsh -Command "Write-Output $env:USERNAME"', 'foreach ($f in Get-ChildItem) { $f.Length }',
   ])('allows %s', (command) => {
     expect(() => checkWindowClose(command)).not.toThrow()
   })

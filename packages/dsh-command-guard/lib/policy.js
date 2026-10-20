@@ -355,38 +355,50 @@ export function stopProtection() {
 // terminate right, so protect.ps1 cannot stop them. Closing the launcher's
 // console window ends every process attached to it, DSH included.
 const CLOSE_MESSAGE = 'DSH command guard: closing a window was blocked. CloseMainWindow, SendMessage and PostMessage can close the console that hosts DSH. Stop the process with Stop-Process -Id <pid> -Force or taskkill /PID <pid> /F instead.'
-// Halves of the name too: ForEach-Object takes wildcards (CloseMain*, *MainWindow).
+// Names, and halves of names split by quotes or written as wildcards.
 const closers = /closemain|mainwindow|sendmessage|postmessage/i
-
-/** Literal body of a `pwsh -Command` or `cmd /c` wrapper, or null when there is none to read. */
-function shellBody(args, command) {
-  if (args.some((e) => !e.literal)) return null
-  const index = args.findIndex((e) => /^(?:-[cC](?:ommand)?|\/[cCkK])$/.test(e.value))
-  const body = index < 0 ? [] : args.slice(index + 1)
-  if (!body.length) return null
-  return body.length === 1 ? body[0].value : command.slice(body[0].start, body.at(-1).end)
-}
+// Member-by-name dispatch takes any wildcard (C*Window), so it is always parsed.
+const memberDispatch = /foreach|\|\s*%/i
+const closeBlocked = (reason) => new Error(`${CLOSE_MESSAGE} (${reason})`)
+// `pwsh -c`, every abbreviation of -Command in any case, and `cmd /c` or `/k`.
+const bodySwitch = /^(?:-c(?:o(?:m(?:m(?:a(?:n(?:d)?)?)?)?)?)?|\/[ck])$/i
+const rtkData = ['read', 'rg', 'grep', 'find', 'ls', 'git', 'log', 'diff', 'status', 'gain', 'help', '--help', '--version']
 
 /** Blocks window-close calls in either protection state. Quoted mentions stay data. */
 export function checkWindowClose(command, parse = (text) => inspect({ mode: 'parse', command: text }), depth = 0) {
   if (typeof command !== 'string' || depth > 6) return
-  if (!closers.test(command) && !closers.test(command.replace(quotes, ''))) return
+  const unquoted = command.replace(quotes, '')
+  if (![closers, memberDispatch].some((gate) => gate.test(command) || gate.test(unquoted))) return
   const ast = parse(command)
-  if (!Array.isArray(ast?.errors) || !Array.isArray(ast.commands)) throw new Error(`${CLOSE_MESSAGE} (unparseable command)`)
+  if (!Array.isArray(ast?.errors) || !Array.isArray(ast.commands)) throw closeBlocked('unparseable command')
   // PowerShell runs nothing that fails to parse; a cmd body might still run.
   if (ast.errors.length) {
-    if (depth > 0) throw new Error(`${CLOSE_MESSAGE} (unparseable shell body)`)
+    if (depth > 0) throw closeBlocked('unparseable shell body')
     return
   }
-  if (ast.closeMembers) throw new Error(`${CLOSE_MESSAGE} (window close call)`)
+  if (ast.closeMembers) throw closeBlocked('window close call')
+  if (ast.dynamicMembers && closers.test(unquoted)) throw closeBlocked('computed member name')
   for (const entry of ast.commands) {
     const name = leaf(entry.name)
     const args = Array.isArray(entry.elements) ? entry.elements.slice(1) : []
-    if (invokers.has(name) && codeArgs(args).some((e) => e.closeName)) throw new Error(`${CLOSE_MESSAGE} (window close by member name)`)
+    // A variable or colon-bound member name cannot be checked against the list.
+    if (invokers.has(name) && codeArgs(args).some((e) => e.closeName || opaque(e))) throw closeBlocked('member invocation by name')
+    const named = closers.test(args.map((e) => e.text).join(' ').replace(quotes, ''))
+    let body
     if (shells.has(name)) {
-      const body = shellBody(args, command)
-      if (body !== null) checkWindowClose(body, parse, depth + 1)
+      const index = args.findIndex((e) => e.literal && bodySwitch.test(e.value))
+      body = index < 0 ? [] : args.slice(index + 1)
+    } else if (name === 'rtk') {
+      const verb = leaf(args[0]?.value)
+      if (args[0]?.literal && rtkData.includes(verb)) continue
+      body = ['test', 'proxy'].includes(verb) ? args.slice(1) : args
+    } else {
+      if (named && (launchers.has(name) || evaluators.has(name) || ['invoke-expression', 'iex'].includes(name))) throw closeBlocked('wrapped window close')
+      continue
     }
+    // Read a literal body; one with variables or no body switch cannot be read.
+    if (body.length && body.every((e) => e.literal)) checkWindowClose(body.length === 1 ? body[0].value : command.slice(body[0].start, body.at(-1).end), parse, depth + 1)
+    else if (named) throw closeBlocked('wrapped window close')
   }
 }
 
