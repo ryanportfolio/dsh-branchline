@@ -1,21 +1,21 @@
 # Loading and delivery
 
-## Define readiness
+## Readiness
 
-Measure the journey the user needs: launch or navigation through visible content and a successful first action. Record intermediate milestones when they explain delay. A hidden spinner, earlier skeleton, or deferred handler does not establish readiness.
+Measure journey user needs: launch/navigation → visible content → successful first action. Record intermediate milestones when they explain delay. Hidden spinner, earlier skeleton, deferred handler ≠ readiness. A loader may become the measured paint element; identify what FCP/LCP represents and retain separate content-reveal and successful-first-action milestones.
 
-For web work, use relevant browser timing and interaction metrics with their exact collection method. Distinguish controlled lab results from field distributions. Use current official documentation if metric definitions, thresholds, or tool behavior need verification; a synthetic score alone is insufficient.
+Web: relevant browser timing + interaction metrics w/ exact collection method. Keep lab results distinct from field distributions. Metric definitions, thresholds, tool behavior need checking → current official docs. Synthetic score alone insufficient.
 
 ## Separate conditions
 
-Keep distinct scenarios for cold cache, warm revisit, first installation or launch, and route transitions as relevant. Define which caches are cold: browser HTTP cache, service worker, application data, process state, CDN, or backend. Avoid claiming a fully cold run when only one layer was cleared.
+Distinct scenarios for cold cache, warm revisit, first install/launch, route transitions as relevant. Define which caches are cold: browser HTTP cache, service worker, app data, process state, CDN, backend. Only 1 layer cleared → don't claim fully cold. Track first-use shader compilation, texture upload and font readiness when relevant; warming these away invalidates an initial-startup claim.
 
-Record connection and throttling settings, CPU conditions, service-worker state, origin, build identity, and data size. Separate time to first response, transfer, decompression, parsing, execution, layout, and application initialization where tools permit. Compare compressed transfer bytes and decoded size separately.
+Record connection + throttling settings, CPU conditions, service-worker state, origin, build identity, data size. Split time to first response, transfer, decompression, parsing, execution, layout, app init where tools permit. Compare compressed transfer bytes + decoded size separately.
 
-## Follow the critical path
+## Critical path
 
-Use a waterfall or trace to identify blocking requests, serial dependencies, unused payload, excessive startup execution, and contention. Evaluate asset changes, lazy loading, preload hints, caching, and code splitting against measured readiness. Additional requests and preloads can compete with critical work.
+Waterfall or trace → find blocking requests, serial deps, unused payload, excessive startup execution, contention. Judge asset changes, lazy loading, preload hints, caching, code splitting vs measured readiness. Extra requests + preloads can compete w/ critical work.
 
-Check the first interaction and a later transition after deferring work. Check repeat visits and cache invalidation after caching changes. Preserve content completeness, image quality, text stability, navigation, authentication behavior, and accessible loading/error states.
+After deferring work → check first interaction + a later transition. After caching changes → check repeat visits + cache invalidation. Preserve content completeness, image quality, text stability, navigation, auth behavior, accessible loading/error states.
 
-Re-run against the actual optimized artifact. An unchanged development server, stale service worker, or old output directory can invalidate the comparison. Keep local benchmark conclusions distinct from deployment performance until that environment is measured within the user's authorization.
+Re-run vs actual optimized artifact. Unchanged dev server, stale service worker, old output dir → comparison invalid. Local benchmark conclusions ≠ deployment perf until that env measured within user's authorization.

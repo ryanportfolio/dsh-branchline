@@ -76,7 +76,7 @@ Words naming a real thing in the repo ("harness") are terms, not tells.
 - **Titles are plain and specific.** Say what the reader gets, unopened.
 - **Keep a voice.** Have a view. Vary sentence and paragraph shape; identical shapes in a row read as generated. First person where genuine. Sterile clean prose is still a tell.
 - **Tell the making as it happened.** How something was built is a fact; verify it like one.
-- **Cut without losing understanding.** Prefer the shortest version that preserves meaning, necessary context, and ease of reading.
+- **Cut without losing understanding.** Prefer the shortest version that preserves meaning, necessary context, and ease of reading. Site and UI copy defaults to fewer words and fewer elements.
 
 ## Editing someone else's draft
 

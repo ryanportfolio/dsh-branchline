@@ -14,6 +14,11 @@ cleanup, or starter-remote wiring, use [setup profiles](references/profiles.md).
 useful capabilities and customizations; defaults are candidates, not automatic deletions.
 Read ownership settings before changing discovery, including maintained Codex natives.
 
+Give the project its own CI: run `node .claude/scripts/write-ci-workflow.mjs` to show the
+detected stacks and the proposed `.github/workflows/ci.yml`, then write it with `--write`
+after the user approves. If the file exists, show a diff and ask before `--force`.
+Subfolder projects (monorepos) are not detected; adapt the file. See [project CI](references/ci.md).
+
 Validate affected JSON, scripts, skill synchronization and links. Configuration changes can break behavior, so never recommend immediate merge merely because they are not app code. Report remaining unknowns. Setup does not imply dependency installation, commit, push, PR or deployment.
 
 ## Pitfall: branch placement

@@ -130,7 +130,7 @@ If the writer has no source, ask for one or flag the claim. Never invent a sourc
 **After:**
 > The event includes talks and panels. There's also time for informal networking between sessions.
 
-### 11. Synonym cycling
+### 11. Synonym cycling (elegant variation)
 
 **Before:**
 > The protagonist faces many challenges. The main character must overcome obstacles. The central figure eventually triumphs. The hero returns home.
@@ -448,7 +448,7 @@ Applies to docs and long-form. Caveman chat fragments are compression, not drama
 
 ### 39. Rhetorical setups
 
-**Watch:** What if I told you, Think about it:, Plot twist:, a question the writer answers in the next line
+**Watch:** What if I told you, Think about it:, Plot twist:, a question the writer answers in the next line (hypophora)
 
 **Before:**
 > What if I told you the slowest step isn't the model? Plot twist: it's the tokenizer.

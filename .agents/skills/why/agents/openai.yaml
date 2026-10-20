@@ -1,0 +1,5 @@
+interface:
+  display_name: "Why"
+  short_description: "Pressure-test a recommendation with a fresh reviewer"
+policy:
+  allow_implicit_invocation: true

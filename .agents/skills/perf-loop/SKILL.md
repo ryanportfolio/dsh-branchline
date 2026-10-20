@@ -1,48 +1,64 @@
 ---
 name: perf-loop
-description: "Run measured optimization rounds with independent review for FPS, loading, latency, throughput, and resource use. Use for $perf-loop or broad performance improvement requests; skip routine isolated fixes."
+description: "Run measured optimization rounds with independent review for FPS, loading, latency, throughput, and resource use; with no named target, triage every dimension first. Use for $perf-loop or broad performance requests; skip isolated fixes."
 ---
 
 # Performance loop
 
-Improve the performance users experience through reproducible experiments and independent review. Preserve behavior and quality. Take the target, constraints, and authorization from the request; broad optimization means broad discovery within that target, followed by focused changes.
+Goal: faster user-facing perf via reproducible experiments + independent review. Preserve behavior + quality. Target, constraints, authorization ← request. No named target → triage every applicable dimension first; user picks focus from its table before any round.
 
-## Establish the scope and measurement path
+## Scope + measurement path
 
-Identify the important user journeys, workload, target devices, and existing performance budgets. Infer reasonable defaults from the project and state them. Ask only when missing information changes the goal or requires a user-owned tradeoff. An audit request stops at findings and recommendations.
+ID key user journeys, workload, target devices, existing perf budgets. Infer sane defaults from project; state them. Ask only when missing info changes goal or needs user-owned tradeoff. Audit request → stop at findings + recommendations.
 
-Inspect exposed tools before promising profiling, browser capture, or independent review. Preflight the selected measurement method with one real run and inspect its output. Missing capabilities narrow the claim: code inspection can identify hypotheses but cannot prove runtime improvement. Report the gap and complete useful authorized work without claiming the full gate passed.
+Check exposed tools before promising profiling, browser capture, or independent review. Preflight chosen measurement method w/ 1 real run; inspect output. Missing capability → narrower claim: code inspection yields hypotheses, never proof of runtime gain. Report gap; finish useful authorized work w/o claiming full gate passed. For a named browser/device, preflight that target; another engine or emulated viewport supports only a separately labeled diagnostic. Record which timing, trace and memory methods actually work.
 
 Load only relevant guidance:
 
-- [Rendering and interaction](references/rendering.md): FPS, frame pacing, games, animation, responsiveness, and visual quality.
-- [Loading and delivery](references/loading.md): startup, page loads, assets, bundles, network requests, and readiness.
-- [Services and resources](references/services.md): APIs, databases, throughput, memory, CPU, disk, and sustained workloads.
+- [Rendering and interaction](references/rendering.md): FPS, frame pacing, games, animation, responsiveness, visual quality.
+- [Loading and delivery](references/loading.md): startup, page loads, assets, bundles, network requests, readiness.
+- [Services and resources](references/services.md): APIs, DBs, throughput, memory, CPU, disk, sustained workloads.
+- [Firefox](references/firefox.md): Firefox-specific capture, graphics diagnosis and memory tools when Firefox is a target or behaves differently from another browser.
 
-For experiment evidence and before/after presentation, read the packaged
-[evidence report](references/evidence-report.md); retain the measurement and review gates below.
+Experiment evidence + before/after presentation → packaged [evidence report](references/evidence-report.md); measurement + review gates below still apply.
 
-Use existing project tools first. This workflow does not grant permission to install tools, run disruptive production load, publish changes, or alter unrelated infrastructure.
+Existing project tools first. Workflow grants no permission to install tools, run disruptive prod load, publish changes, or alter unrelated infra.
 
-## Record a repeatable baseline
+## Triage when target open
 
-Capture the current working state, including relevant uncommitted changes, so baseline and candidate can be rebuilt without discarding user work. Identify source state, build mode, commands, dependency versions, device/runtime, dataset, scenario, and sampling duration. Use a representative optimized build for acceptance; diagnostic development runs must be labeled separately.
+Trigger: request names no specific metric/scenario (skill invoked alone, "make it faster", "optimize everything"). Follow [triage](references/triage.md): measure each applicable dimension vs a reference, profile just far enough to name its top contributor, present ranked table. No code changes during triage.
 
-Control cache state, warmup, resolution, quality settings, concurrency, random seeds where useful, and power/thermal conditions. Keep cold and warm runs separate. Confirm the intended build is running. Record unavoidable differences and their limits.
+Then stop; wait for user to pick focus. Never pick for them. Unattended run → table = final report. Audit request may also end at table.
 
-Repeat the baseline enough to expose variation. For quick deterministic scenarios, start with at least three runs; expensive or noisy workloads need a justified sample plan. Retain raw measurements, sample counts, units, and distributions. A tiny sample does not establish a reliable tail percentile. Fix the measurement window and exclusion rules before evaluating candidates; retain and explain invalid runs instead of silently dropping inconvenient results.
+User names target → skip triage, mention it's available, go to baseline. Triage numbers = diagnostic only; chosen target always gets own full baseline.
 
-Run benchmarks serially on shared hardware. Pause agent builds, tests, other benchmarks, and profiling work that compete for the measured resources. Give shared browser control one owner at a time. Keep build outputs and ports separate when multiple environments are necessary. Never stop unrelated user processes to clean up a measurement.
+## Repeatable baseline
 
-## Set the bar and profile
+Capture current working state incl. relevant uncommitted changes → baseline + candidate rebuildable w/o discarding user work. Record source state, build mode, commands, dep versions, device/runtime, dataset, scenario, sampling duration. Acceptance → representative optimized build; label diagnostic dev runs separately.
 
-Define the primary outcome metric, practical success threshold, protected scenarios, and regression tolerances before editing. Use existing budgets or derive a target from the request and baseline; label inferred targets. Avoid universal score targets or unsupported promises about all devices.
+Control cache state, warmup, resolution, quality settings, concurrency, random seeds where useful, power/thermal. Cold + warm runs separate. Confirm intended build running. Record unavoidable diffs + their limits. Each run record identifies build, runtime, phase and sample duration; include URL/origin and renderer mode where relevant. A port alone is not build identity. Use existing diagnostics or a saved record; do not add product UI solely for this.
 
-Profile the actual slow scenario. Rank bottlenecks by measured contribution, user impact, confidence, and fix cost. Treat suspected bottlenecks as hypotheses. Prefer end-to-end improvements over proxy wins such as smaller bundles with unchanged readiness or higher FPS with worse input latency.
+Separate relevant phases: initial startup, first action, steady animation, settled idle, hidden/resumed state and repeated navigation. Keep initial stalls in their own window; a rolling steady-state average must not erase them. Protect adjacent phases affected by a fix without expanding a narrow request into an unrelated audit.
 
-## Run bounded experiments
+Save the scenario, protocol and run identities before long runs. Pilot enough of the real journey to validate collection and settled-state signals, then expand for repeatability or suspected accumulation. If extra cycles cannot answer the question with available tools, change the measurement path instead of extending the run.
 
-Use one implementer per round and one testable hypothesis, allowing a small coupled change when needed to test it. Keep an experiment record in the project's existing artifact location, or a task-local directory:
+Repeat baseline enough to expose variation. Quick deterministic scenarios: ≥3 runs to start; expensive/noisy workloads need justified sample plan. Keep raw measurements, sample counts, units, distributions. Tiny sample ≠ reliable tail percentile. Fix measurement window + exclusion rules before evaluating candidates; keep + explain invalid runs, never silently drop inconvenient results.
+
+Benchmarks serial on shared hw. Pause agent builds, tests, other benchmarks, profiling that compete for measured resources. Shared browser control: 1 owner at a time. Separate build outputs + ports when multiple envs needed. Never kill unrelated user processes to clean up a measurement.
+
+Per-run scratch (browser profiles, user-data dirs, temp builds, raw dumps) → delete as each run ends, pass or fail, once the process using it has exited. Do it in harness code (`try/finally`, Node `fs.rm`), not a later shell step: agent command policies can refuse recursive shell deletes. Reuse 1 prepared template profile when the scenario needs no fresh state. Keep only artifacts the analysis needs: results, logs, captures. Long loop → check scratch size between rounds. Delete fails or is blocked → report path + size right away; never leave it silent.
+
+## Set bar + profile
+
+Before editing, define: primary outcome metric, practical success threshold, protected scenarios, regression tolerances. Existing budgets, else derive target from request + baseline; label inferred targets. No universal score targets or unsupported all-device promises.
+
+Profile actual slow scenario. Rank bottlenecks by measured contribution, user impact, confidence, fix cost. Suspected bottlenecks = hypotheses. Prefer end-to-end wins over proxy wins (smaller bundle w/ unchanged readiness; higher FPS w/ worse input latency).
+
+When expensive components overlap, isolate them before an architectural rewrite: reproduce each alone, together, and with startup staggered as relevant. Use the smallest reversible experiment that distinguishes competing explanations. Workers can relieve main-thread contention while still competing for graphics resources. Isolation runs are diagnostic: prefer existing controls; record temporary edits and restore the source before acceptance runs. A retained change needs its own candidate comparison. Audit-only requests use existing controls unless code edits are authorized.
+
+## Bounded experiments
+
+1 implementer/round, 1 testable hypothesis; small coupled change OK when needed to test it. Experiment record → project's existing artifact location, else task-local dir:
 
 | Field | Evidence to record |
 | --- | --- |
@@ -53,36 +69,36 @@ Use one implementer per round and one testable hypothesis, allowing a small coup
 | Regression checks | Protected scenarios and functional or visual evidence |
 | Verdict | Keep, discard, or inconclusive, with the reason |
 
-Reproduce the same workload after each change. Alternate baseline and candidate runs when practical to detect environment drift. Distinguish profiler traces used for diagnosis from minimally instrumented acceptance runs; keep measurement overhead comparable. Report absolute and relative changes with a clear direction of improvement.
+Same workload after each change. Alternate baseline/candidate runs when practical → detect env drift. Diagnostic profiler traces ≠ minimally instrumented acceptance runs; keep measurement overhead comparable. Report absolute + relative change w/ clear direction of improvement.
 
-Check correctness and affected user journeys alongside performance. Preserve features, visual fidelity, accessibility, security, data integrity, and existing resource constraints. Reducing resolution, effects, content, durability, or other quality requires explicit agreement when it changes the intended experience. Moving work into first interaction or growing memory to reduce latency must be measured as a tradeoff.
+Check correctness + affected user journeys alongside perf. Preserve features, visual fidelity, a11y, security, data integrity, existing resource constraints. Cutting resolution, effects, content, durability, or other quality → explicit agreement needed when it changes intended experience. Moving work into first interaction or growing memory to cut latency = tradeoff; measure it.
 
-Keep changes with repeatable, practically meaningful gains and no disallowed regressions. Discard failed experiments by reverting only this round's edits. Treat improvements indistinguishable from run variation as inconclusive. Re-profile after meaningful wins because the bottleneck may move. Do not keep speculative changes merely because they look efficient.
+Keep: repeatable, practically meaningful gains w/ no disallowed regressions. Failed experiment → revert only this round's edits. Gain within run variation → inconclusive. Meaningful win → re-profile; bottleneck may move. Never keep speculative changes just because they look efficient.
 
-Pick the next hypothesis from the whole experiment record (kept, discarded, inconclusive, and why), not from the best result so far. After a discard, the next round moves to the next-ranked bottleneck unless new profile evidence justifies staying; a discarded hypothesis returns only with such evidence. The stop rule below still applies: two consecutive rounds without a retained gain end the loop, whichever bottleneck they targeted.
+Next hypothesis ← whole experiment record (kept, discarded, inconclusive + why), not best result so far. After discard → next-ranked bottleneck unless new profile evidence justifies staying; discarded hypothesis returns only w/ such evidence. Stop rule still applies: 2 consecutive rounds w/o retained gain → loop ends, whichever bottleneck targeted.
 
 ## Independent challenge
 
-Before accepting a round, obtain fresh independent review through exposed agents. Inspect capacity, counting the manager and active workers; run the two review lenses in separate sequential fresh contexts when they cannot fit together. Honor explicit model choices; otherwise inherit the configured model. Disclose an unavailable requested model rather than silently substituting it. In Codex, use `collaboration.spawn_agent` with `fork_turns: "none"`. Provide the request, constraints, skill, exact source states, diff, reproduction commands, and raw evidence paths. Clearly label implementer conclusions as unverified. Reviewers must inspect evidence and code themselves.
+Before accepting a round → fresh independent review via exposed agents. Check capacity, counting manager + active workers; lenses don't fit together → separate sequential fresh contexts. Honor explicit model choices; else inherit configured model. Requested model unavailable → disclose, never silently substitute. Codex: `collaboration.spawn_agent` w/ `fork_turns: "none"`. Brief = request, constraints, skill, exact source states, diff, reproduction commands, raw evidence paths. Label implementer conclusions unverified. Reviewers inspect evidence + code themselves.
 
-- Measurement reviewer: challenge comparability, sample sufficiency, benchmark relevance, overhead, noise, and interpretation. Independently reproduce the decisive comparison when feasible; otherwise state that runtime reproduction remains unverified.
-- Regression reviewer: inspect the full experiment diff, exercise affected behavior, and challenge quality losses, resource shifts, accessibility damage, and edge cases. Read actual captures when visual behavior changes.
+- Measurement reviewer: challenge comparability, sample sufficiency, benchmark relevance, overhead, noise, interpretation. Reproduce decisive comparison when feasible; else state runtime reproduction unverified.
+- Regression reviewer: inspect full experiment diff, exercise affected behavior, challenge quality losses, resource shifts, a11y damage, edge cases. Visual change → read actual captures.
 
-Use separate fresh agents for these lenses. They may read artifacts concurrently, but schedule measurement and other resource-heavy work serially. Agent availability alone does not prove that the required profiler, browser, or runtime is accessible to them. If independent review is unavailable, report that gap rather than substituting self-review and calling it independent.
+Separate fresh agent per lens. Concurrent artifact reads OK; measurement + other resource-heavy work serial. Agent availability ≠ access to required profiler, browser, runtime. Independent review unavailable → report gap; self-review ≠ independent.
 
-Each reviewer returns confirmed, refuted, or unresolved findings with evidence paths and severity. A lack of findings alone cannot establish a performance gain. Reproduce confirmed findings, fix through the sole implementer, and repeat the affected measurement and regression checks on the resulting state.
+Each reviewer → confirmed / refuted / unresolved findings w/ evidence paths + severity. No findings ≠ proof of gain. Confirmed finding → reproduce, fix via sole implementer, rerun affected measurement + regression checks on resulting state.
 
-## Stop and report
+## Stop + report
 
-Default to at most five implementation rounds, fewer when the target is reached or further gains no longer justify the cost. Stop earlier when two consecutive rounds yield no retained, meaningful gain, or when further progress requires a missing capability or user-owned tradeoff. Respect any tighter user time or cost budget.
+Default ≤5 implementation rounds; fewer when target reached or further gains not worth cost. Stop early: 2 consecutive rounds w/o retained meaningful gain, or progress needs missing capability / user-owned tradeoff. Respect tighter user time/cost budget.
 
-The orchestrator checks the final combined state with the decisive benchmark and appropriate project verification. Attribute gains both to the original baseline and, where useful, individual rounds. Independent wins do not guarantee that the combined changes remain faster.
+Orchestrator checks final combined state w/ decisive benchmark + appropriate project verification. Recheck affected first-use, idle and navigation behavior; delayed work must not simply move a stall into the next action. Attribute gains vs original baseline and, where useful, per round. Independent wins ≠ guaranteed combined speedup.
 
 Report one outcome:
 
-- **Target met:** the declared budgets pass under the documented conditions, required reviews and regression checks pass, and no blocking finding remains. If the baseline already met them, say no optimization was needed.
-- **Improved, target unmet:** retained gains are verified, but a budget or scope goal remains unmet.
-- **Inconclusive:** evidence cannot support a reliable performance conclusion or required verification is missing.
-- **No retained improvement:** tested candidates failed, regressed, or did not produce a meaningful gain.
+- **Target met:** declared budgets pass under documented conditions, required reviews + regression checks pass, no blocking finding left. Baseline already met them → say no optimization needed.
+- **Improved, target unmet:** retained gains verified; budget or scope goal still unmet.
+- **Inconclusive:** evidence can't support reliable perf conclusion, or required verification missing.
+- **No retained improvement:** tested candidates failed, regressed, or gave no meaningful gain.
 
-Include a compact before/after table, tested conditions, kept and discarded changes, evidence paths, and unresolved limits. Claim only the devices, workloads, and environments actually tested. Clean up only processes and temporary resources created for this task.
+Include compact before/after table, tested conditions, kept + discarded changes, evidence paths, unresolved limits. Claim only devices, workloads, envs actually tested. Clean up only processes + temp resources this task created; report any scratch still on disk w/ path + size.

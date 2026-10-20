@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cache loop"
+  short_description: "Cache assets aggressively and keep releases fresh"
+  default_prompt: "Use $cache-loop to audit and improve this site's caching, then verify repeat visits and release freshness."

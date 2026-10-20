@@ -41,7 +41,7 @@ Design source of truth:
 Frontend stack:
 Existing primitives:
 Current design/UI skills:
-Canonical skill location and adapter process:
+Canonical skill location and runtime sync process:
 Verification available:
 Unknowns:
 ```

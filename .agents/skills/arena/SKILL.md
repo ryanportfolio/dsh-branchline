@@ -38,13 +38,15 @@ For browser-rendered artifacts, each candidate brief includes the browser rule f
 
 A candidate that returns nothing is a dropout. Record it and continue with the rest.
 
+**Baseline.** When the task improves an artifact that already exists, copy the current version unchanged into `c0/` with no `rationale.md`. It goes to the judge under a neutral letter like any candidate, and picking it is a valid outcome. A new artifact has no baseline; never build a stand-in. If its style or history would identify it to the judge, record that as a blinding limit.
+
 **Judge.** Start it only after all candidates return. Fresh and read-only, it sees only `criteria.md` and `judge/`, and returns pass/fail per criterion with evidence for every letter, plus a recommended base.
 
 ## Deciding
 
 Read every candidate completely, low scorers included, and score the criteria yourself. Before overruling the judge, recheck the evidence it cited.
 
-The base is the candidate whose design the planned merges would disturb least; if still tied, the one with less code. Take at most one or two ideas from each other candidate and rewrite them to the base's conventions. A reader of the final artifact should not be able to tell where one candidate ends and another begins.
+The base is the candidate whose design the planned merges would disturb least; if still tied, the one with less code. Take at most one or two ideas from each other candidate and rewrite them to the base's conventions. A reader of the final artifact should not be able to tell where one candidate ends and another begins. When the baseline is chosen as the base, take an idea from another candidate only if that candidate passed a criterion the baseline failed; otherwise the current version stands unchanged.
 
 If the candidates split over a basic premise, `brief.md` has a gap: that gap gets fixed in the brief and a new round runs; a merge of both premises is never the answer. If they all agree, still run the checks.
 
@@ -56,7 +58,7 @@ One rerun total, spent on either a split premise or a verification failure trace
 
 The artifact passes the real checks it claims (tests, build, render, measurement), and `note.md` lists, in this order:
 
-1. A worker table: letter, model, vendor, angle, and outcome (returned, dropped, or blocked).
+1. A worker table: letter, model, vendor, angle, and outcome (returned, dropped, or blocked). A baseline appears as `c0`, angle "unchanged".
 2. Blinding limits and the judge's verdict.
 3. For each non-base candidate: every idea you looked at, marked taken or left, with the reason. Put the base choice and its reason at the top of this section.
 4. Check commands and their results.

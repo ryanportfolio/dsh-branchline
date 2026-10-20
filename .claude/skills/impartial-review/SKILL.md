@@ -24,12 +24,26 @@ Use `$ARGUMENTS` if the user named a specific scope (file path, PR number, "the 
 
 State the scope you're reviewing in your first sentence so the user can redirect if it's wrong. Also count the changed lines (`git diff <range> --stat | tail -1`) — you'll need this for Step 2.
 
-Record the run ID, absolute workspace, exact base/head SHAs, staged/unstaged diff and relevant untracked path/content hashes. Exclude task-owned report artifacts. Bind findings to that manifest; source changes during review make affected findings stale and require renewed review.
+**Freeze the scope with the snapshot script.** For any review of uncommitted or untracked work, or any diff over about 1500 lines, run `scripts/snapshot.mjs` from this skill's folder instead of assembling the diff by hand. The script always snapshots the checked-out working tree, so its head is that tree. To review a commit, branch or range whose head is not checked out, or a checkout with unrelated local edits, first create a clean worktree at the requested head (`git worktree add --detach <dir> <head>`) and pass `--root <dir>`:
+
+```bash
+node <this skill>/scripts/snapshot.mjs --base <ref> [--merge-base] [--root <dir>] [--exclude <report dir>]
+```
+
+`--base` defaults to `HEAD` (uncommitted work only); use `--base origin/main --merge-base` for a branch or PR. The script compares the base with the working tree, untracked files included, and writes a folder under `.tmp/review-snapshots/` holding `base/` and `head/` copies of the changed files, `scope.patch`, `source-inventory.json` (path, status, SHA-256, absolute paths, scope hash) and `BRIEF.md`. It converts CRLF to LF before diffing, so a pure line-ending flip is listed as `eol-only` and stays out of the patch. Copies and patches over 48 KB or 1800 lines are also split into pages that fit the Read tool. The brief ends with a JS/TS import check that lists `unresolvedDeps`. The script exits 1 without writing the inventory when a changed path is missing from the patch; fix the cause, never review a partial patch. Exclude task-owned report folders with `--exclude`.
+
+When the caller already supplied a snapshot (a `BRIEF.md` path), use it as is. When this session cannot write files, for example a Manager launched in a read-only sandbox, do not run the script: use the git commands from the scope, record the run ID, absolute workspace, base/head SHAs and untracked path/content hashes by hand, and state in the report that the scope was not frozen.
+
+Findings are bound to the snapshot's scope hash. Before accepting findings, run `node <this skill>/scripts/snapshot.mjs --verify <snapshot dir>`; it exits 1 and lists the paths when the working tree has moved on, or when a snapshot copy, page or patch file no longer matches the hash recorded for it. Findings on drifted paths are stale and need renewed review; an altered snapshot file needs a fresh snapshot. For a committed range with no local changes, a plain `git diff <range>` is enough; still record the run ID, absolute workspace and exact base/head SHAs.
+
+**Author brief (optional).** When the caller supplies one, or when you are reviewing work this session wrote, write a short brief of facts: the goal in one or two sentences, the files or behaviors most likely to break, related work in flight (other PRs, merge order), and the checks already run with their results. No verdicts or opinions ("I believe this is correct", "this part is fine"): the brief says what the change is for, never whether it succeeded. Only the Bucket F reviewer sees it (Step 2). With no brief, skip Bucket F.
 
 ## Step 2: Pick review mode
 
 - **Tiny diff (< 50 changed lines, single file, no schema/auth/cache code):** use one fresh leaf reviewer covering all relevant buckets, including project rules.
 - **Everything else:** cover all five buckets with fresh reviewers, one per bucket, in bounded batches (see Step 3).
+- **Open lens (everything but a tiny diff):** add one Bucket G reviewer. The five buckets are shaped for application code; an animation, a build script, or a UI change can carry its main risk in a lens none of them names. Bucket G picks that lens itself.
+- **With an author brief:** add one Bucket F reviewer at either size. Buckets A–E stay diff-only, so the review keeps a layer that never sees the author's framing.
 
 Preserve independent context at every size. If risk is unclear, use the broader coverage.
 
@@ -62,12 +76,15 @@ Reviewers spawned from Codex share the author's vendor, so this buys fresh conte
 
 Each prompt must include:
 
-1. The exact diff to review (paste it inline if < ~1500 lines; otherwise give the exact `git` command and the commit range/branch).
+1. The scope. With a snapshot, paste its `BRIEF.md` verbatim: it carries the absolute snapshot and workspace paths every reviewer resolves against, the patch parts, the scope hash, and the dependency note. Without one, paste the diff inline if < ~1500 lines, otherwise give the exact `git` command and the commit range/branch.
 2. Their assigned category bucket (below).
 3. The verification rule from Step 4.
 4. The severity scheme from Step 5.
 5. The per-finding output format from Step 6.
 6. An instruction to **only** report findings in their bucket — the main session deduplicates and merges.
+7. The plan-mode rule: reviewers never enter plan mode, write a plan, or wait for approval. A report that is a plan, or that stops to ask for approval, is a failed review: rerun that reviewer.
+
+Never put the author brief in a Bucket A–E or G prompt, including the tiny-diff reviewer's; it goes to Bucket F only.
 
 For a full review, Bucket E (project-aware) gets an **extended** prompt; the other four use the standard template. For a tiny diff, combine the relevant instructions into one prompt and remove statements that assume other reviewers exist.
 
@@ -114,7 +131,7 @@ For this bucket specifically: greppability beats cleverness. The agent should `g
 
 **Bucket E — Project-aware violations** (the structural blind spot of fresh-context review)
 
-The other four reviewers are deliberately context-free — that's the source of their impartiality, and also why they can't catch violations of *this codebase's specific rules*. Bucket E exists to close that gap. The agent reads project reference material first, then reviews the diff against it.
+Buckets A–D are deliberately context-free — that's the source of their impartiality, and also why they can't catch violations of *this codebase's specific rules*. Bucket E exists to close that gap. The agent reads project reference material first, then reviews the diff against it.
 
 The reviewer is told to read these files before looking at the diff:
 
@@ -136,6 +153,30 @@ The reviewer's job is to find places where the diff violates rules encoded in th
 
 The reviewer should cite the specific rule (file + section) it's enforcing for each finding so the human can verify the rule actually says what the agent claims.
 
+**Bucket F: Intent and gaps** (only with an author brief)
+
+Buckets A–E judge what the code does. None of them knows what it was meant to do, so none can say it missed its goal. Bucket F gets the diff plus the author brief and checks the change against its stated purpose:
+
+- Does the diff achieve the stated goal on every path the goal implies, or only the one the author tested?
+- Cases the goal requires that the diff doesn't handle (other callers, other runtimes, existing data, removal and rollback).
+- The files or behaviors the brief names as risky: are they actually safe? Verify; don't take the brief's word.
+- Related work in flight: will this change conflict with, or depend on, the other PRs or merge order the brief names?
+- The checks the brief says were run: do they actually exercise the risky parts, or is something important untested?
+
+The brief is the author's framing, not evidence. Findings come from the code; the brief only says where to aim.
+
+**Bucket G: Open lens** (everything but a tiny diff)
+
+The other buckets are fixed lenses. Bucket G gets the diff and the names of the lenses already assigned in this run (never their findings, and never the author brief), then chooses the one or two lenses most likely to find a real problem in this diff that no assigned reviewer covers. It may pick a standard bucket that was not assigned, or any other lens the diff calls for, for example:
+
+- Rendering and frame budget, reduced-motion and accessibility, visual regressions (UI and animation)
+- Concurrency and ordering, resource cleanup (async code, workers)
+- Cross-platform behavior: shells, line endings, paths (scripts and tooling)
+- Cost and rate limits, prompt size (LLM calls)
+- Copy, i18n, and user-facing wording
+
+It names each lens it chose and ties the choice to specific lines of the diff before reviewing through it. A lens with no reason tied to this diff counts as a failed review, not a finding.
+
 ### Subagent prompt template (Buckets A–D)
 
 ```
@@ -143,6 +184,8 @@ You are an impartial code reviewer. Fresh context — you did not write this cod
 Your job: find what's wrong, not validate what's right. Bias toward finding real issues.
 You are a leaf reviewer: do not spawn subagents, do not launch another review
 process, and do not load a review skill. Review the diff yourself and report.
+Do not enter plan mode, write a plan, or stop to ask for approval: your output
+is the findings report below.
 
 Your job at this stage is coverage, not filtering. Report every issue you find,
 including ones you are uncertain about or consider low-severity. A separate merge
@@ -152,13 +195,16 @@ with a confidence level and a severity so the merge step can rank it. (Don't
 invent issues to pad the list — fabrication is the only thing to omit.)
 
 ## Scope
-[paste the diff here, OR give the exact git command + range]
+[paste the snapshot's BRIEF.md verbatim, OR the diff, OR the exact git command + range]
+
+Resolve every path against the absolute snapshot and workspace paths given in
+the scope, never against your current directory or another checkout.
 
 ## Your bucket: [A / B / C / D — name]
 Review ONLY these categories:
 [paste the bucket's bullets]
 
-Do NOT report findings outside your bucket. The main session merges with four
+Do NOT report findings outside your bucket. The main session merges with the
 other reviewers covering the rest.
 
 ## Verification rule
@@ -196,6 +242,8 @@ Return ONLY a list of findings in this format, severity-ordered (🔴 first):
 
 ## 🔴 Short title  ·  confidence: HIGH|MED|LOW
 `path/to/file.ts:123`
+Scope: [first 12 characters of the scope hash, or the git range] · Evidence: read-only | executed: [each command run and its result]
+Files read: [absolute paths you read for this finding]
 
 [Concrete description: what's wrong, what triggers it, what the impact is.
 Reference specific code, not abstract worries.]
@@ -220,10 +268,12 @@ low-severity/low-confidence findings and tag them honestly; the merge step filte
 You are an impartial code reviewer with project context. Fresh context — you
 did not write this code. Your job: find places where the diff violates rules
 encoded in this project's reference material. You are the ONLY reviewer
-seeing project-specific rules; the other four are deliberately context-free.
+seeing project-specific rules; Buckets A–D see only the diff.
 
 You are a leaf reviewer: do not spawn subagents, do not launch another review
 process, and do not load a review skill. Review the diff yourself and report.
+Do not enter plan mode, write a plan, or stop to ask for approval: your output
+is the findings report below.
 
 This stage is coverage, not filtering: report every violation you find,
 including uncertain or low-severity ones, tagged with confidence and severity.
@@ -247,7 +297,11 @@ process binds the diff whoever wrote it, while a rule that only tells one
 runtime how to behave inside its own session is not a finding about the diff.
 
 ## Scope (the diff to review)
-[paste the diff here, OR give the exact git command + range]
+[paste the snapshot's BRIEF.md verbatim, OR the diff, OR the exact git command + range]
+
+Resolve every path against the absolute snapshot and workspace paths given in
+the scope, never against your current directory or another checkout. Read the
+project files above from the workspace path.
 
 ## What to look for
 
@@ -298,6 +352,8 @@ Return ONLY a list of findings in this format, severity-ordered (🔴 first):
 
 ## 🔴 Short title  ·  confidence: HIGH|MED|LOW
 `path/to/file.ts:123`
+Scope: [first 12 characters of the scope hash, or the git range] · Evidence: read-only | executed: [each command run and its result]
+Files read: [absolute paths you read for this finding]
 Rule: [file:section, with a short quote of the rule]
 
 [Concrete description: what the diff does, why it violates the rule, what
@@ -315,6 +371,14 @@ files]; no project-rule violations in this diff." Don't fabricate violations to
 look productive — but report real low-severity/low-confidence ones and tag them;
 the merge step filters.
 ```
+
+### Subagent prompt template (Bucket F only)
+
+Use the Buckets A–D template with these changes: the role line says "You are the intent reviewer: you get the author's brief and check the change against its stated purpose"; add an `## Author brief` section with the brief pasted verbatim, labeled "the author's framing, not evidence: verify every claim in it against the code"; replace the bucket section with the Bucket F bullets; replace "The main session merges with the other reviewers" with "Other reviewers, who never see the brief, cover correctness, data flow, performance, missed changes, and project rules."
+
+### Subagent prompt template (Bucket G only)
+
+Use the Buckets A–D template with these changes: the role line says "You are the open-lens reviewer: other reviewers cover fixed lenses; you choose the lens they miss"; add a `## Lenses already assigned` section listing the bucket names in this run (names only); replace the bucket section with the Bucket G paragraph and examples; require the output to open with `Lenses chosen:` and, for each, one line naming the diff lines that make it relevant; replace "The main session merges with the other reviewers" with "Do not repeat a lens already assigned." Never include the author brief.
 
 ## Step 4: Verification rule
 
@@ -334,15 +398,18 @@ This rule is repeated inside each subagent prompt, but it also applies to the si
 
 When the selected reviewers return — **this is the precision stage.** The subagents over-reported on purpose (coverage); your job is to verify and rank so the human gets a trustworthy list. You hold the full diff, the project, and all reviewer reports at once; reviewers received only their assigned scope and constraints. That is what makes this verification worth its cost. Reviewing the subagents' work is the point — do not rubber-stamp it.
 
+0. **Check scope and form.** Run `snapshot.mjs --verify <snapshot dir>` when a snapshot was used. A finding whose `Scope:` differs from the run's scope hash, or that sits on a path `--verify` reports as drifted, is stale: set it aside for renewed review instead of verifying it against code it never saw. A report that is a plan, asks for approval, or has a finding without the `Scope` / `Evidence` / `Files read` lines is a failed review for that bucket: rerun it or list the bucket as uncovered. A report with no findings needs none of those lines.
 1. **Deduplicate — and read agreement as signal.** Two agents may flag the same issue from different angles — merge into one finding, keep the higher severity. Bucket E findings often overlap with A/B/C/D (e.g., a cover-identity leak is also a correctness issue) — merge but preserve E's rule citation so the human sees *why* it's a violation. The same issue surfaced independently by two or more subagents is high-confidence signal: note the agreement on the merged finding ("flagged independently by A and D") and weight it accordingly when you verify. A lone-agent finding is still worth verifying, just with lower prior.
-2. **Verify every finding you intend to surface — across all severities, not just 🔴.** The finding stage deliberately over-reported, including LOW-confidence items; turning that into precision is your job. For each finding, run a real `grep`/`Read` to confirm before passing it to the human (for Bucket E, open the cited rule file and confirm the rule actually says what the agent claimed — paraphrased rules are the most common Bucket E failure mode). Treat the 🔴s adversarially: a fresh-context subagent in a hurry is exactly the kind of reviewer that produces plausible-but-wrong blockers, so try to *refute* each one before you accept it.
+2. **Verify every finding you intend to surface — across all severities, not just 🔴.** The finding stage deliberately over-reported, including LOW-confidence items; turning that into precision is your job. For each finding, run a real `grep`/`Read` to confirm before passing it to the human (for Bucket E, open the cited rule file and confirm the rule actually says what the agent claimed — paraphrased rules are the most common Bucket E failure mode). Treat the 🔴s adversarially: a fresh-context subagent in a hurry is exactly the kind of reviewer that produces plausible-but-wrong blockers, so try to *refute* each one before you accept it. Verify against the same snapshot copies the reviewer read (`head/` and `base/`, or the workspace for unchanged files), never a different checkout. When you and a reviewer disagree, settle it there: cite the snapshot lines you read and, when a command decides it, run it and record the result.
    - **Own the confidence filter — but drop only on evidence.** A finding tagged LOW-confidence gets *confirmed* (verify, then promote and re-tag), *refuted* (drop it from the findings list and record it under "Dismissed" with the reason), or *kept as LOW* with a one-line note on the residual uncertainty. Drop a finding **only because you checked and it isn't real** — never because it "seems minor" or "seems unlikely." Filtering on vibes here re-introduces exactly the recall loss the coverage-first finding stage was built to prevent.
-3. **Severity-order globally.** All 🔴 first across all buckets, then all 🟡, then 🟢 — not bucket-by-bucket and not in the order agents returned.
-4. **Present in this format:**
+3. **Tag each finding's source** when Bucket F ran: *blind* (A–E or G, the reviewers that never see the brief), *intent* (F only), or *both*. Intent-only findings are what the brief made visible. A blind-only finding that sits in an area the brief called risky or covered means the brief may have steered F away from it; say so in the report.
+4. **Severity-order globally.** All 🔴 first across all buckets, then all 🟡, then 🟢 — not bucket-by-bucket and not in the order agents returned.
+5. **Present in this format:**
 
 ```
 ## 🔴 Short title of the issue
 `path/to/file.ts:123`
+Scope: [scope hash prefix or git range] · Evidence: read-only | executed: [commands and results] · Files read: [absolute paths]
 
 [Concrete description: what's wrong, what triggers it, what the impact is.]
 
@@ -369,7 +436,9 @@ After the findings, include:
 Be concrete about merge readiness.]
 ```
 
-If every reviewer returned zero findings and your verification confirms, report the actual reviewer count, covered buckets, and any unavailable checks. A clean result is valid; do not infer missed defects from the finding count alone.
+If every reviewer returned zero findings and your verification confirms, report the actual reviewer count, covered buckets (including whether Bucket F ran), and any unavailable checks.
+
+In every report, list any standard bucket (A–E) that had no reviewer, each with a one-line reason tied to the diff ("C: animation-only change, no input or data handling"), and the lenses Bucket G chose with its stated reasons. A skipped bucket is a stated decision, never a silent one. A clean result is valid; do not infer missed defects from the finding count alone.
 
 ## Anti-patterns to avoid
 

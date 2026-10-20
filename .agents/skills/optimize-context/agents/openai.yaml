@@ -1,0 +1,5 @@
+interface:
+  display_name: "Optimize Context"
+  short_description: "Reduce per-turn context load"
+policy:
+  allow_implicit_invocation: false

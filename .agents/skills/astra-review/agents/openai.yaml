@@ -1,0 +1,5 @@
+interface:
+  display_name: "Astra Review"
+  short_description: "Cross-vendor review on gpt-6-astra"
+policy:
+  allow_implicit_invocation: false

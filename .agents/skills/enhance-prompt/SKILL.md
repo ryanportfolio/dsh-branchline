@@ -5,6 +5,15 @@ description: "Use when the user asks for a rewritten, copy-ready prompt for anot
 
 # Write a usable handoff prompt
 
+Find the request first. Non-empty invocation input is the request. With empty input, or a
+request such as "turn this into a prompt" or "hand this off", the request is the current
+task or the follow-up task the user just named. Carry over what the session already
+established: file paths and line numbers, user decisions, approaches tried and failed, and
+open questions. Write them as plain statements, never as references to the conversation
+("as we saw"). Recheck any fact the prompt relies on that a later edit may have made stale.
+With no input and no current task, ask what the prompt is for; never invent one. When the
+input was empty, open the reply with one line naming the request you inferred.
+
 Preserve the user's intended task: advice, review, planning, or implementation. Carry forward
 settled choices and existing authorization without broadening either. Do not turn approved
 implementation into another proposal round merely because it touches UI copy or an API.

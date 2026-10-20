@@ -1,6 +1,7 @@
 ---
 name: claude-review
 description: Use when the user says /claude-review, asks Claude or Fable to review code written in Codex, or requests a cross-vendor review through Claude CLI.
+disable-model-invocation: true
 ---
 
 # Claude review

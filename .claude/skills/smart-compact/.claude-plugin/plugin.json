@@ -1,0 +1,9 @@
+{
+  "name": "smart-compact",
+  "version": "0.1.0",
+  "description": "/smart-compact: write custom /compact instructions from the session, then compact with them",
+  "author": {
+    "name": "ryanportfolio",
+    "url": "https://github.com/ryanportfolio"
+  }
+}

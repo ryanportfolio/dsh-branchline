@@ -23,7 +23,7 @@ Each step identifies:
 - Prerequisites and unresolved decisions that could change the approach.
 - A check that establishes completion at the claimed layer.
 
-Order by dependencies and deliver a thin working path early. Make steps small enough to
+Order by dependencies and deliver a thin working path (a walking skeleton) early. Make steps small enough to
 verify independently. Distinguish local step checks from final integration acceptance.
 Include code or exact commands where they remove ambiguity, not a second implementation
 of the entire solution. Discover verifiable facts instead of filling the plan with placeholders.

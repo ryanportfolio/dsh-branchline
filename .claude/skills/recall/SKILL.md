@@ -10,7 +10,7 @@ index; in this repository, list `.claude/reference/` and read only relevant topi
 Shared project facts can serve either runtime. Prefer current source and
 observed behavior when stored notes conflict with reality. Cite the conflict and its effect.
 When a stored fact changes an action, say so with its file and date, for example "per
-pitfalls.md (2026-08-29): the plugin browser is shared, using playwright-iso", so a stale
+pitfalls.md (2026-03-14): the test database must be reset first, resetting it", so a stale
 fact surfaces as a dated claim the user can correct in one reply.
 
 For lookup, answer from relevant entries with evidence pointers. If no entry answers the

@@ -1,0 +1,5 @@
+interface:
+  display_name: "Adopt Repo"
+  short_description: "Mirror an external repo privately and add the firmware"
+policy:
+  allow_implicit_invocation: false

@@ -5,6 +5,14 @@ description: "Use when the user asks for a rewritten, copy-ready prompt for anot
 
 # Write a usable handoff prompt
 
+Find the request first. Non-empty `$ARGUMENTS` is the request. With it empty, or "turn this
+into a prompt" / "hand this off", the request is the current task or the follow-up task the
+user just named: carry over what the session established (file paths and line numbers, user
+decisions, approaches tried and failed, open questions) as plain statements, never references
+to the conversation, and recheck relied-on facts a later edit may have made stale. With no
+input and no current task, ask what the prompt is for; never invent one. When the input was
+empty, open the reply with one line naming the inferred request.
+
 Preserve the user's intended task: advice, review, planning, or implementation. Carry forward
 settled choices and existing authorization without broadening either. Do not turn approved
 implementation into another proposal round merely because it touches UI copy or an API.
