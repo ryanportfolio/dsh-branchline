@@ -131,7 +131,7 @@ The optional permanent `dsh-command-guard` host bundle keeps agent shells from s
 
 - the DSH host process;
 - its ancestors while they are `node`, `cmd`, `pwsh` or `powershell` (the npx and launcher chain; killing the launcher breaks the pipe DSH writes its log into);
-- the `conhost` or `OpenConsole` children of those processes (killing a console host closes the console, and every process attached to it exits).
+- the `conhost` or `OpenConsole` process that hosts the console each of those processes uses, as Windows reports it (killing a console host closes the console, and every process attached to it exits). Other consoles, including other Windows Terminal tabs, stay unprotected.
 
 The helper then confirms that each of these processes refuses a new terminate handle. From then on, `taskkill /F /IM node.exe`, `Stop-Process -Name node`, pipelines, `.Kill()`, `process.kill()` and WMI `Terminate` all work on every other process and fail with `Access is denied` on the protected ones. `scripts/test-process-protection.ps1` runs these and other kill commands against throwaway processes.
 

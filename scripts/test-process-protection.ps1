@@ -46,6 +46,8 @@ try {
     Check 'dummy and cmd parent protected' (($protected -contains $a.Dummy) -and ($protected -contains $a.Cmd))
     Check 'chain stops below WmiPrvSE' (-not (@($report.pids | Where-Object { $_.name -notmatch '^(?:cmd|conhost|OpenConsole|dshprotect-dummy)\.exe$' })))
     Check 'console host protected' ($consoleHosts.Count -gt 0)
+    $ownConsole = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($a.Cmd) AND Name = 'conhost.exe'" | ForEach-Object { [int]$_.ProcessId })
+    Check 'protects exactly dummy, cmd and their console' (($protected.Count -eq 3) -and ($ownConsole.Count -eq 1) -and ($protected -contains $ownConsole[0]))
 
     # Windows PowerShell 5.1 turns native stderr into a terminating error under Stop.
     $ErrorActionPreference = 'Continue'

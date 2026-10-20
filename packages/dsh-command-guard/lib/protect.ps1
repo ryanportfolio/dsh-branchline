@@ -5,9 +5,9 @@
 #   - the DSH host process (-ProcessId);
 #   - its ancestors while they are node, cmd, pwsh, or powershell (the npx and
 #     launcher chain: killing the launcher breaks the pipe DSH logs into);
-#   - the conhost/OpenConsole children of those processes, of the process the
-#     walk stops at, and of an exited parent (killing a console host closes
-#     the console and every process attached to it).
+#   - the console host (conhost or OpenConsole) each of those processes is
+#     attached to, as Windows reports it (killing a console host closes the
+#     console and every process attached to it).
 # Then verifies that this unelevated caller can no longer open each one for
 # termination, and prints {"pids":[...],"failed":[...]} as JSON.
 #
@@ -36,6 +36,7 @@ namespace DshBranchline
         [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
         [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetKernelObjectSecurity(IntPtr handle, int information, byte[] descriptor, int length, out int needed);
         [DllImport("advapi32.dll", SetLastError = true)] static extern bool SetKernelObjectSecurity(IntPtr handle, int information, byte[] descriptor);
+        [DllImport("ntdll.dll")] static extern int NtQueryInformationProcess(IntPtr handle, int information, out IntPtr value, int length, out int written);
 
         static bool IsShield(GenericAce ace)
         {
@@ -63,6 +64,25 @@ namespace DshBranchline
                 byte[] updated = new byte[descriptor.BinaryLength];
                 descriptor.GetBinaryForm(updated, 0);
                 if (!SetKernelObjectSecurity(handle, DaclInformation, updated)) throw new Win32Exception();
+            }
+            finally { CloseHandle(handle); }
+        }
+
+        /// PID of the console host the process is attached to, or 0 for none.
+        /// ProcessConsoleHostProcess (49) sets bit 0 when a console is attached;
+        /// without a console it returns the process's own PID.
+        public static int ConsoleHost(int pid)
+        {
+            IntPtr handle = OpenProcess(0x1000, false, pid);
+            if (handle == IntPtr.Zero) throw new Win32Exception();
+            try
+            {
+                IntPtr value;
+                int written;
+                int status = NtQueryInformationProcess(handle, 49, out value, IntPtr.Size, out written);
+                if (status != 0) throw new Win32Exception("console host query failed: NTSTATUS 0x" + status.ToString("X8"));
+                long raw = value.ToInt64();
+                return (raw & 1) == 0 ? 0 : (int)(raw & ~3L);
             }
             finally { CloseHandle(handle); }
         }
@@ -98,14 +118,22 @@ for (;;) {
     if ($rows[$parent].Name -notmatch '^(?:node|cmd|pwsh|powershell)\.exe$') { break }
     $cursor = $parent
 }
-# Console hosts of the chain, of the process the walk stopped at (Windows
-# Terminal starts OpenConsole beside the shell), and orphans of an exited
-# parent (a console outlives the process that created it).
-$owners = @($chain) + $parent
-$targets = @($chain) + @($rows.Values | Where-Object { $owners -contains [int]$_.ParentProcessId -and $chain -notcontains [int]$_.ProcessId -and $_.Name -match '^(?:conhost|OpenConsole)\.exe$' } | ForEach-Object { [int]$_.ProcessId })
-
 $done = @()
 $failed = @()
+# Ask Windows which console each chain process uses: parent links miss a console
+# whose creator exited, and over-match other tabs of the same terminal.
+$targets = @($chain)
+foreach ($member in $chain) {
+    try { $consoleHost = [DshBranchline.ProcessShield]::ConsoleHost($member) }
+    catch { $failed += @{ pid = $member; name = $rows[$member].Name; error = 'console host unknown: ' + $_.Exception.Message }; continue }
+    if ($consoleHost -and $targets -notcontains $consoleHost) {
+        if (-not $rows.ContainsKey($consoleHost) -or $rows[$consoleHost].Name -notmatch '^(?:conhost|OpenConsole)\.exe$') {
+            $failed += @{ pid = $consoleHost; name = $(if ($rows.ContainsKey($consoleHost)) { $rows[$consoleHost].Name }); error = "unexpected console host for $member" }
+            continue
+        }
+        $targets += $consoleHost
+    }
+}
 foreach ($target in $targets) {
     $name = $rows[$target].Name
     try {
