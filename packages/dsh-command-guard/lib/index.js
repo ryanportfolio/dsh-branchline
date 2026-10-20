@@ -1,5 +1,5 @@
 /** Permanent host-only shell guard. No subprocess hooks or global overrides. */
-import { checkCommand, blocked, closeInspector, protectHost, protectionStatus, warmInspector } from './policy.js'
+import { checkCommand, blocked, closeInspector, protectHost, protectionStatus, stopProtection, warmInspector } from './policy.js'
 
 export const name = 'dsh-command-guard'
 export const inject = ['shell']
@@ -71,7 +71,7 @@ export function apply(ctx, config = {}) {
     guard = installGuard(typeof ctx.get === 'function' ? ctx.get('shell') : ctx.shell)
     warmInspector()
     if (config.protectHost !== false) protectHost()
-    return () => { guard.dispose(); closeInspector() }
+    return () => { guard.dispose(); stopProtection(); closeInspector() }
   }, 'dsh-command-guard.shell')
   if (config.statusEndpoint === true) {
     ctx.inject(['webServer'], (webCtx) => webCtx.effect(() => webCtx.webServer.register({

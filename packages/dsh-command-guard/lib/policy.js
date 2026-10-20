@@ -345,6 +345,12 @@ export function protectHost(pid = process.pid) {
   })
 }
 
+/** Back to the command policy, and drop any result still on its way. The OS entries stay. */
+export function stopProtection() {
+  protectRun++
+  protection = { state: 'off' }
+}
+
 export function checkCommand(command) {
   if (protection.state === 'active') return
   const target = assess(command)

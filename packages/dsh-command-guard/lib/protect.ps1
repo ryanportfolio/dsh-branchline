@@ -5,8 +5,9 @@
 #   - the DSH host process (-ProcessId);
 #   - its ancestors while they are node, cmd, pwsh, or powershell (the npx and
 #     launcher chain: killing the launcher breaks the pipe DSH logs into);
-#   - the conhost/OpenConsole children of those processes (killing a console
-#     host closes the console and every process attached to it).
+#   - the conhost/OpenConsole children of those processes, of the process the
+#     walk stops at, and of an exited parent (killing a console host closes
+#     the console and every process attached to it).
 # Then verifies that this unelevated caller can no longer open each one for
 # termination, and prints {"pids":[...],"failed":[...]} as JSON.
 #
@@ -89,12 +90,19 @@ if (-not $rows.ContainsKey($ProcessId)) { throw "process $ProcessId not found" }
 
 $chain = New-Object System.Collections.Generic.List[int]
 $cursor = $ProcessId
-while ($rows.ContainsKey($cursor) -and -not $chain.Contains($cursor)) {
-    if ($chain.Count -gt 0 -and $rows[$cursor].Name -notmatch '^(?:node|cmd|pwsh|powershell)\.exe$') { break }
+for (;;) {
     $chain.Add($cursor)
-    $cursor = [int]$rows[$cursor].ParentProcessId
+    $parent = [int]$rows[$cursor].ParentProcessId
+    # A parent created after its child is a reused PID: the real parent exited.
+    if (-not $rows.ContainsKey($parent) -or $chain.Contains($parent) -or $rows[$parent].CreationDate -gt $rows[$cursor].CreationDate) { break }
+    if ($rows[$parent].Name -notmatch '^(?:node|cmd|pwsh|powershell)\.exe$') { break }
+    $cursor = $parent
 }
-$targets = @($chain) + @($rows.Values | Where-Object { $chain.Contains([int]$_.ParentProcessId) -and $_.Name -match '^(?:conhost|OpenConsole)\.exe$' } | ForEach-Object { [int]$_.ProcessId })
+# Console hosts of the chain, of the process the walk stopped at (Windows
+# Terminal starts OpenConsole beside the shell), and orphans of an exited
+# parent (a console outlives the process that created it).
+$owners = @($chain) + $parent
+$targets = @($chain) + @($rows.Values | Where-Object { $owners -contains [int]$_.ParentProcessId -and $chain -notcontains [int]$_.ProcessId -and $_.Name -match '^(?:conhost|OpenConsole)\.exe$' } | ForEach-Object { [int]$_.ProcessId })
 
 $done = @()
 $failed = @()

@@ -75,6 +75,24 @@ try {
     Check 'name kill still ends an unprotected dummy' (-not (Alive $b.Dummy))
     Check 'name kill spares the protected dummy' (Alive $a.Dummy)
 
+    # The console's creator exits; the console lives on while the dummy is attached.
+    $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = [uint16]0 }
+    $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = 'cmd.exe /d /c start "" /b "' + $dummy + '" -n 600 127.0.0.1'; ProcessStartupInformation = $startup }
+    $creator = [int]$created.ProcessId
+    $deadline = (Get-Date).AddSeconds(10)
+    do {
+        Start-Sleep -Milliseconds 200
+        $orphan = Get-CimInstance Win32_Process -Filter "ParentProcessId = $creator AND Name = '$dummyName.exe'"
+    } until (($orphan -and -not (Alive $creator)) -or (Get-Date) -gt $deadline)
+    $orphanHost = Get-CimInstance Win32_Process -Filter "ParentProcessId = $creator AND Name = 'conhost.exe'"
+    Check 'orphan setup: creator exited, console host remains' ($orphan -and $orphanHost -and -not (Alive $creator))
+    if ($orphan) {
+        $spawned += [int]$orphan.ProcessId
+        $orphanReport = & $protect -ProcessId $orphan.ProcessId | ConvertFrom-Json
+        $protected += @($orphanReport.pids | ForEach-Object { [int]$_.pid })
+        Check 'orphaned console host protected' ($orphanHost -and (@($orphanReport.pids | ForEach-Object { [int]$_.pid }) -contains [int]$orphanHost.ProcessId))
+    }
+
     & $protect -ProcessId $a.Dummy -Release
     Stop-Process -Id $a.Dummy -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 500
