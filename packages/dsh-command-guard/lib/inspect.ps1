@@ -9,6 +9,12 @@ function Test-KillName($value) {
     try { return 'Kill' -like $value } catch { return $true }
 }
 
+function Test-CloseName($value) {
+    # Members that post WM_CLOSE to a window, which needs no terminate right.
+    $names = 'CloseMainWindow', 'SendMessage', 'SendMessageW', 'SendMessageA', 'PostMessage', 'PostMessageW', 'PostMessageA'
+    try { return [bool]($names | Where-Object { $_ -like $value }) } catch { return $true }
+}
+
 function Invoke-Inspection($inputData) {
     if ($inputData.mode -eq 'processes') {
         $rows = @(Get-CimInstance Win32_Process | ForEach-Object {
@@ -39,7 +45,7 @@ function Invoke-Inspection($inputData) {
             } elseif ($_ -is [System.Management.Automation.Language.ExpandableStringExpressionAst] -and $_.NestedExpressions.Count -eq 0) {
                 $literal = $true; $value = $_.Value
             }
-            @{ literal = $literal; value = $value; text = $_.Extent.Text; start = $_.Extent.StartOffset; end = $_.Extent.EndOffset; kind = $_.GetType().Name; killName = $literal -and (Test-KillName $value) }
+            @{ literal = $literal; value = $value; text = $_.Extent.Text; start = $_.Extent.StartOffset; end = $_.Extent.EndOffset; kind = $_.GetType().Name; killName = $literal -and (Test-KillName $value); closeName = $literal -and (Test-CloseName $value) }
         })
         @{ name = $_.GetCommandName(); elements = $elements; redirects = $_.Redirections.Count; text = $_.Extent.Text }
     })
@@ -50,22 +56,28 @@ function Invoke-Inspection($inputData) {
     }
     $members = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.InvokeMemberExpressionAst] }, $true))
     $killMembers = 0
+    $closeMembers = 0
     $dynamicMembers = 0
     $evaluators = 0
     foreach ($node in $members) {
         if ($node.Member -isnot [System.Management.Automation.Language.StringConstantExpressionAst]) { $dynamicMembers++; continue }
         $member = $node.Member.Value
         if ($member -eq 'Kill') { $killMembers++ }
+        # SendMessageW, SendNotifyMessage, PostThreadMessage and the like all deliver WM_CLOSE.
+        elseif ($member -eq 'CloseMainWindow' -or $member -match '^(?:Send|Post)\w*Message') { $closeMembers++ }
         elseif ($member -eq 'ForEach') {
             # .ForEach('Kill') invokes a member by name; only script blocks stay inspectable.
             $first = @($node.Arguments)[0]
             if ($null -ne $first -and $first -isnot [System.Management.Automation.Language.ScriptBlockExpressionAst]) {
                 if ($first -isnot [System.Management.Automation.Language.StringConstantExpressionAst] -or (Test-KillName $first.Value)) { $killMembers++ }
+                # A computed name may be CloseMainWindow too; .ForEach([type]) only converts.
+                if ($first -is [System.Management.Automation.Language.StringConstantExpressionAst]) { if (Test-CloseName $first.Value) { $closeMembers++ } }
+                elseif ($first -isnot [System.Management.Automation.Language.TypeExpressionAst]) { $closeMembers++ }
             }
         } elseif ($member -in @('InvokeScript', 'NewScriptBlock', 'ExpandString', 'GetCommand', 'GetCmdlet', 'GetCommandName', 'InvokeWithContext', 'AddScript', 'AddCommand')) { $evaluators++ }
         elseif ($member -eq 'Create' -and $node.Static -and $node.Expression -is [System.Management.Automation.Language.TypeExpressionAst] -and $node.Expression.TypeName.FullName -match '(?i)^(?:System\.Management\.Automation\.)?ScriptBlock$') { $evaluators++ }
     }
-    return @{ errors = @($parseErrors | ForEach-Object { $_.ErrorId }); commands = $items; standalone = [bool]$standalone; killMembers = $killMembers; dynamicMembers = $dynamicMembers; evaluators = $evaluators } | ConvertTo-Json -Depth 12 -Compress
+    return @{ errors = @($parseErrors | ForEach-Object { $_.ErrorId }); commands = $items; standalone = [bool]$standalone; killMembers = $killMembers; closeMembers = $closeMembers; dynamicMembers = $dynamicMembers; evaluators = $evaluators } | ConvertTo-Json -Depth 12 -Compress
 }
 
 if ($Serve) {

@@ -3,7 +3,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 // @ts-expect-error plain-JS permanent host package
 import { apply, installGuard } from '../packages/dsh-command-guard/lib/index.js'
 // @ts-expect-error plain-JS permanent host package
-import { assess, closeInspector, inspect, protectList, suspicious, verifyTarget } from '../packages/dsh-command-guard/lib/policy.js'
+import { assess, checkWindowClose, closeInspector, inspect, protectList, suspicious, verifyTarget } from '../packages/dsh-command-guard/lib/policy.js'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -129,6 +129,53 @@ describe('PowerShell AST policy (parse only, never execution)', () => {
     for (const parser of [() => null, () => ({ errors: ['error'], commands: [] }), () => { throw new Error('inspection failed') }]) {
       expect(() => assess('taskkill /PID 40', parser)).toThrow()
     }
+  })
+})
+
+describe('window close calls (WM_CLOSE needs no terminate right)', () => {
+  it.each([
+    '(Get-Process -Id 6564).CloseMainWindow()', '(Get-Process cmd).closemainwindow()',
+    'Get-Process pwsh | ForEach-Object { $_.CloseMainWindow() }',
+    'Get-Process cmd | ForEach-Object CloseMainWindow', 'Get-Process cmd | % -MemberName CloseMain*',
+    'Get-Process cmd | ForEach-Object *MainWindow', '(Get-Process cmd).ForEach("CloseMainWindow")',
+    "npm test; (Get-Process cmd).'CloseMainWindow'()",
+    '[Win32]::PostMessage($h, 0x10, 0, 0)', '[Native]::SendMessage($h, 16, 0, 0) | Out-Null',
+    'pwsh -NoProfile -Command "(Get-Process cmd).CloseMainWindow()"',
+    'Get-Process cmd | ForEach-Object C*Window', 'Get-Process cmd | % -MemberName:CloseMainWindow',
+    'Get-Process cmd | ForEach-Object $member',
+    'rtk proxy pwsh -Command "(Get-Process cmd).CloseMainWindow()"',
+    'rtk test pwsh -Command "(Get-Process cmd).CloseMainWindow()"',
+    'pwsh -Command "(Get-Process -Id $targetPid).CloseMainWindow()"',
+    'pwsh -COMMAND "(Get-Process cmd).CloseMainWindow()"', 'pwsh -Com "(Get-Process cmd).CloseMainWindow()"',
+    'cmd /C pwsh -c "(Get-Process cmd).CloseMainWindow()"',
+    'iex "(Get-Process cmd).CloseMainWindow()"',
+    'Start-Process pwsh -ArgumentList "-c (Get-Process cmd).CloseMainWindow()"',
+    "(Get-Process cmd).('Close'+'MainWindow')()",
+    "$member = 'CloseMainWindow'; (Get-Process cmd).ForEach($member)",
+    "$ExecutionContext.InvokeCommand.InvokeScript('(Get-Process cmd).CloseMainWindow()')",
+    "[ScriptBlock]::Create('(Get-Process cmd).CloseMainWindow()').Invoke()",
+    '[Win32]::PostMessageW($h, 0x10, 0, 0)', '[Win32]::SendMessageA($h, 16, 0, 0)',
+    '[Win32]::SendNotifyMessage($h, 16, 0, 0)',
+    "iex 'Get-Process | % C*Window'", "Invoke-Expression 'Get-Process cmd | ForEach-Object C*Window'",
+    'Start-Process pwsh -ArgumentList "-c Get-Process cmd | % C*Window"',
+    `${'rtk proxy '.repeat(6)}pwsh -c '(Get-Process cmd).CloseMainWindow()'`,
+  ])('blocks %s', (command) => {
+    expect(() => checkWindowClose(command)).toThrow('closing a window was blocked')
+  })
+
+  it.each([
+    'git commit -m "Guard CloseMainWindow on the launcher console"',
+    'Write-Output "SendMessage and PostMessage are blocked"', 'rg -n CloseMainWindow packages',
+    '# (Get-Process cmd).CloseMainWindow()', 'Get-Process node | Select-Object Id, MainWindowHandle',
+    'taskkill /F /IM node.exe', '(Get-Process cmd).CloseMainWindow(',
+    'rtk git commit -m "Guard CloseMainWindow"', 'Get-ChildItem | ForEach-Object { $_.Name }',
+    '1..3 | % { $_ * 2 }', 'Get-Process | ForEach-Object Name', 'pwsh -Command "Get-Date"',
+    'pwsh -Command "Write-Output $env:USERNAME"', 'foreach ($f in Get-ChildItem) { $f.Length }',
+    'Get-Process node | ForEach-Object { $_.Kill() }', '(Get-Process node).ForEach({ $_.Kill() })',
+    'Send-MailMessage -To a@b.c -Subject hi', '@(1, 2).ForEach([string])',
+    "iex 'Get-ChildItem | ForEach-Object Name'",
+  ])('allows %s', (command) => {
+    expect(() => checkWindowClose(command)).not.toThrow()
   })
 })
 
