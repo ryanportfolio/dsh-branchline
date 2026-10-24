@@ -1,6 +1,6 @@
 ---
 name: brainstorming
-description: "Use when product, interface, workflow, or architecture goals have unresolved material tradeoffs. Skip routine work and implementation of an approved design."
+description: "Product, interface, workflow, or architecture goals with unresolved material tradeoffs. Skip routine work + implementing an approved design."
 ---
 
 # Resolve the design decisions

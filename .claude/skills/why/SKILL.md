@@ -1,5 +1,5 @@
 ---
-description: Pressure-test a recommendation with one fresh reviewer. Use when the user types /why, or before you present your own weighty recommendation (hard to undo, two or more real options, or real time or money at stake). Never trigger from ordinary why questions or paraphrases.
+description: "Pressure-test a recommendation with one fresh reviewer: on /why, or before presenting own weighty rec (hard to undo, 2+ real options, real time or money at stake). Never from ordinary why questions or paraphrases."
 ---
 
 # Why

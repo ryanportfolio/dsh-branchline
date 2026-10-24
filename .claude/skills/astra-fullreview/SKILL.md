@@ -1,6 +1,6 @@
 ---
 name: astra-fullreview
-description: "Full multi-agent Codex review on gpt-6-astra at medium reasoning. Same verified lifecycle as codex-fullreview. Use for /astra-fullreview or 'full Astra review with sub-reviewers'."
+description: "Full multi-agent Codex review on gpt-6-astra, medium. Same lifecycle as codex-fullreview. Use: /astra-fullreview, 'full Astra review with sub-reviewers'."
 disable-model-invocation: true
 ---
 

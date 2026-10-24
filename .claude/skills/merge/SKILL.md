@@ -1,6 +1,6 @@
 ---
 name: merge
-description: "Merge PRs through a Codex review loop: /codex-fullreview, fix, then /codex-review reruns (3 max) until clean, then CI and squash-merge. Runs only when the user types /merge; from then on, every PR in the session goes through the same loop and merges."
+description: "Merge PRs via Codex loop: /codex-fullreview, fix, /codex-review reruns (3 max) until clean, then CI + squash-merge. Only when user types /merge; then every session PR goes through it + merges."
 disable-model-invocation: true
 ---
 

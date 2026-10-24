@@ -1,6 +1,6 @@
 ---
 name: "optimize-context"
-description: "Use when the user asks to reduce per-turn context or token load, trim kernels, skills, or connectors, or propagate a generic context optimization to the starter."
+description: "Cut per-turn context or token load: trim kernels, skills, connectors; push generic context optimization to starter."
 ---
 
 # Reduce measured context load

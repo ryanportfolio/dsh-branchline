@@ -1,6 +1,6 @@
 ---
 name: "astra-review"
-description: "Codex CLI review configured for gpt-6-astra at medium reasoning. Same verified CLI lifecycle as codex-review. Use for $astra-review or 'have Astra review this'."
+description: "Codex CLI review on gpt-6-astra, medium. Same lifecycle as codex-review. Use: $astra-review, 'have Astra review this'."
 ---
 
 # Astra review

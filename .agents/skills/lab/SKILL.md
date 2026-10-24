@@ -1,6 +1,6 @@
 ---
 name: "lab"
-description: "Use when the user explicitly asks to lab or prototype a visual, UI, motion, or game-feel element with live tuning before production implementation."
+description: "Explicit ask to lab or prototype a visual, UI, motion, or game-feel element with live tuning before production."
 ---
 
 # Lab: live-tune an element in an isolated sandbox, then port and delete

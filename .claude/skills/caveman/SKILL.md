@@ -1,6 +1,6 @@
 ---
 name: caveman
-description: "Use for every session reply to the user: concise Caveman prose with built-in Unslop. User-facing deliverables use Writing instead."
+description: "Every session reply to user: terse Caveman prose + built-in Unslop. User-facing deliverables → Writing."
 ---
 
 # Caveman

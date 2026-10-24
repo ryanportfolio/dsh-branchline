@@ -24,7 +24,7 @@ for comparison, backup, reconciliation, and discovery checks.
 |---|---|
 | Native | `addskill`, `babysit-ci`, `brainstorming`, `bro`, `caveman`, `enhance-prompt`, `external-review`, `fable-mode`, `forge-repo-ui-skill`, `handoff-audit`, `recall`, `refine`, `servers`, `session-hub`, `showpiece`, `wrapup`, `writing`, `writing-plans` |
 | Adapted | `apply-firmware`, `astra-review`, `claude-review`, `codex-review`, `deep-plan`, `dsh-plugin-permanent`, `dsh-upgrade-audit`, `init-project`, `lab`, `optimize-context`, `opus-fullreview`, `sync-starter` |
-| Capability-gated | `advocate`, `arena`, `cache-loop`, `dare`, `design-prototypes`, `impartial-review`, `long-horizon`, `perf-loop`, `redesign-concepts`, `why`, `wow-loop` |
+| Capability-gated | `advocate`, `arena`, `cache-loop`, `dare`, `design-prototypes`, `impartial-review`, `long-horizon`, `perf-loop`, `redesign-concepts`, `security-loop`, `why`, `wow-loop` |
 | Dangerous | `adopt-repo` |
 | Claude-only | `astra-fullreview`, `codex-fullreview`, `codex-image-gen`, `compact-review`, `coordinate`, `long-horizon-workflows`, `merge` |
 

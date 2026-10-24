@@ -1,6 +1,6 @@
 ---
 name: addskill
-description: "Create, import, update, or install repository or personal skills; includes runtime ownership, resources, and discovery validation."
+description: "Create, import, update, or install repo or personal skills: runtime ownership, resources, discovery checks."
 ---
 
 # Create, import, update, or install a skill
@@ -51,6 +51,8 @@ install extra copies into multiple roots. If an existing same-named personal cop
 show the meaningful difference, preserve it in a backup, and reconcile only the authorized
 skills. Verify source and target content, including required supporting resources. Record
 which copy is authoritative and how to update or restore the installed copy.
+
+Write every `description` in caveman-ultra style, in both runtime copies: fragments, no articles or filler, `→` for a hand-off to a neighboring skill. Keep the exact trigger text (the `/name` or `$name` command, quoted user phrases) and any gating limit ("only on explicit", "never from") word for word. The Codex catalog of every skill name plus description has a 7,500-character budget that `node .claude/scripts/test-codex-contract.mjs` checks; a new or edited skill must keep the total inside it.
 
 Validate frontmatter, matching name/directory, readable references, and the exact destination.
 Codex discovers repository skills from the working directory toward the repository root;

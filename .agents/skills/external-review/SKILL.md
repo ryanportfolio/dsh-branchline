@@ -1,6 +1,6 @@
 ---
 name: "external-review"
-description: "Use on explicit $external-review invocation or when a launcher prompt names this file. Single-context leaf review of an exact diff scope: no agents, nested reviews, or edits."
+description: "Explicit $external-review, or a launcher prompt naming this file. Single-context leaf review of exact diff scope: no agents, nested reviews, or edits."
 ---
 
 # External leaf review

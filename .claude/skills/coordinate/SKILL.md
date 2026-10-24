@@ -1,6 +1,6 @@
 ---
 name: coordinate
-description: "Coordinate with another Claude Code session the user names: read what it did and recommends, critique it, send your own recommendation, let it answer, and once you agree have it proceed to done, pinging the user only when a step needs them. Use on /coordinate <session>, or when the user asks you to coordinate, review or go back and forth with another session."
+description: "Coordinate with another named Claude Code session: read its work + recs, critique, send own rec, let it answer, once agreed have it finish; ping user only when a step needs them. Use: /coordinate <session>, 'coordinate / review / go back and forth with another session'."
 ---
 
 # coordinate: two sessions, one agreed plan

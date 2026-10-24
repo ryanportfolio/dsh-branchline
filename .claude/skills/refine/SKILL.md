@@ -1,6 +1,6 @@
 ---
 name: refine
-description: "Use for an explicit workflow-improvement review, turning the user's preferences into rules or a skill, recurring task friction that may justify a narrow change to skills or project references, or the unattended weekly review (/refine weekly)."
+description: "Explicit workflow-improvement review; user preferences → rules or skill; recurring task friction justifying a narrow skill or reference change; unattended weekly review (/refine weekly)."
 ---
 
 # Improve the working process

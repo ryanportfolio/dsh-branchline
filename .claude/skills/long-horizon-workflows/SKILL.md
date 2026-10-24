@@ -1,5 +1,5 @@
 ---
-description: 'Long-horizon rounds run through the Workflow tool: one script per batch, with a fresh baseline, candidate executors, a blind pick, and independent judges for every round, schema verdicts and a run journal. Use on /long-horizon-workflows or to run a big task in Workflow-audited rounds. Claude Code only.'
+description: "Long-horizon rounds via Workflow tool: 1 script per batch, fresh baseline, candidate executors, blind pick, independent judges each round, schema verdicts, run journal. Use: /long-horizon-workflows, big task in Workflow-audited rounds. Claude Code only."
 disable-model-invocation: true
 ---
 

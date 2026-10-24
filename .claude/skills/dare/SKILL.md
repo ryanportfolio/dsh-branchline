@@ -1,6 +1,6 @@
 ---
 name: dare
-description: "Use for /dare, first principles, or questioning the problem: four fresh stages decompose, audit, recombine and test, preserving immutable goals and constraints."
+description: "/dare, first principles, questioning the problem: 4 fresh stages decompose, audit, recombine, test; immutable goals + constraints kept."
 disable-model-invocation: true
 ---
 

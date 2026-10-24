@@ -1,5 +1,5 @@
 ---
-description: 'Use for work too big for one context window: long multi-step tasks, progress lost to compaction or failed retries, work spanning hours or sessions, or when the user says /long-horizon or asks to run a task in verified rounds.'
+description: "Work too big for one context window: long multi-step tasks, progress lost to compaction or failed retries, work spanning hours or sessions, /long-horizon, or 'run in verified rounds'."
 ---
 
 # long-horizon: run big tasks in audited rounds

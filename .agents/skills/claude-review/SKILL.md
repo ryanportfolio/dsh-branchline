@@ -1,6 +1,6 @@
 ---
 name: "claude-review"
-description: "Use when the user says $claude-review, asks Claude or Fable to review code written in Codex, or requests a cross-vendor review through Claude CLI."
+description: "$claude-review, Claude or Fable asked to review Codex-written code, or cross-vendor review via Claude CLI."
 ---
 
 # Claude review

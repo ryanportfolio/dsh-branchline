@@ -1,5 +1,5 @@
 ---
-description: Use when the user asks to review, audit, or stress-test recent code changes with fresh independent agents; requires exposed multi-agent tools or an authenticated Codex CLI.
+description: "Review, audit, or stress-test recent code changes with fresh independent agents. Needs exposed multi-agent tools or authed Codex CLI."
 ---
 
 # Impartial review

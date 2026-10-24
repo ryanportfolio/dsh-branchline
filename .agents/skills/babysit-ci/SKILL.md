@@ -1,6 +1,6 @@
 ---
 name: "babysit-ci"
-description: "Watches a PR's checks and fixes failures. Use for $babysit-ci, \"watch CI\", \"fix CI\", \"get checks green\", or a PR with failing or pending checks; not a bare merge request."
+description: "Watch PR checks, fix failures. Use: $babysit-ci, 'watch CI', 'fix CI', 'get checks green', PR with failing or pending checks. Not a bare merge request."
 ---
 
 # Babysit CI

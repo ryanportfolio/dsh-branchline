@@ -1,6 +1,6 @@
 ---
 name: init-project
-description: "Configure a starter project when setup is requested, using detected project facts and only necessary user questions."
+description: "Configure a starter project on setup request: detected project facts, only necessary user questions."
 ---
 
 # Configure a starter

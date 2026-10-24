@@ -1,6 +1,6 @@
 ---
 name: "sync-starter"
-description: "Use when the user asks to pull template improvements into a spawned repo, compare starter drift, or push a generic improvement back to the starter."
+description: "Pull template improvements into a spawned repo, compare starter drift, or push a generic improvement back to the starter."
 ---
 
 # Two-way sync with the starter template

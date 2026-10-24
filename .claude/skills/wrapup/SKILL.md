@@ -1,6 +1,6 @@
 ---
 name: wrapup
-description: "Use on /wrapup or when the user asks if a session is done, good to archive, or what is left: one verdict from git, the PR, scratch files and running servers or browsers."
+description: "/wrapup, or user asks if session is done, OK to archive, or what's left: one verdict from git, the PR, scratch files, running servers or browsers."
 ---
 
 # Wrap up

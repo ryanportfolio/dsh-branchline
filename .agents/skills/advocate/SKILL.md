@@ -1,6 +1,6 @@
 ---
 name: "advocate"
-description: "Use only when the user explicitly invokes $advocate to challenge a change just made before it lands. Do not trigger from natural-language requests."
+description: "Only on explicit $advocate: challenge a just-made change before it lands. Never from natural-language requests."
 ---
 
 # Advocate: any reason not to?
