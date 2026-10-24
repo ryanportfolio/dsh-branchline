@@ -1,6 +1,6 @@
 ---
 name: cache-loop
-description: Use for caching or stale content
+description: "Caching or stale content."
 ---
 
 # Cache loop

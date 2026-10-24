@@ -1,6 +1,6 @@
 ---
 name: handoff-audit
-description: "Draft a self-contained audit prompt for a separate task or reviewer, with exact scope and falsifiable checks. Does not run the audit."
+description: "Draft self-contained audit prompt for a separate task or reviewer: exact scope, falsifiable checks. Doesn't run the audit."
 ---
 
 # Handoff for independent review

@@ -8,7 +8,7 @@ resources. A skill should change decisions, not narrate one successful session.
 
 Use a kebab-case folder and SKILL.md with YAML name and description. Describe the capability
 and the circumstances that should select it; include neighboring exclusions only when they
-prevent likely misrouting. Keep descriptions short. State concrete completion conditions,
+prevent likely misrouting. Keep descriptions short, in caveman-ultra style (SKILL.md). State concrete completion conditions,
 real constraints and relevant tools without pretending unavailable tools exist.
 
 Keep the entrypoint lean. Put substantial optional procedures in linked references, reusable

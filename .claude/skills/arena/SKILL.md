@@ -1,6 +1,6 @@
 ---
 name: arena
-description: Builds parallel attempts at one task, judges them blind, and grafts the best ideas onto the strongest. Use for /arena, "try a few approaches", "build me options", bakeoffs, competing versions, or a stalled long-horizon or wow-loop step.
+description: "Parallel attempts at one task, blind judging, best ideas grafted onto strongest. Use: /arena, 'try a few approaches', 'build me options', bakeoffs, competing versions, stalled long-horizon or wow-loop step."
 ---
 
 # Arena

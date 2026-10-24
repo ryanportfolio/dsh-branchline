@@ -48,6 +48,7 @@
     "redesign-concepts": "native",
     "servers": "native",
     "wrapup": "native",
-    "opus-fullreview": "native"
+    "opus-fullreview": "native",
+    "security-loop": "native"
   }
 }

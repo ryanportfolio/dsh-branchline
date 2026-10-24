@@ -1,6 +1,6 @@
 ---
 name: fable-mode
-description: "Use for difficult multi-step work, uncertain diagnoses, repeated failures, 'did it work/is it fixed/prove it' questions, or tasks where verification and handoff need particular care. Skip routine changes."
+description: "Hard multi-step work, uncertain diagnoses, repeated failures, 'did it work/is it fixed/prove it', or tasks needing careful verification + handoff. Skip routine changes."
 ---
 
 # Evidence-led execution

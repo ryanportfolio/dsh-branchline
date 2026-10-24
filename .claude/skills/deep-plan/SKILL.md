@@ -1,6 +1,6 @@
 ---
 name: deep-plan
-description: "Use for /deep-plan: interview a loose idea in short rounds of decisions and stop for an explicit go before anything is built."
+description: "/deep-plan: interview a loose idea in short decision rounds; stop for explicit go before anything is built."
 ---
 
 # deep-plan: interview a loose idea into decisions the user made
@@ -47,7 +47,7 @@ If a write fails, say so once and continue chat-only; never claim a ledger you d
 - Rework filter: ask only where a wrong guess forces rework. Turn a low-stakes node into an assumption with its own ID and status `assumed`. Never assume goal or scope.
 - Drop from the round any question whose answer could change another question in the same round.
 - Cap: at most 4 questions per round, the ones with the highest rework cost; the rest wait for the next round. If the user asks for fewer per round, use that cap and record it as Pace.
-- Fact lookups: run the cheapest probe first (read a file, grep); use a subagent only for a slow lookup. Ask now the questions that do not depend on a pending lookup; hold the rest.
+- Fact lookups: run the cheapest probe first (read a file, grep); use a subagent only for a slow lookup. Brief it with questions about how things work today (where X lives, how Y loads Z), never the idea being planned, and ask for file:line facts with no recommendations, so its findings describe what exists rather than what would suit the plan. Ask now the questions that do not depend on a pending lookup; hold the rest.
 
 ## Asking a round
 

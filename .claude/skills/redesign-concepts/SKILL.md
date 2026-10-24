@@ -1,6 +1,6 @@
 ---
 name: redesign-concepts
-description: "Built UI → screenshots → Codex image_gen → 10 redesign concepts → owner picks → build plan. Use: /redesign-concepts, \"show what we have to Codex, get 10 better versions\", \"prototype improvements to current UI\". Brief only, nothing built → design-prototypes."
+description: "Built UI → screenshots → Codex image_gen → 10 redesign concepts → owner picks → build plan. Use: /redesign-concepts, 'show what we have to Codex, get 10 better versions', 'prototype improvements to current UI'. Brief only → design-prototypes."
 ---
 
 # Redesign concepts

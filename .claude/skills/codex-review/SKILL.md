@@ -1,5 +1,5 @@
 ---
-description: "Cross-vendor second-opinion review. Drives OpenAI Codex CLI (codex exec review, gpt-6.1-sol, high reasoning) over a PR, branch, commit, or uncommitted diff, then verifies each finding. Trigger: /codex-review, \"have Codex/Sol review this\"."
+description: "Cross-vendor second opinion: Codex CLI (codex exec review, gpt-6.1-sol, high) over PR, branch, commit, or uncommitted diff, then each finding verified. Use: /codex-review, 'have Codex/Sol review this'."
 ---
 
 # Codex review — cross-vendor second opinion

@@ -1,6 +1,6 @@
 ---
 name: long-horizon
-description: "Use when work spans context windows or sessions, progress is lost after compaction or retries, or the user invokes $long-horizon or asks to work in verified rounds."
+description: "Work spanning context windows or sessions, progress lost after compaction or retries, $long-horizon, or 'work in verified rounds'."
 ---
 
 # Long-horizon for Codex

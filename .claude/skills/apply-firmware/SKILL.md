@@ -1,6 +1,6 @@
 ---
 name: apply-firmware
-description: "Use on /apply-firmware or to bring the current folder (a plain folder, an existing repo, or an older or partial firmware copy) up to full Harness Firmware in place. To mirror an external repo instead, use adopt-repo."
+description: "/apply-firmware, or bring current folder (plain folder, existing repo, old or partial firmware copy) up to full Harness Firmware in place. Mirror external repo → adopt-repo."
 ---
 
 # apply-firmware: bring the current folder up to full firmware

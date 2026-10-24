@@ -1,5 +1,5 @@
 ---
-description: Use when the user explicitly asks to lab or prototype a visual, UI, motion, or game-feel element with live tuning before production implementation.
+description: "Explicit ask to lab or prototype a visual, UI, motion, or game-feel element with live tuning before production."
 disable-model-invocation: true
 ---
 

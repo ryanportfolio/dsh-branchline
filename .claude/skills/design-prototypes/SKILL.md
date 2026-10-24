@@ -1,6 +1,6 @@
 ---
 name: design-prototypes
-description: "Brief → distinct image concepts (sections, features, interactions, branding) → compare → refine pick, before build. Use: /design-prototypes, prototype visual directions, compare design options, refine chosen concept. Built UI → redesign-concepts."
+description: "Brief → distinct image concepts (sections, features, interactions, branding) → compare → refine pick, before build. Use: /design-prototypes, prototype visual directions, compare design options. Built UI → redesign-concepts."
 ---
 
 # Design prototypes

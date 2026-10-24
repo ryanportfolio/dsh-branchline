@@ -1,6 +1,6 @@
 ---
 name: codex-fullreview
-description: "Full multi-agent Codex review: codex exec runs $impartial-review as Manager with fresh-context sub-reviewers (gpt-6.1-sol, high), then each finding is verified. Trigger: /codex-fullreview, \"full Codex review with sub-reviewers\"."
+description: "Full multi-agent Codex review: codex exec runs impartial-review as Manager with fresh sub-reviewers (gpt-6.1-sol, high), then each finding verified. Use: /codex-fullreview, 'full Codex review with sub-reviewers'."
 ---
 
 # Codex full review: multi-agent second opinion

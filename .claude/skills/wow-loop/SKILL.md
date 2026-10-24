@@ -1,6 +1,6 @@
 ---
 name: wow-loop
-description: "Evidence-gated review and repair loop for one deliverable or a set of like items. Use on /wow-loop, requests for wow factor or dial it to 11, a target score to reach (\"get it to 8/10\", \"bring everything under 6 up to 6+\"), or substantial visual work (3D, animation, UI, rendered documents) that needs reference fidelity or repeated visual correction. Skip routine cosmetic edits and discussion of the skill itself."
+description: "Evidence-gated review + repair loop, one deliverable or set of like items. Use: /wow-loop, wow factor, 'dial it to 11', target score ('get it to 8/10', 'bring everything under 6 up to 6+'), substantial visual work (3D, animation, UI, rendered docs) needing reference fidelity or repeated correction. Skip routine cosmetic edits + talk about the skill itself."
 ---
 
 # Wow loop

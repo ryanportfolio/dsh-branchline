@@ -1,5 +1,5 @@
 ---
-description: Use when the user asks to pull template improvements into a spawned repo, compare starter drift, or push a generic improvement back to the starter.
+description: "Pull template improvements into a spawned repo, compare starter drift, or push a generic improvement back to the starter."
 ---
 
 # sync-starter — two-way sync with the claude-starter template

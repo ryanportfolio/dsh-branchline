@@ -1,6 +1,6 @@
 ---
 name: servers
-description: "Use on /servers, after starting a dev server, or when the user asks what is running, which port is which, why browsers are open, or to close old servers and browsers."
+description: "/servers, after starting a dev server, or user asks what's running, which port is which, why browsers are open, or to close old servers and browsers."
 ---
 
 # Servers and automation browsers

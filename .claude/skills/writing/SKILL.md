@@ -1,6 +1,6 @@
 ---
 name: writing
-description: "Write or edit audience-facing prose: docs, UI copy, emails, release notes, and application answers. Use also for voice matching, clarity review, or AI-tell cleanup. Ordinary session replies follow session conventions."
+description: "Write or edit audience-facing prose: docs, UI copy, emails, release notes, application answers; voice matching, clarity review, AI-tell cleanup. Session replies follow session conventions."
 ---
 
 # Writing
@@ -12,10 +12,20 @@ Ordinary chat follows session conventions, including Caveman when configured. De
 ## Precedence
 
 1. The writer's own sample voice: mirror sentence length, register, punctuation, recurring phrases. Never upgrade casual to corporate.
-2. An optional project voice reference identified by repository instructions, such as CLAUDE.md or AGENTS.md. Apply it only to that project's work; no particular voice file is required.
+2. A voice reference named by user or repository instructions, such as the global or project CLAUDE.md or AGENTS.md. Follow it wherever the rules below leave a choice open; where they conflict, the rules win. A project's reference takes priority over a user-wide one for that project's work. No voice file is required.
 3. The rules below.
 
 Explicit user choices override all style defaults, including punctuation. Preserve facts, uncertainty, quotations, identifiers, and technical meaning.
+
+## Building a voice reference
+
+When the user wants deliverables in their own voice and no voice reference exists, offer to build one. Ask for complete pieces they wrote without AI help, ideally three or more of the kind being drafted. Whole pieces show how the writer opens, moves between points, and ends; excerpts do not. From the samples, record:
+
+- **Traits**, each with a short exact quote from a sample: sentence length, register, openings and endings, humor, how they hedge, recurring phrases.
+- **Words and moves they avoid**, from the samples and from the user's own list. The tells below already cover generic AI phrasing; list only what belongs to this writer.
+- **Anti-examples**: a few passages that miss the voice, such as a draft the user rejected or one sample paragraph rewritten in generic style, each with one line on what is wrong with it.
+
+Record only traits the samples show. Save the reference where user or repository instructions point; if they name no location, ask the user where it goes. When drafting in that voice, load the whole reference, anti-examples included, and keep the samples available.
 
 ## Before drafting
 
@@ -96,6 +106,12 @@ Unless the user specifies another format, begin the returned review with the rev
 
 For substantive review, check support, recoverable meaning, essential caveats, and whether each section adds useful information or helps the reader act before polishing style. Reuse evidence already checked. Style-only reviews stay within their requested scope and need no reader restatement. Routine drafting returns the deliverable without a review preamble.
 
+## Critic pass
+
+Run one when the user asks for a critique, or offer one for a substantial draft in a set voice. A fresh reader gets the draft, the audience, the brief, any voice reference, and these rules, and returns specific notes, each quoting the line it concerns. Revise from the notes. Stop after three rounds at most, sooner when the notes turn minor or repeat. Each further round pulls the draft toward generic phrasing. Then return the draft for the user's own review; a critic pass does not replace it.
+
+Prefer a critic from a different model family than the writer, such as a Codex critic for a Claude draft or the reverse, because models tend to favor writing from their own family. Ask the critic for notes against the brief, voice reference, and rules, not for a pick between two drafts, since a preference verdict carries its family's taste. When no other family is available, say the critic was from the same family. The independence rule above still applies.
+
 ## Review sweep, in order
 
 Apply only unoverridden defaults; preserve requested voice and quoted or technical material.
@@ -110,6 +126,7 @@ Apply only unoverridden defaults; preserve requested voice and quoted or technic
 8. Stranger-test captions, labels, double-reading words.
 9. Repeated abstract nouns: rewrite the leaning sentences.
 10. Title says what the reader gets?
+11. Read it as the author speaking it aloud. Rewrite any sentence they would not say or would trip over; with a voice reference, check the draft against it.
 
 For an explicitly requested prose review, give **PASS** when no applicable, unoverridden requirement remains, otherwise **FAIL** with concrete violations or missing evidence. Overall PASS covers substance and style; missing required evidence prevents it. For a review limited to clarity or style, label the verdict **Clarity-only PASS/FAIL** or **Style-only PASS/FAIL** as appropriate; assess only that scope and do not imply factual verification. A clarity-only request needs no added research. Label notes **Requirement** or **Suggestion**. Ordinary drafting needs no verdict; a requested style is not a violation.
 

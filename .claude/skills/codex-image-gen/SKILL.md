@@ -1,6 +1,6 @@
 ---
 name: codex-image-gen
-description: "Image asset needed (icon, sprite, texture, splash, logo, marketing art, illustration) from inside Claude Code → drive Codex image_gen via codex exec. Use: \"generate an image\", \"make an icon\", \"use gpt-image / my Codex sub\", placeholder asset → real art."
+description: "Image asset needed (icon, sprite, texture, splash, logo, marketing art, illustration) → Codex image_gen via codex exec. Use: 'generate an image', 'make an icon', 'use gpt-image / my Codex sub', placeholder → real art."
 ---
 
 # Codex Image Generation

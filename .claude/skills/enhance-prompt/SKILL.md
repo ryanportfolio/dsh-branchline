@@ -1,6 +1,6 @@
 ---
 name: enhance-prompt
-description: "Use when the user asks for a rewritten, copy-ready prompt for another agent or session. Produce the prompt without executing its task."
+description: "User wants a rewritten, copy-ready prompt for another agent or session. Produce prompt; don't run its task."
 ---
 
 # Write a usable handoff prompt

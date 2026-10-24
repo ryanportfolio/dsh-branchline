@@ -1,6 +1,6 @@
 ---
 name: why
-description: "Fresh critical second look at a recommendation: on $why, or before presenting your own weighty pick (hard to undo, two or more real options, or real time or money at stake). Never from ordinary why questions."
+description: "Fresh critical second look at a recommendation: on $why, or before presenting own weighty pick (hard to undo, 2+ real options, real time or money at stake). Never from ordinary why questions."
 ---
 
 # Second look at a recommendation

@@ -1,6 +1,6 @@
 ---
 name: wow-loop
-description: "Use for $wow-loop, wow factor, a target score (\"get it to 8/10\"), or visual work needing reference fidelity or repeated correction, on one deliverable or a set of like items. Skip routine cosmetic edits and discussion of the skill."
+description: "$wow-loop, wow factor, target score ('get it to 8/10'), or visual work needing reference fidelity or repeated correction, one deliverable or set of like items. Skip routine cosmetic edits + talk about the skill."
 ---
 
 # Wow loop for Codex

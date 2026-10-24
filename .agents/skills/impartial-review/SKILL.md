@@ -1,6 +1,6 @@
 ---
 name: impartial-review
-description: "Use when the user requests independent review of code, a diff, or recent changes. Requires fresh reviewer context through exposed agents or an authenticated Codex CLI."
+description: "Independent review of code, a diff, or recent changes. Needs fresh reviewer context: exposed agents or authed Codex CLI."
 ---
 
 # Independent Codex review
