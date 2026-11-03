@@ -1,6 +1,6 @@
 ---
 name: "arena"
-description: "Parallel attempts at one task, blind judging, best ideas grafted onto strongest. Use: $arena, 'try a few approaches', 'build me options', bakeoffs, competing versions, stalled long-horizon or wow-loop step."
+description: "Parallel attempts at one task, blind judging, best ideas grafted onto strongest. Use: 'try a few approaches', 'build me options', bakeoffs, competing versions, stalled long-horizon or wow-loop step."
 ---
 
 # Arena

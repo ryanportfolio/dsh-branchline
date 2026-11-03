@@ -6,53 +6,26 @@ description: "Work too big for one context window: long multi-step tasks, progre
 
 Roles: Manager, Executor, Auditor. You (this ctx) = Manager: hold goal, keep state file true, delegate every round. Executors, auditors = fresh subagents; fresh ctx per round splits impl from independent evidence. Discussing/editing this skill does not activate it.
 
+## Guardrails
+
+- Honor explicit user model choices + required quality floors; else inherit configured session model. Check actual exposure before dispatch; requested model/floor unavailable → disclose, never silently downgrade or claim it ran.
+- Size step so one fresh ctx finishes it: one slice, one migration, one bug. Split independent work into separate steps → parallel rounds.
+- Audit independence = the point: verdicts from auditor's own inspection in fresh subagent, never this Manager ctx.
+- Executors + auditors follow fable-mode discipline in their round; fable-mode governs one ctx, this skill governs work spanning many.
+- Under ~3 dependent steps: skip harness, run fable-mode directly.
+- At `max(5, 2 * initial step count)` rounds: reassess strategy + remaining work before continuing. Reassessment threshold only, not completion or abandonment rule. At reassessment, tag every Remaining item continue, reserve, or close w/ one-line reason; reserved item reopens only via final auditor's failed checks or user instruction. Track executor attempts, auditor calls, retries separately. Explicit user round/time/cost limits binding; checkpoint before exceeding, report unfinished checks. Zero budget permits inspection, no budgeted execution.
+- Unavailable required check blocks that step + dependents; finish independent authorized work, ask only for missing user-owned decisions or authority. Invocation does not authorize publication, installation, deployments, or external messages.
+
 ## State file
 
 `.tmp/long-horizon/<task-slug>/state.md` (gitignored scratch), created before round one:
 
-```markdown
-# Contract  (original retained; explicit user changes recorded as amendments)
-Goal: <one paragraph>
-Acceptance: <the checks that prove it done, as a numbered list>
-Version: <current contract version>
-
-# Amendments
-- <version, explicit user instruction, changed checks, affected steps and claims>
-
-# Verified progress
-- <claim> — contract version: <version>; evidence: <file/command/output the auditor saw>
-
-# Remaining
-1. <step sized for one fresh context>; depends on: <step numbers or none>; writes: <paths>
-
-# Current rounds  (one block per active round; scope and checks fixed at Plan, except for explicit user amendments)
-Round: <N>   Batch: <B>   Phase: planned | executing | awaiting-audit | audited
-Contract version: <version used for this round>
-Workspace: <absolute root the executor writes; any other workspace the round reads, marked read-only>
-Workers: <agent/process IDs, role, last observed status; update as workers start or stop>
-Step: <the one Remaining step this round works>
-Done-check: <commands, cwd, and the expected result; the auditor runs them itself>
-Write scope: <paths the executor may change; test and gate definitions only if the step is about them>
-Baseline: <manifest path> + <git ref>  (see Plan; the auditor diffs against this, never HEAD)
-Auditor brief: <path>  (written at Plan, dispatched byte for byte)
-Residue: <paths a failed earlier round left changed, and whether they were reverted or kept>
-
-# Dead ends  (approaches that failed audit; do not retry without new evidence)
-- <approach>: <why it failed, one line>
-
-# Method notes  (rules later rounds must follow, such as how to measure)
-- <rule>: source round <N>; unconfirmed / confirmed in round <M> / dropped
-
-# Audit log
-- round N (batch B): <step> — <status>/<integrity>/<contract>, <one-line evidence>
-```
+Template: `references/state-file.md`; read it before creating or rebuilding the file or writing a Current round block.
 
 Only audit-passed results enter **Verified progress**. Resume from existing state file; reconcile w/ real workspace + latest user instructions.
 Before resuming run this session didn't start, check ownership: state file changed in last 30 min, or `Workers:` lists worker still running → ask user: take over (they stop other session first) or stay out. Two Managers writing one state file corrupt it.
 
 Keep original contract. Explicit user changes → versioned amendments; reassess affected steps, invalidate affected claims before using them as prereqs. Never weaken acceptance just to make a round pass. Amendment mid-round → reconcile its workers before more execution; keep baseline + old briefs; new versioned brief from amended contract + raw artifacts, no executor assessments. Only audit vs current contract accepts affected work.
-
-Dead ends = memory. Unrecorded failed approach gets re-proposed rounds later; re-walking it costs full round.
 
 ## Context boundary
 
@@ -90,7 +63,7 @@ Within round, executor runs independent reads/searches/commands at once, may fan
 
 1. **Plan**: read state file, pick batch (every ready step Parallel rounds allows; each round works ONE step), write each round's Current round block to state file, phase `planned`, before spawning anything. Then per round: take Baseline, write auditor brief to recorded path, write executor brief: contract excerpt, Current round block, only verified facts step needs, every dead end touching step, Method notes. Done-check frozen from here; wrong one → fixed in next round's Plan, never after reading executor's report.
 
-   Round whose execution or done-check costs hours (browser work, GPU timing, long batches) → draft review after Current round block written, before Baseline + briefs freeze it. One fresh read-only peer, preferably other model family (custom-prompt `codex exec -s read-only` run, preflight + CLI mechanics per `codex-review` skill; else fresh Claude subagent), reads draft Step, Done-check, and the code the check exercises. One question: can check pass while work wrong, fail while right, or not run as written? Concrete findings only: wrong impl that passes (stub returning expected value, test never reaching changed path, check reading file executor can write), correct result failing check read literally, or command failing as written w/ cwd + output. "Could be stronger" ≠ finding. Manager fixes draft, ≤1 follow-up review of changed wording, then freezes. Peer sees only draft + code, never executor report; auditor brief carries only frozen block, never peer critique. Cheap rounds skip; auditor's `blocked: invalid check` covers them.
+   Round whose execution or done-check costs hours (browser work, GPU timing, long batches) → draft review before Baseline + briefs freeze it, ≤1 follow-up review: read + follow `references/draft-review.md`. Cheap rounds skip.
 
    Write/edit state file + briefs w/ file-edit tool; shell/script string layers drop backslashes + backticks. Re-read each saved brief before dispatch. Every brief: worker appends each long-lived process it starts (pid, port, command) to `processes.log` in task dir. Hours-long job brief: executor checks between batches that workspaces still whole (`git worktree list`, sentinel file); mismatch → stop + report, don't rebuild. Evidence from another revision (line numbers, patch map) names that revision; executor finds cited code by anchor text, not line number.
 
@@ -132,13 +105,7 @@ Round count alone can't resolve stalled run. Watch repeated failures directly:
 
 Count both triggers from Audit log, never memory; recovery round = attempt. Remaining rewrite may route stuck step through `arena` (parallel candidates, pick, graft); arena then runs inside executor subagent: Manager never reads candidates, picks, grafts; auditor sees only workspace result. Candidates need state file's Contract + Dead ends copied in. Worktree starts from HEAD → use `.tmp/arena-*` copies or commit WIP first; else earlier rounds' uncommitted edits lost.
 
-Either trigger may escalate to cross-vendor supervisor. Manager, executor, auditor all Claude → shared blindspots; from inside, shared blindspot looks exactly like plateau. Codex = different model family, never saw this session:
-
-```bash
-codex login status
-```
-
-Logged in, or `model_provider` gateway set in `config.toml` in `$CODEX_HOME` (default `~/.codex`) → one `codex exec` run (custom prompt, no scope selector) w/ contract, audit log, Dead ends, asking plateau diagnosis + different strategy. Current local preflight, CLI mechanics, run identity: per `codex-review` skill. Answer = opinion: check vs current contract version + acceptance checks before it rewrites Remaining; drop anything drifting. Neither, or run fails → skip; rewrite rules above stand alone.
+Either trigger may escalate to cross-vendor supervisor (Codex): read `references/codex-consult.md` first. Its answer = opinion: check vs current contract version + acceptance checks before it rewrites Remaining.
 
 One consult per trigger. Each run bills user's Codex subscription → tied to stagnation trigger, not every round.
 
@@ -147,13 +114,3 @@ One consult per trigger. Each run bills user's Codex subscription → tied to st
 Per-round verdicts prove each step vs workspace at that time; later round can regress earlier one. So before reporting: one last fresh auditor w/ current contract, amendments, workspace root runs every current acceptance check vs final workspace. Failures → back to Remaining.
 
 Then answer from Verified progress alone. Unfinished = valid report: state verified + remaining, incl. missing independent checks. Bind final evidence to inspected revision + content manifest; later relevant changes require revalidation.
-
-## Guardrails
-
-- Honor explicit user model choices + required quality floors; else inherit configured session model. Check actual exposure before dispatch; requested model/floor unavailable → disclose, never silently downgrade or claim it ran.
-- Size step so one fresh ctx finishes it: one slice, one migration, one bug. Split independent work into separate steps → parallel rounds.
-- Audit independence = the point: verdicts from auditor's own inspection in fresh subagent, never this Manager ctx.
-- Executors + auditors follow fable-mode discipline in their round; fable-mode governs one ctx, this skill governs work spanning many.
-- Under ~3 dependent steps: skip harness, run fable-mode directly.
-- At `max(5, 2 * initial step count)` rounds: reassess strategy + remaining work before continuing. Reassessment threshold only, not completion or abandonment rule. At reassessment, tag every Remaining item continue, reserve, or close w/ one-line reason; reserved item reopens only via final auditor's failed checks or user instruction. Track executor attempts, auditor calls, retries separately. Explicit user round/time/cost limits binding; checkpoint before exceeding, report unfinished checks. Zero budget permits inspection, no budgeted execution.
-- Unavailable required check blocks that step + dependents; finish independent authorized work, ask only for missing user-owned decisions or authority. Invocation does not authorize publication, installation, deployments, or external messages.

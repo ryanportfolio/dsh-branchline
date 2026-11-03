@@ -123,7 +123,7 @@ Select a companion file because recon found the boundary its `When to use this f
 
 ## Coverage ledger
 
-The parent writes `<output>/coverage-ledger.json` as a top-level JSON array, one unit for every material combination of entry surface, trust boundary, subsystem, and applicable ordinary or companion attack class, at the granularity the profile sets (`quick` uses the single subsystem `profile/quick/all-in-scope-subsystems`; `deep` adds lifecycle modes). A scoped run seeds in-scope surfaces for assignment and records discovered excluded surfaces as `out_of_scope`, never `covered`.
+The parent writes `<output>/coverage-ledger.json` as a top-level JSON array, one unit for every material combination of entry surface, trust boundary, subsystem, and applicable ordinary or companion attack class, at the granularity the profile sets (`quick` uses the single subsystem `profile/quick/all-in-scope-subsystems`; `deep` adds lifecycle modes). A scoped run seeds in-scope surfaces for assignment and records discovered excluded surfaces as `out_of_scope`, never `covered`. Every run also seeds one exploratory unit ([hunting.md](hunting.md), One exploratory unit per run).
 
 Each dimension has a human label and a stable source-derived value in `canonical_refs`: a repository-relative entry path plus exported scope, a route or message identity defined in source, the source control that defines a boundary, a package path, or the exact block reference. A block reference is `FILE.md#` plus the class name exactly as written in bold or as a heading in that file (for companion sections, the heading text before any parenthetical, for example `Core discipline`). Never derive references by lowercasing or slugging labels.
 

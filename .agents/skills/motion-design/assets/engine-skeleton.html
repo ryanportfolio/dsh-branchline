@@ -1,0 +1,130 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>engine skeleton</title>
+<!-- Deterministic particle film skeleton. See ../references/web-engine.md.
+     Every frame is a pure function of t; the phosphor trail buffer is the only state and resets on seek.
+     Replace SHAPES, TRACKS and CAPTIONS with the piece. Exposes window.__anim for scripts/stills.mjs.
+     t is rounded to 1 us so event comparisons (at<=t, t>=a) do not land one step early after a seek.
+     If a scene sets any per-frame field (vignette, exposure, fade), reset it to its default at the top of draw().
+     The 1-exp(-x) composite shifts saturated hues; for exact brand colours see ../references/color-light.md. -->
+
+<style>
+html,body{margin:0;height:100%;background:#060806;color:#b9c4ba;font:12px ui-monospace,Consolas,monospace}
+body{display:flex;flex-direction:column;padding:14px;box-sizing:border-box;gap:10px}
+#wrap{flex:1;min-height:0;display:grid;place-items:center}
+#stage{position:relative;background:#0f1210;overflow:hidden}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+#ov{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;pointer-events:none}
+.cap{position:absolute;opacity:0;white-space:nowrap}.cap.c{transform:translateX(-50%)}
+.stmt{font:400 68px/1.04 system-ui,sans-serif;color:#f3f3ec;max-width:1640px;white-space:normal}.stmt em{color:#53db76}.stmt .w{display:inline-block;opacity:0}
+.mono{font:17px/1.5 ui-monospace,monospace;letter-spacing:.12em;color:rgba(243,243,236,.62)}
+#transport{display:flex;gap:12px;align-items:center}#range{flex:1}
+button{background:#101712;color:#cfe;border:1px solid #2a3a2d;border-radius:6px;padding:6px 10px;font:inherit}
+</style></head><body>
+<div id="wrap"><div id="stage"><canvas id="gl"></canvas><div id="ov"></div></div></div>
+<div id="transport"><button id="play">Pause</button><span id="time"></span><input id="range" type="range" min="0" max="10000"></div>
+<script>
+'use strict';
+const S={MORPH_MS:1400,MORPH_STAGGER:.45,MORPH_BOUNCE:.8,MORPH_ARC:.18,FLIGHT_GLOW:.6,PARTICLES:16000,POINT_SIZE:2.4,EXPOSURE:1,TRAIL:.88,BLOOM:.8,DUST:.22,GRAIN:.05,VIGNETTE:.4,DRIFT:1,GREEN:'#53db76',AMBER:'#efc87e',PAPER:'#f3f3ec',INK:'#0f1210'};
+// reduced motion is off by default (owner's choice); ?rm=1 previews it. If the owner asks for one, also read matchMedia('(prefers-reduced-motion: reduce)') here.
+const RM=new URLSearchParams(location.search).has('rm');
+if(RM)Object.assign(S,{MORPH_ARC:0,MORPH_BOUNCE:0,DRIFT:0});
+const W=1920,H=1080,TAU=Math.PI*2,TOTAL=12;
+const clamp=(x,a=0,b=1)=>x<a?a:x>b?b:x,lerp=(a,b,t)=>a+(b-a)*t,sm=x=>{x=clamp(x);return x*x*(3-2*x)},eo=x=>{x=clamp(x);return 1-(1-x)**3};
+function backOut(x,c1){if(x<=0)return 0;if(x>=1)return 1;const c3=c1+1;return 1+c3*(x-1)**3+c1*(x-1)**2}
+function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+// particles: seeded randoms, roles as fixed index ranges
+const N=S.PARTICLES,rnd=mulberry(7),R1=new Float32Array(N),R2=new Float32Array(N),R3=new Float32Array(N),R4=new Float32Array(N);
+for(let i=0;i<N;i++){R1[i]=rnd();R2[i]=rnd();R3[i]=rnd();R4[i]=rnd()}
+const ROLES={MAIN:{start:0,n:Math.floor(N*.6)}};ROLES.DUST={start:ROLES.MAIN.n,n:N-ROLES.MAIN.n};
+
+// shapes: fn(t,i,k,n,P) writes x,y,b (brightness),a (accent),w (white),s (size)
+const Pd={x:0,y:0,b:0,a:0,w:0,s:1};
+function dust(t,i,P){P.x=((R1[i]*2100+t*(5+R3[i]*14)*S.DRIFT)%2100)-90;P.y=R2[i]*1100-10+Math.sin(t*.21+R4[i]*6.283)*22*S.DRIFT;
+ P.b=S.DUST*(.25+.75*R4[i]*R4[i])*(.7+.3*Math.sin(t*1.3+R3[i]*40));P.a=0;P.w=0;P.s=.6+R3[i]*.6}
+const dustFn=(t,i,k,n,P)=>dust(t,i,P);
+const ring=(t,i,k,n,P)=>{const th=TAU*k/n-Math.PI/2,r=300+(R3[i]-.5)*6;P.x=960+Math.cos(th)*r;P.y=540+Math.sin(th)*r;P.b=.5};
+const bars=(t,i,k,n,P)=>{const row=Math.floor(k*8/n);P.x=560+R1[i]*(400+row*60);P.y=380+row*42;P.b=.6;P.a=row===3?1:0};
+
+// tracks: per role, keyframes {at,dur,stag,fn}
+const M=S.MORPH_MS/1000,kf=(at,fn,dur=M,stag=S.MORPH_STAGGER)=>({at,fn,dur,stag});
+const TR={MAIN:[kf(0,dustFn),kf(1.5,ring),kf(6,bars),kf(10.5,dustFn)],DUST:[kf(0,dustFn)]};
+
+// captions: seconds, class, stage position, html (statements stagger per word)
+const CAPTIONS=[[2.6,6,'stmt',120,84,'One pool of particles, <em>many</em> shapes.'],[7,10.5,'stmt',120,84,'Every frame is a function of <em>t</em>.'],[7.4,10.5,'mono',124,176,'SCRUB IT, PAUSE IT, EXPORT IT']];
+
+// staggered, recursive morph between keyframes
+const POOL=Array.from({length:10},()=>({x:0,y:0,b:0,a:0,w:0,s:1}));
+function evalTrack(tr,j,t,i,k,n,d){const P=POOL[d];P.b=1;P.a=0;P.w=0;P.s=1;const f=tr[j];f.fn(t,i,k,n,P);
+ if(j===0||d>=8)return P;const t0=f.at+R1[i]*f.stag*f.dur,u=(t-t0)/(f.dur*(1-f.stag));if(u>=1)return P;
+ const A=evalTrack(tr,j-1,t,i,k,n,d+1);if(u<=0)return A;
+ const e=backOut(u,S.MORPH_BOUNCE),dx=P.x-A.x,dy=P.y-A.y,off=Math.sin(Math.PI*u)*S.MORPH_ARC*(R2[i]-.5)*2;
+ const glow=Math.sin(Math.PI*u)*S.FLIGHT_GLOW*Math.min(1,Math.hypot(dx,dy)/260)*Math.min(1,(A.b+P.b)*2);
+ P.x=A.x+dx*e-dy*off;P.y=A.y+dy*e+dx*off;P.b=A.b+(P.b-A.b)*u+glow;P.a=A.a+(P.a-A.a)*u;P.w=A.w+(P.w-A.w)*u;P.s=A.s+(P.s-A.s)*u;return P}
+const buf=new Float32Array(N*6);
+function fillBuf(t){for(const name in ROLES){const R=ROLES[name],tr=TR[name];let j=0;for(let q=1;q<tr.length;q++)if(tr[q].at<=t)j=q;
+ for(let k=0;k<R.n;k++){const i=R.start+k,P=evalTrack(tr,j,t,i,k,R.n,0),o=i*6;buf[o]=P.x;buf[o+1]=P.y;buf[o+2]=Math.max(0,P.b);buf[o+3]=P.a;buf[o+4]=P.w;buf[o+5]=P.s}}}
+
+// WebGL2: additive points -> phosphor feedback (gain 1-k, reset on seek) -> two bloom levels -> tone-mapped composite
+const cv=document.getElementById('gl'),gl=cv.getContext('webgl2',{antialias:false,alpha:false}),HF=!!gl.getExtension('EXT_color_buffer_float');
+const V=`#version 300 es
+out vec2 v;void main(){vec2 p=vec2(gl_VertexID==1?3.:-1.,gl_VertexID==2?3.:-1.);v=p*.5+.5;gl_Position=vec4(p,0,1);}`;
+const SRC={
+ pv:`#version 300 es
+layout(location=0) in vec4 a_p;layout(location=1) in vec2 a_q;uniform float u_px,u_ps,u_gain;uniform vec3 u_g,u_am,u_pa;out vec3 vc;
+void main(){gl_Position=vec4(a_p.x/960.-1.,1.-a_p.y/540.,0,1);gl_PointSize=a_p.z>.002?max(1.5,a_q.y*u_ps*u_px):0.;vc=mix(mix(u_g,u_am,clamp(a_p.w,0.,1.)),u_pa,clamp(a_q.x,0.,1.))*a_p.z*u_gain;}`,
+ pf:`#version 300 es
+precision highp float;in vec3 vc;out vec4 o;void main(){float d=length(gl_PointCoord-.5)*2.;o=vec4(vc*exp(-d*d*3.5)*step(d,1.),1);}`,
+ decay:`#version 300 es
+precision highp float;uniform sampler2D u_t;uniform float u_k;in vec2 v;out vec4 o;void main(){o=texture(u_t,v)*u_k;}`,
+ blur:`#version 300 es
+precision highp float;uniform sampler2D u_t;uniform vec2 u_d;in vec2 v;out vec4 o;void main(){vec4 c=texture(u_t,v)*.227027;c+=(texture(u_t,v+u_d*1.384615)+texture(u_t,v-u_d*1.384615))*.316216;c+=(texture(u_t,v+u_d*3.230769)+texture(u_t,v-u_d*3.230769))*.070270;o=c;}`,
+ comp:`#version 300 es
+precision highp float;uniform sampler2D u_a,u_b,u_c;uniform float u_bloom,u_exp,u_grain,u_vig,u_fade,u_time;uniform vec3 u_ink;uniform vec2 u_res;in vec2 v;out vec4 o;
+float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+void main(){vec3 x=texture(u_a,v).rgb*u_exp+(texture(u_b,v).rgb+texture(u_c,v).rgb*.6)*u_bloom;vec3 m=1.-exp(-x*1.25);float l=max(max(x.r,x.g),x.b);m+=vec3(max(l-1.2,0.)*.12);
+vec2 q=v-.5;vec3 col=(u_ink+m)*(1.-u_vig*dot(q,q)*2.2)*u_fade;col+=(h(floor(v*u_res)+fract(u_time)*97.)-.5)*u_grain;
+vec2 px=floor(v*u_res);col+=(h(px+fract(u_time*1.37)*53.)+h(px*1.7+fract(u_time*.71)*31.)-1.)/255.;o=vec4(col,1);}`};// last line: triangular dither, about 1 LSB, seeded from t so seeks stay identical
+function shd(ty,s){const x=gl.createShader(ty);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(x));return x}
+function prog(vs,fs){const p=gl.createProgram();gl.attachShader(p,shd(gl.VERTEX_SHADER,vs));gl.attachShader(p,shd(gl.FRAGMENT_SHADER,fs));gl.linkProgram(p);const u={};
+ for(let j=0;j<gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);j++){const a=gl.getActiveUniform(p,j);u[a.name]=gl.getUniformLocation(p,a.name)}return{p,u}}
+const PP=prog(SRC.pv,SRC.pf),PD=prog(V,SRC.decay),PB=prog(V,SRC.blur),PC=prog(V,SRC.comp),vaoFs=gl.createVertexArray(),vaoPts=gl.createVertexArray(),vbo=gl.createBuffer();
+gl.bindVertexArray(vaoPts);gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferData(gl.ARRAY_BUFFER,buf.byteLength,gl.DYNAMIC_DRAW);
+gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,4,gl.FLOAT,false,24,0);gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,2,gl.FLOAT,false,24,16);gl.bindVertexArray(null);
+function target(w,h){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,HF?gl.RGBA16F:gl.RGBA8,w,h,0,gl.RGBA,HF?gl.HALF_FLOAT:gl.UNSIGNED_BYTE,null);
+ for(const [k,v] of [[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]])gl.texParameteri(gl.TEXTURE_2D,k,v);
+ const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);return{t,f,w,h}}
+let cw=0,ch=0,acc=[],q1,q2,e1,e2,cur=0,reset=true;
+function size(w,h){if(w===cw&&h===ch)return;cw=cv.width=w;ch=cv.height=h;for(const o of [...acc,q1,q2,e1,e2])if(o){gl.deleteTexture(o.t);gl.deleteFramebuffer(o.f)}
+ acc=[target(w,h),target(w,h)];q1=target(w>>2||1,h>>2||1);q2=target(w>>2||1,h>>2||1);e1=target(w>>3||1,h>>3||1);e2=target(w>>3||1,h>>3||1);reset=true}
+const hex=h=>[1,3,5].map(j=>parseInt(h.slice(j,j+2),16)/255);
+function pass(P,dst,src,set){gl.bindFramebuffer(gl.FRAMEBUFFER,dst?dst.f:null);gl.viewport(0,0,dst?dst.w:cw,dst?dst.h:ch);gl.useProgram(P.p);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,src.t);set();gl.bindVertexArray(vaoFs);gl.drawArrays(gl.TRIANGLES,0,3)}
+function draw(t,dtF){fillBuf(t);const k=Math.pow(S.TRAIL,Math.max(.2,dtF)),A=acc[cur],B=acc[1-cur];gl.disable(gl.BLEND);
+ if(reset){gl.bindFramebuffer(gl.FRAMEBUFFER,A.f);gl.viewport(0,0,cw,ch);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT)}else pass(PD,A,B,()=>{gl.uniform1i(PD.u.u_t,0);gl.uniform1f(PD.u.u_k,k)});
+ gl.bindFramebuffer(gl.FRAMEBUFFER,A.f);gl.viewport(0,0,cw,ch);gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE);gl.useProgram(PP.p);
+ gl.uniform1f(PP.u.u_px,cw/W);gl.uniform1f(PP.u.u_ps,S.POINT_SIZE);gl.uniform1f(PP.u.u_gain,reset?1:1-k);gl.uniform3fv(PP.u.u_g,hex(S.GREEN));gl.uniform3fv(PP.u.u_am,hex(S.AMBER));gl.uniform3fv(PP.u.u_pa,hex(S.PAPER));
+ gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferSubData(gl.ARRAY_BUFFER,0,buf);gl.bindVertexArray(vaoPts);gl.drawArrays(gl.POINTS,0,N);gl.disable(gl.BLEND);reset=false;cur=1-cur;
+ const blur=(d,s,x,y)=>pass(PB,d,s,()=>{gl.uniform1i(PB.u.u_t,0);gl.uniform2f(PB.u.u_d,x/s.w,y/s.h)});blur(q1,A,1.5,0);blur(q2,q1,0,1.5);blur(e1,q2,1.5,0);blur(e2,e1,0,1.5);
+ const fade=sm(t/.8)*(1-sm((t-(TOTAL-.7))/.7));
+ pass(PC,null,A,()=>{gl.uniform1i(PC.u.u_a,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,q2.t);gl.uniform1i(PC.u.u_b,1);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,e2.t);gl.uniform1i(PC.u.u_c,2);
+  gl.uniform1f(PC.u.u_bloom,S.BLOOM);gl.uniform1f(PC.u.u_exp,S.EXPOSURE);gl.uniform1f(PC.u.u_grain,S.GRAIN);gl.uniform1f(PC.u.u_vig,S.VIGNETTE);gl.uniform1f(PC.u.u_fade,fade);gl.uniform1f(PC.u.u_time,t);gl.uniform3fv(PC.u.u_ink,hex(S.INK));gl.uniform2f(PC.u.u_res,cw,ch)});
+ ov.style.opacity=fade;caps(t)}
+
+// captions over the canvas
+const ov=document.getElementById('ov');
+const CAPS=CAPTIONS.map(([a,b,cls,x,y,html])=>{const el=document.createElement('div');el.className='cap '+cls;el.style.left=x+'px';el.style.top=y+'px';el.innerHTML=html;
+ const words=[];if(cls.includes('stmt')){const walk=n=>{for(const c of [...n.childNodes]){if(c.nodeType===3){const fr=document.createDocumentFragment();for(const p of c.textContent.split(/(\s+)/)){if(!p)continue;if(/^\s+$/.test(p))fr.append(p);else{const s=document.createElement('span');s.className='w';s.textContent=p;words.push(s);fr.append(s)}}c.replaceWith(fr)}else walk(c)}};walk(el)}
+ ov.appendChild(el);return{el,a,b,words}});
+function caps(t){for(const c of CAPS){const o=t>=c.a&&t<c.b?(c.words.length?1:eo((t-c.a)/.7))*(1-sm((t-(c.b-.45))/.45)):0;c.el.style.opacity=o;
+ c.words.forEach((w,j)=>{const p=eo((t-c.a-j*.07)/.7);w.style.opacity=p;w.style.transform=`translateY(${(1-p)*16}px)`})}}
+
+// stage sizing + transport
+const stage=document.getElementById('stage'),wrap=document.getElementById('wrap'),range=document.getElementById('range'),play=document.getElementById('play'),time=document.getElementById('time');
+function layout(){const r=wrap.getBoundingClientRect(),w=Math.floor(Math.min(r.width,r.height*16/9)),h=Math.floor(w*9/16);stage.style.width=w+'px';stage.style.height=h+'px';ov.style.transform=`scale(${w/W})`;const d=Math.min(devicePixelRatio||1,1.5);size(Math.round(w*d),Math.round(h*d))}
+let t=0,playing=true,last=performance.now();
+const qt=x=>Math.round(x*1e6)/1e6,seek=x=>{t=qt(clamp(x,0,TOTAL-.001));reset=true};
+range.oninput=()=>seek(range.value/10000*TOTAL);play.onclick=()=>{playing=!playing;play.textContent=playing?'Pause':'Play'};
+addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();play.click()}else if(e.key==='ArrowRight')seek(t+1);else if(e.key==='ArrowLeft')seek(t-1)});
+function loop(now){const dt=Math.min(.1,(now-last)/1000);last=now;if(playing){t=qt(t+dt);if(t>=TOTAL){t=0;reset=true}}draw(t,dt*60);time.textContent=t.toFixed(1)+' / '+TOTAL;if(document.activeElement!==range)range.value=Math.round(t/TOTAL*10000);requestAnimationFrame(loop)}
+window.__anim={seek,pause(){playing=false;play.textContent='Play'},get t(){return t},TOTAL};
+layout();addEventListener('resize',layout);requestAnimationFrame(loop);
+</script></body></html>

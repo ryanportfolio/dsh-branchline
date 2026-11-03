@@ -105,7 +105,12 @@ hash, or the git range), `Evidence: read-only` or `Evidence: executed` with each
 its result, and `Files read:` with absolute paths. Keep severity separate from confidence. Missing access means a
 check was unavailable, not that code passed. Report credible uncertain findings with their
 uncertainty; do not invent issues or promote style preferences into correctness blockers.
-Finding nothing is valid.
+Finding nothing is valid. Grade severity against the change's goal: a finding limited to
+another code path, a rare input, a small performance cost, or extra compatibility is lowest
+severity unless it breaks the goal; security, auth, and data-loss findings keep their impact
+severity. Report code, tests, guards, or options the goal does not need as lowest-severity
+findings whose fix is the smaller version. Manager applies the same rule when ranking,
+whatever label a reviewer gave.
 
 Manager first sets aside findings whose `Scope:` differs from the run's scope hash or that sit
 on paths `--verify` reports as drifted; they need renewed review. Manager then deduplicates and

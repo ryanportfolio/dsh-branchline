@@ -53,7 +53,7 @@ inherited `writing-skills: disabled` entry may remain inert. Confirm no retired
 name retains a SKILL.md in either root before running the sync check. A retirement never
 removes a locked skill; report it instead.
 
-For `settings.json`: merge, don't overwrite — the project may have its own permission additions. Read both, union the `allow` lists, keep project-specific hooks.
+For `settings.json`: merge, don't overwrite — the project may have its own permission additions. Read both, union the `allow` lists, keep project-specific hooks. A template hook whose command differs from a project hook only in quoting replaces that hook; never keep both.
 
 After any skill, sync script, compatibility matrix, or `skillOverrides` change, run
 `node .claude/scripts/sync-codex-skills.mjs --write` (it deletes leftover generated

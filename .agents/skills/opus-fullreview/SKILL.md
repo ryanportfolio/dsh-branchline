@@ -1,6 +1,6 @@
 ---
 name: "opus-fullreview"
-description: "Full multi-reviewer Claude review from Codex: Claude CLI runs impartial-review as Manager with fresh Opus sub-reviewers, Codex verifies each finding. Use: $opus-fullreview, full Claude/Opus review with sub-reviewers."
+description: "Full Claude review from Codex: Claude CLI runs impartial-review as Manager w/ fresh Opus sub-reviewers; Codex verifies each finding."
 ---
 
 # Opus full review

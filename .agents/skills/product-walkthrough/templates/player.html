@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Walkthrough</title><link rel="icon" href="data:,">
+<script src="tour.config.js"></script>
+<script>
+  // Product CSS first; the player chrome below only styles its own #wt-* elements.
+  for (const href of (window.TOUR && window.TOUR.css) || []) document.write('<link rel="stylesheet" href="' + href + '">');
+</script>
+<style>
+  :root{--wt-accent:#6d5efc}
+  html,body{height:100%;margin:0;overflow:hidden}
+  :where(body){font-family:system-ui,-apple-system,"Segoe UI",sans-serif} /* zero specificity: product CSS wins */
+  :where(html:not(.wt-embed)) :where(body){background:var(--wt-page)} /* a theme's page colour; embed stays transparent */
+  #wt-wrap{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+  #wt-fit{position:relative;transform-origin:50% 50%;flex:none}
+  #wt-root{position:absolute;inset:0;overflow:hidden;border-radius:18px;box-shadow:0 30px 120px -30px rgba(0,0,0,.6),0 0 0 1px rgba(127,127,127,.25)}
+  #wt-actor{position:absolute;left:0;top:0;pointer-events:none;z-index:50;will-change:transform,opacity;transform-origin:50% 50%}
+  #wt-actor-host{position:relative;overflow:visible}
+  #wt-ripple{position:absolute;left:0;top:0;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;border:2px solid var(--wt-accent);pointer-events:none;z-index:51;opacity:0}
+  #wt-caption{display:flex;align-items:center;gap:22px;max-width:94vw;flex:none;color:var(--wt-ink,inherit)}
+  #wt-text{flex:1;min-width:0}
+  #wt-num{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--wt-accent);font-weight:600}
+  #wt-title{font-size:24px;line-height:1.15;margin-top:4px;font-weight:700}
+  #wt-take{opacity:.75;font-size:15px;margin-top:6px}
+  #wt-dots{display:flex;gap:7px;margin-top:12px}
+  #wt-dots button{width:22px;height:4px;padding:0;border:0;border-radius:2px;background:rgba(127,127,127,.35);cursor:pointer;display:block;overflow:hidden;position:relative}
+  #wt-dots b{position:absolute;inset:0;background:var(--wt-accent);transform-origin:0 50%;transform:scaleX(0)}
+  #wt-btns{display:flex;gap:10px;align-items:center}
+  .wt-btn{padding:10px 16px;border-radius:12px;border:1px solid rgba(127,127,127,.4);background:transparent;color:inherit;font:inherit;font-size:14px;cursor:pointer;text-decoration:none;white-space:nowrap}
+  .wt-btn:disabled{opacity:.4;cursor:default}
+  .wt-btn:focus-visible,#wt-dots button:focus-visible{outline:2px solid var(--wt-accent);outline-offset:2px}
+  .wt-btn.wt-primary{background:var(--wt-accent);color:#fff;border-color:transparent;font-weight:700}
+  #wt-pause{width:40px;padding:10px 0;text-align:center}
+  #wt-skip{display:none}
+  #wt-dev{position:fixed;left:12px;bottom:10px;z-index:60;display:flex;gap:8px;align-items:center;font:11px ui-monospace,Consolas,monospace;opacity:.55}
+  #wt-dev:hover{opacity:1}
+  #wt-dev input[type=range]{width:320px}
+  #wt-dev button,#wt-dev select{font:inherit;padding:3px 7px;background:#111;color:#ddd;border:1px solid #333;border-radius:5px}
+  .wt-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  /* embed mode (?embed=1): transparent page so the host shows through; the stage stays opaque */
+  html.wt-embed,html.wt-embed body{background:transparent!important}
+  html.wt-embed #wt-dev,html.wt-nodev #wt-dev{display:none}
+  html.wt-embed #wt-skip{display:inline-block;border:0;padding:10px 6px;opacity:.65;text-decoration:underline;text-underline-offset:3px}
+  /* capture mode: Element Capture needs the captured element isolated and flat */
+  html.wt-capture #wt-caption{display:none}
+  html.wt-capture #wt-fit{isolation:isolate;transform-style:flat}
+</style></head>
+<body>
+<div id="wt-wrap">
+  <!-- The stage is a picture of the product, not the product: its controls are inert and
+       hidden from assistive tech; the figure carries a text description instead. -->
+  <div id="wt-fit" role="img"><div id="wt-root" inert aria-hidden="true"></div>
+    <div id="wt-actor" aria-hidden="true"><div id="wt-actor-host"></div></div><div id="wt-ripple" aria-hidden="true"></div></div>
+  <div id="wt-caption">
+    <div id="wt-text">
+      <div aria-live="polite" aria-atomic="true"><div id="wt-num"></div><div id="wt-title"></div><div id="wt-take"></div><div class="wt-sr" id="wt-alt"></div></div>
+      <div id="wt-dots" role="group"></div>
+    </div>
+    <div id="wt-btns"><button class="wt-btn" id="wt-skip"></button><button class="wt-btn" id="wt-pause" aria-pressed="false"></button><button class="wt-btn" id="wt-back"></button><button class="wt-btn" id="wt-next"></button><a class="wt-btn wt-primary" id="wt-cta" href="#"></a></div>
+  </div>
+</div>
+<div id="wt-dev">
+  <button id="wt-play">pause</button><input type="range" id="wt-scrub" min="0" max="1000" value="0" aria-label="time"><span id="wt-t">0</span>
+  <select id="wt-speed" aria-label="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
+  <button id="wt-theme">theme</button><button id="wt-auto">auto: on</button><button id="wt-replay">replay</button>
+</div>
+<script>
+(() => {
+"use strict";
+const C = Object.assign({ css: [], bodyClass: "", rootClass: "", stage: { w: 1200, h: 720 }, themes: { light: {} }, defaultTheme: null,
+  chapters: [], actor: null, gapMs: 1800, maxScale: 1.25, accent: "#6d5efc", parentOrigin: "*", reducedMotion: "end-frame", strings: {} }, window.TOUR || {});
+const STR = Object.assign({ chapter: "Chapter {n} of {total}", back: "Back", next: "Next", finish: "Finish", skip: "Skip tour", cta: "Try it",
+  pause: "Pause", play: "Play", chapters: "Chapters" }, C.strings);
+const W = C.stage.w, H = C.stage.h, THEMES = Object.keys(C.themes);
+const q = new URLSearchParams(location.search);
+const EMBED = q.get("embed") === "1";
+const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+const $ = (id) => document.getElementById("wt-" + id);
+const html = document.documentElement;
+if (EMBED) html.classList.add("wt-embed");
+// capture=1: stage only, no caption or dev bar, for video export (checks/export-video.mjs)
+const CAPTURE = q.get("capture") === "1";
+if (q.get("dev") === "0" || CAPTURE) html.classList.add("wt-nodev");
+if (CAPTURE) html.classList.add("wt-capture");
+// Reduced motion: each chapter opens on its end frame, paused; Play still works.
+const REDUCED = !CAPTURE && C.reducedMotion !== "ignore" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+html.style.setProperty("--wt-accent", C.accent);
+if (C.bodyClass) document.body.className = C.bodyClass;
+const root = $("root"); root.className = C.rootClass; $("fit").style.width = W + "px"; $("fit").style.height = H + "px";
+$("dots").setAttribute("aria-label", STR.chapters);
+
+// Errors any scene, actor or the player throws. Checks read this.
+const errors = [], missing = [];
+const P = window.__player = { errors, missing, ready: false, themes: THEMES };
+addEventListener("error", (e) => errors.push(String(e.message || e)));
+addEventListener("unhandledrejection", (e) => errors.push(String(e.reason)));
+
+// ── helpers handed to scenes as ctx.OB
+const OB = (() => {
+  const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const prog = (t, start, dur) => dur <= 0 ? (t >= start ? 1 : 0) : clamp((t - start) / dur);
+  const E = { linear: (x) => x, in: (x) => x * x * x, out: (x) => 1 - Math.pow(1 - x, 3), inOut: (x) => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2,
+    back: (x) => { const c = 1.70158, c3 = c + 1; return 1 + c3 * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); },
+    spring: (x) => x >= 1 ? 1 : 1 - Math.exp(-6 * x) * Math.cos(10 * x) };
+  const ease = (name) => E[name] || E.inOut;
+  // Keyframes [{t, ...numbers, ease?}]; missing fields carry over; numbers interpolate, others step.
+  function track(keys, t) {
+    if (!keys.length) return {};
+    const full = []; let prev = {};
+    for (const k of keys) { prev = { ...prev, ...k }; full.push(prev); }
+    if (t <= full[0].t) return { ...full[0] };
+    for (let i = 1; i < full.length; i++) {
+      const a = full[i - 1], b = full[i];
+      if (t <= b.t) {
+        const u = ease(keys[i].ease || "inOut")(clamp((t - a.t) / Math.max(1, b.t - a.t)));
+        const o = { ...b };
+        for (const k in b) { if (k === "t") continue; o[k] = typeof b[k] === "number" && typeof a[k] === "number" ? lerp(a[k], b[k], u) : a[k]; }
+        o.t = t; return o;
+      }
+    }
+    return { ...full[full.length - 1] };
+  }
+  const typed = (s, t, start, cps = 28) => s.slice(0, Math.max(0, Math.floor((t - start) / 1000 * cps)));
+  const stream = (s, t, start, wps = 9) => { const w = s.split(/(\s+)/); return w.slice(0, Math.max(0, Math.floor((t - start) / 1000 * wps * 2))).join(""); };
+  const h = (markup) => { const d = document.createElement("div"); d.innerHTML = markup.trim(); return d.firstElementChild; };
+  // Seeded random, so jitter is the same on every render of the same t.
+  const rand = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let x = Math.imul(a ^ (a >>> 15), 1 | a); x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x; return ((x ^ (x >>> 14)) >>> 0) / 4294967296; }; };
+  // Cached DOM writer: set(el, "opacity", "0.5"), set(el, "text", ...), set(el, "html", ...). Writes only on change.
+  const writer = () => { const last = new Map(); return (el, prop, val) => {
+    let m = last.get(el); if (!m) { m = {}; last.set(el, m); }
+    if (m[prop] === val) return; m[prop] = val;
+    if (prop === "text") el.textContent = val; else if (prop === "html") el.innerHTML = val; else if (prop === "class") el.className = val; else el.style[prop] = val;
+  }; };
+  return { clamp, lerp, prog, ease, track, typed, stream, h, rand, writer };
+})();
+
+// ── guide actor
+const A = C.actor;
+let actorMod = null, actorInst = null, actorKeys = [], baseSize = (A && A.size) || 56, box = { w: baseSize, h: baseSize };
+const actorEl = $("actor"), actorHost = $("actor-host"), ripple = $("ripple");
+const tipOffset = (size) => actorMod && actorMod.tip ? actorMod.tip(size) : { x: 0, y: 0 };
+function setActor(keys) {
+  actorKeys = keys || [];
+  if (actorInst && actorInst.destroy) try { actorInst.destroy(); } catch (e) { errors.push("actor: " + e.message); }
+  actorInst = null; actorHost.innerHTML = "";
+  if (!actorMod || !actorKeys.length) return;
+  baseSize = actorKeys[0].size || A.size || 56;
+  box = actorMod.box ? actorMod.box(baseSize) : { w: baseSize, h: baseSize };
+  actorHost.style.width = box.w + "px"; actorHost.style.height = box.h + "px";
+  try { actorInst = actorMod.create(actorHost, { theme }); } catch (e) { errors.push("actor: " + e.message); }
+}
+function actorAt(t) {
+  if (!actorKeys.length) return null;
+  const s = OB.track(actorKeys, t);
+  let cur = {}, tapAt = -1e9;
+  for (const k of actorKeys) { if (k.t > t) break; cur = { ...cur, ...k }; if (k.tap) tapAt = k.t; }
+  return { ...s, expr: cur.expr || "idle", tapAt };
+}
+// Centre position that puts the actor's tip on stage point (x, y).
+const aim = (x, y, size) => { const tp = tipOffset(size || baseSize); return { x: x - tp.x, y: y - tp.y }; };
+// Stage-space rect of an element (the player scales #wt-fit with a transform).
+const rect = (el) => { const R = root.getBoundingClientRect(), r = el.getBoundingClientRect(), s = R.width / W || 1;
+  return { x: (r.left - R.left) / s, y: (r.top - R.top) / s, w: r.width / s, h: r.height / s }; };
+
+// ── themes
+const DEFAULT_THEME = C.defaultTheme && C.themes[C.defaultTheme] ? C.defaultTheme : THEMES[0];
+let theme = C.themes[q.get("theme")] ? q.get("theme") : DEFAULT_THEME;
+function applyTheme(id) {
+  for (const k of THEMES) { const th = C.themes[k] || {}; if (th.class) html.classList.remove(...th.class.split(/\s+/)); for (const a in th.attrs || {}) html.removeAttribute(a); }
+  const th = C.themes[id] || {}; if (th.class) html.classList.add(...th.class.split(/\s+/)); for (const [a, v] of Object.entries(th.attrs || {})) html.setAttribute(a, v);
+  // Caption text colour. In embed mode the page is transparent, so inherited body colour
+  // can vanish against the host's background; each theme names its ink.
+  if (th.ink) html.style.setProperty("--wt-ink", th.ink); else html.style.removeProperty("--wt-ink");
+  // Standalone page colour behind the caption, for when the product CSS paints no body background.
+  if (th.page) html.style.setProperty("--wt-page", th.page); else html.style.removeProperty("--wt-page");
+  theme = id;
+}
+
+// ── chapters
+// started: embed mode plays only after the host's "start" (arrow keys must not autoplay).
+let idx = 0, inst = null, t = 0, started = !EMBED, playing = !EMBED && !q.has("t") && !REDUCED, speed = +(q.get("speed") || 1), auto = q.get("auto") !== "0";
+let last = performance.now(), lastDt = 16, needReady = EMBED, actorFade = EMBED ? 0 : 1, fadeTo = actorFade;
+const rank = (sc) => { const i = C.chapters.indexOf(sc.id); return i < 0 ? 1000 + (sc.order || 0) : i; };
+const scenes = () => (window.SCENES || []).slice().sort((a, b) => rank(a) - rank(b));
+const cur = () => scenes()[idx];
+const ctx = () => ({ OB, actor: setActor, tipOffset, aim, rect, theme, stage: { w: W, h: H } });
+const fmt = (s, o) => s.replace(/\{(\w+)\}/g, (m, k) => o[k] !== undefined ? o[k] : m);
+function setPlaying(v) { playing = v; $("play").textContent = v ? "pause" : "play"; const b = $("pause"); b.textContent = v ? "❚❚" : "▶"; b.setAttribute("aria-label", v ? STR.pause : STR.play); b.setAttribute("aria-pressed", String(!v)); }
+function load(i) {
+  const L = scenes();
+  if (!L.length) { root.innerHTML = '<div style="padding:40px">No scenes loaded.</div>'; return; }
+  idx = (i + L.length) % L.length;
+  if (inst && inst.destroy) try { inst.destroy(); } catch (e) { errors.push(String(e)); }
+  inst = null; root.innerHTML = ""; setActor([]); t = REDUCED ? L[idx].duration : 0;
+  const sc = L[idx];
+  try { inst = sc.mount(root, ctx()); } catch (e) { errors.push(sc.id + ": " + e.message); root.innerHTML = `<pre style="padding:30px;color:#e55;white-space:pre-wrap">${sc.id}: ${String(e.stack).replace(/</g, "&lt;")}</pre>`; }
+  $("num").textContent = fmt(STR.chapter, { n: idx + 1, total: L.length });
+  $("title").textContent = sc.title || ""; $("take").textContent = sc.takeaway || "";
+  const alt = sc.alt || [sc.title, sc.takeaway].filter(Boolean).join(". ");
+  $("alt").textContent = sc.alt || ""; $("fit").setAttribute("aria-label", alt);
+  const cta = $("cta"); cta.textContent = (sc.cta && sc.cta.label) || STR.cta; cta.href = (sc.cta && sc.cta.href) || "#";
+  const dots = $("dots"); dots.innerHTML = L.map((s, j) => `<button type="button" aria-label="${(s.title || s.id).replace(/"/g, "&quot;")}"${j === idx ? ' aria-current="step"' : ""} data-j="${j}"><b></b></button>`).join("");
+  dots.querySelectorAll("button").forEach((b) => b.onclick = () => go(+b.dataset.j));
+  $("scrub").max = sc.duration;
+  $("back").disabled = idx === 0;
+  $("next").textContent = idx === L.length - 1 ? STR.finish : STR.next;
+  if (EMBED) { needReady = true; toParent({ type: "chapter", index: idx, id: sc.id, total: L.length }); }
+  else if (!CAPTURE) {
+    // Keep the other parameters (dev, auto, speed); drop t, which only applies at load.
+    const u = new URLSearchParams(location.search); u.set("scene", sc.id); u.delete("t");
+    if (theme !== DEFAULT_THEME) u.set("theme", theme); else u.delete("theme");
+    history.replaceState(null, "", "?" + u.toString() + location.hash);
+  }
+  fit(); render();
+}
+function go(i) { load(i); setPlaying(started && !REDUCED); }
+
+// ── embed protocol (see references/player-api.md)
+const toParent = (m) => { if (!EMBED || parent === window) return; try { parent.postMessage({ source: "walkthrough", ...m }, C.parentOrigin); } catch (e) { errors.push("postMessage: " + e.message); } };
+const actorRect = () => { const r = actorHost.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height }; };
+function done(skipped) {
+  if (!EMBED) return;
+  setPlaying(false); fadeTo = 0;
+  toParent({ type: "tour-done", skipped: !!skipped, index: idx, id: cur() && cur().id, total: scenes().length, actor: actorRect() });
+}
+if (EMBED) {
+  addEventListener("message", (e) => {
+    if (e.source !== parent || (C.parentOrigin !== "*" && e.origin !== C.parentOrigin)) return;
+    const d = e.data || {};
+    if (d.type === "theme" && C.themes[d.theme] && d.theme !== theme) { const keep = t, pl = playing; applyTheme(d.theme); load(idx); t = keep; setPlaying(pl); render(); }
+    else if (d.type === "reset") { if (C.themes[d.theme]) applyTheme(d.theme); started = false; load(0); setPlaying(false); actorFade = fadeTo = 0; }
+    else if (d.type === "start") { started = true; setPlaying(!REDUCED); fadeTo = 1; $("next").focus({ preventScroll: true }); }
+    else if (d.type === "goto" && Number.isInteger(d.index)) go(d.index);
+    else if (d.type === "skip") done(true);
+  });
+}
+// Keyboard: arrows change chapter, Space (or the pause button) pauses, Escape skips (embed).
+// In embed mode Tab stays inside the caption controls, since the iframe covers the host page.
+const focusables = () => [...document.querySelectorAll("#wt-dots button, #wt-btns .wt-btn")].filter((el) => !el.disabled && el.offsetParent !== null);
+addEventListener("keydown", (e) => {
+  // Arrows stay with fields that use them (the dev scrubber); Space stays with buttons and links, which it presses.
+  const onField = e.target && e.target.closest && e.target.closest("input, select, textarea, [contenteditable]");
+  const onControl = onField || (e.target && e.target.closest && e.target.closest("button, a"));
+  if (e.key === "Escape" && EMBED) { e.preventDefault(); done(true); }
+  else if (e.key === "ArrowRight" && !onField) { e.preventDefault(); next(); }
+  else if (e.key === "ArrowLeft" && !onField) { e.preventDefault(); if (idx > 0) go(idx - 1); }
+  else if (e.key === " " && !onControl) { e.preventDefault(); togglePlay(); }
+  else if (e.key === "Tab" && EMBED) {
+    const f = focusables(); if (!f.length) return;
+    const i = f.indexOf(document.activeElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && (i === f.length - 1 || i < 0)) { e.preventDefault(); f[0].focus(); }
+  }
+});
+function next() { if (idx === scenes().length - 1) { if (EMBED) done(false); else go(0); } else go(idx + 1); }
+
+// ── layout
+function fit() {
+  const dev = EMBED || html.classList.contains("wt-nodev") ? 0 : 40; // keep the dev bar clear of the caption
+  // Capture mode keeps the normal fit (caption hidden): scaling the stage to fill the
+  // viewport made Element Capture deliver no frames at all.
+  const cap = $("caption"), s = Math.min((innerWidth - 40) / W, (innerHeight - cap.offsetHeight - 60 - dev * 2) / H, C.maxScale);
+  const f = $("fit"); f.style.transform = `scale(${s})`; f.style.margin = `${(H * s - H) / 2}px ${(W * s - W) / 2}px`;
+  cap.style.width = Math.min(W * s, innerWidth * .94) + "px";
+}
+addEventListener("resize", () => { fit(); needReady = EMBED; });
+
+// ── render: everything visible is a function of t (actor smoothing aside)
+function render() {
+  const sc = cur(); if (!sc) return;
+  const tt = Math.min(t, sc.duration);
+  if (inst) try { inst.frame(tt); } catch (e) { errors.push(sc.id + ": " + e.message); inst = null; }
+  const a = actorAt(tt);
+  if (a && actorInst) {
+    const size = a.size || baseSize, k = size / baseSize, tapP = (tt - a.tapAt) / 320;
+    const dip = tapP >= 0 && tapP < 1 ? Math.sin(Math.PI * tapP) * 4 : 0;
+    actorEl.style.opacity = String((a.opacity === undefined ? 1 : a.opacity) * actorFade);
+    actorEl.style.transform = `translate(${a.x - box.w / 2}px,${a.y - box.h / 2 + dip}px) scale(${k})`;
+    try { actorInst.frame(t / 1000, lastDt / 1000, { size, expression: a.expr, look: { x: a.lookX || 0, y: a.lookY || 0 }, excite: a.excite ?? .25, press: tapP >= 0 && tapP < 1 ? tapP : 0, theme }); }
+    catch (e) { errors.push("actor: " + e.message); }
+    if (tapP >= 0 && tapP < 1.4) { const tp = tipOffset(size), r = tapP / 1.4; ripple.style.left = (a.x + tp.x) + "px"; ripple.style.top = (a.y + tp.y) + "px"; ripple.style.opacity = String(1 - r); ripple.style.transform = `scale(${1 + r * 4})`; }
+    else ripple.style.opacity = "0";
+    if (needReady) { needReady = false; toParent({ type: "ready", index: idx, actor: actorRect() }); }
+  } else {
+    actorEl.style.opacity = "0"; ripple.style.opacity = "0";
+    if (needReady) { needReady = false; toParent({ type: "ready", index: idx, actor: null }); }
+  }
+  document.querySelectorAll("#wt-dots b").forEach((b, j) => b.style.transform = `scaleX(${j < idx ? 1 : j > idx ? 0 : Math.min(1, tt / sc.duration)})`);
+  $("scrub").value = tt; $("t").textContent = Math.round(tt);
+}
+function loop(now) {
+  lastDt = Math.min(50, now - last); last = now;
+  const sc = cur();
+  if (sc && playing) {
+    t += lastDt * speed;
+    if (t >= sc.duration + C.gapMs) {
+      if (EMBED) { if (idx === scenes().length - 1) { t = sc.duration; done(false); } else go(idx + 1); }
+      else if (auto) go(idx + 1); else { t = sc.duration; setPlaying(false); } // stop on the end frame; Play replays
+    }
+  }
+  if (EMBED) actorFade = fadeTo > actorFade ? Math.min(fadeTo, actorFade + lastDt / 300) : Math.max(fadeTo, actorFade - lastDt / 250);
+  render();
+  requestAnimationFrame(loop);
+}
+
+// ── controls
+function togglePlay() {
+  const sc = cur(); if (!sc) return;
+  if (!playing && t >= sc.duration) t = 0; // Play at the end (or in reduced-motion mode) replays the chapter
+  setPlaying(!playing);
+}
+$("skip").textContent = STR.skip; $("back").textContent = STR.back;
+$("next").onclick = next;
+$("back").onclick = () => { if (idx > 0) go(idx - 1); };
+$("skip").onclick = () => done(true);
+$("pause").onclick = togglePlay;
+// CTA: only same-origin paths ("/route") are handed to the host or followed.
+// Browsers read "/\host" as "//host", so the parsed origin decides, not the first characters.
+const safeHref = (h) => { if (typeof h !== "string" || !/^\/(?![\/\\])/.test(h)) return false; try { return new URL(h, location.href).origin === location.origin; } catch { return false; } };
+$("cta").onclick = (e) => {
+  const href = e.currentTarget.getAttribute("href");
+  if (!safeHref(href)) { e.preventDefault(); errors.push("cta href is not a same-origin path: " + href); return; }
+  if (EMBED) { e.preventDefault(); toParent({ type: "cta", href, id: cur() && cur().id }); }
+};
+$("play").onclick = togglePlay;
+$("scrub").oninput = (e) => { t = +e.target.value; setPlaying(false); render(); };
+$("speed").value = String(speed); $("speed").oninput = (e) => speed = +e.target.value;
+$("theme").onclick = () => { applyTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]); load(idx); };
+$("auto").textContent = "auto: " + (auto ? "on" : "off");
+$("auto").onclick = (e) => { auto = !auto; e.target.textContent = "auto: " + (auto ? "on" : "off"); };
+$("replay").onclick = () => { t = 0; setPlaying(true); };
+
+// ── API for check scripts: set({scene, t, theme}) renders synchronously
+P.scenes = () => scenes().map((s) => ({ id: s.id, title: s.title, takeaway: s.takeaway, alt: s.alt, cta: s.cta, duration: s.duration }));
+P.state = () => ({ scene: cur() && cur().id, index: idx, t, theme, playing, started, reduced: REDUCED });
+P.play = () => setPlaying(true); P.pause = () => setPlaying(false);
+P.set = (o) => {
+  if (o.theme && C.themes[o.theme] && o.theme !== theme) { applyTheme(o.theme); if (!o.scene) load(idx); }
+  if (o.scene) { const j = scenes().findIndex((s) => s.id === o.scene); if (j < 0) throw new Error("no scene " + o.scene); load(j); }
+  if (o.t !== undefined) { t = o.t; setPlaying(false); }
+  render(); return P.state();
+};
+
+// ── boot: actor script, then chapter scripts, then start
+applyTheme(theme);
+setPlaying(playing);
+// Cache-busting only on a local dev server; a shipped tour keeps normal caching.
+const add = (src) => new Promise((res) => { const s = document.createElement("script"); s.src = LOCAL ? src + (src.includes("?") ? "&" : "?") + "v=" + Date.now() : src;
+  s.onload = () => res(true); s.onerror = () => { missing.push(src); res(false); }; document.body.appendChild(s); });
+(async () => {
+  if (A && A.src) { await add(A.src); actorMod = (window.WT_ACTORS || {})[A.id] || null; if (!actorMod) errors.push("actor " + A.id + " did not register"); }
+  await Promise.all(C.chapters.map((f) => add("scenes/" + f + ".js")));
+  // Chapter order comes from file names, so each file's scene id must equal its file name.
+  for (const f of C.chapters) if (!missing.includes("scenes/" + f + ".js") && !(window.SCENES || []).some((s) => s.id === f)) errors.push(`scenes/${f}.js registered no scene with id "${f}" (id must equal the file name)`);
+  if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  const want = q.get("scene"), j = want ? scenes().findIndex((s) => s.id === want) : 0;
+  load(j < 0 ? 0 : j);
+  if (q.has("t")) { t = +q.get("t"); setPlaying(false); render(); }
+  P.ready = true;
+  requestAnimationFrame((n) => { last = n; loop(n); });
+})();
+})();
+</script></body></html>

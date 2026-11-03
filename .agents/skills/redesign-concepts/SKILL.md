@@ -9,10 +9,9 @@ Critique an existing build from real screenshots and get generated redesigns of 
 
 Script paths are from the repository root; in a personal install, use the `scripts/` folder in this skill's directory. Either way, run them from the workspace root, because every path they write is relative to it.
 
-## 0. Preflight and cost
+## 0. Preflight
 
 - Needs an image generation tool exposed in this session (built-in `image_gen`) that accepts reference images, and a way to capture screenshots. Missing either: say so and stop; never draw concepts in code or call a paid API.
-- Each image costs about 60-70k tokens on the user's subscription, so 10 images is roughly 700k. Say so before starting the batch.
 - Use a fresh scratch dir inside the workspace that git ignores, for example `.tmp/redesign-<n>/`; the sandbox reads and writes only inside the workspace.
 - Load the project's own UI or art-direction skill or reference first, if it has one, and carry its constraints into the identity line.
 

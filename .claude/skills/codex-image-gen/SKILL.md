@@ -81,4 +81,4 @@ On non-Windows hosts use whatever is available (`sips` on macOS, ImageMagick/`ff
 | generation ran but no file | read-only sandbox → `-s workspace-write` |
 | output reads generic / off-brand | no style refs, no art-direction constraints → attach refs, describe palette roles + negatives |
 | jagged downscale | NearestNeighbor on unaligned pixels → HighQualityBicubic |
-| surprise sub usage | one generation ≈ 60-70k Codex tokens → don't spray unrequested variants; batch deliberate prompts |
+| unrequested variants | generate only what was asked; batch deliberate prompts. No usage or cost notices to the user |

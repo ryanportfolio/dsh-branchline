@@ -33,21 +33,9 @@ For a branch diff, fetch first (`git fetch origin <default-branch>`) and use the
 
 ## Step 3: Launch the review
 
-Run from the repository root. Create a new run directory atomically; never reuse one from an earlier invocation. Use plain `codex exec` in the read-only sandbox, not `codex exec review`: review mode exposes no agent-spawning tools, while plain `codex exec` exposes `spawn_agent`, `wait_agent`, and the other collaboration tools. The prompt tells Codex to read `.agents/skills/impartial-review/SKILL.md` completely and act as its Manager, states the exact scope, and fixes the sub-reviewer settings. Name the file: on codex-cli 0.156.0 a `$skill` mention in an exec prompt is not injected, so only a file read loads the skill. For example, a branch diff in a POSIX shell:
+Run from the repository root. Create a new run directory atomically; never reuse one from an earlier invocation. Use plain `codex exec` in the read-only sandbox, not `codex exec review`: review mode exposes no agent-spawning tools, while plain `codex exec` exposes `spawn_agent`, `wait_agent`, and the other collaboration tools. The prompt tells Codex to read `.agents/skills/impartial-review/SKILL.md` completely and act as its Manager, states the exact scope, and fixes the sub-reviewer settings. Name the file: on codex-cli 0.156.0 a `$skill` mention in an exec prompt is not injected, so only a file read loads the skill.
 
-```bash
-mkdir -p .tmp
-RUN=$(mktemp -d .tmp/codex-fullreview-XXXXXXXX)
-git fetch origin main
-BASE=$(git merge-base origin/main HEAD); HEAD_SHA=$(git rev-parse HEAD)
-codex exec -s read-only -m gpt-6.1-sol -c model_reasoning_effort=high -o "$RUN/report.md" "Read .agents/skills/impartial-review/SKILL.md completely and act as its Manager on the branch diff: base $BASE, head $HEAD_SHA. Read the diff with git diff $BASE $HEAD_SHA. Spawn fresh-context sub-reviewers with spawn_agent, fork_turns \"none\", model gpt-6.1-sol, reasoning_effort high, as the skill directs; each is a leaf reviewer. Start no codex exec or other reviewer CLI process; if agent tools are missing, say so in the report. Author brief: $RUN/brief.md; give it only to the intent reviewer, as the skill directs; every other sub-reviewer gets the diff without it. No file edits, no Git writes, no publication. Verify the sub-reviewers' findings and write the final verified report. First line: Scope: base $BASE, head $HEAD_SHA. Second line: Sub-reviewers: <number spawned>." < /dev/null > "$RUN/run.log" 2>&1
-```
-
-Each scope has its own complete prompt. Substitute the resolved SHAs; append only a focus the user requests:
-
-- Branch diff: the prompt in the example above (drop its author-brief sentence for a fully blind review).
-- Single commit, where base is the parent or, for a root commit, the empty tree: `Read .agents/skills/impartial-review/SKILL.md completely and act as its Manager on commit <head-sha>: base <base-sha>, head <head-sha>. Read the diff with git diff <base-sha> <head-sha>. Spawn fresh-context sub-reviewers with spawn_agent, fork_turns "none", model gpt-6.1-sol, reasoning_effort high, as the skill directs; each is a leaf reviewer. Start no codex exec or other reviewer CLI process; if agent tools are missing, say so in the report. No file edits, no Git writes, no publication. Verify the sub-reviewers' findings and write the final verified report. First line: Scope: base <base-sha>, head <head-sha>. Second line: Sub-reviewers: <number spawned>.`
-- Uncommitted work: `Read .agents/skills/impartial-review/SKILL.md completely and act as its Manager on the uncommitted working tree (staged, unstaged, untracked) against head <head-sha>. Read tracked changes with git diff <head-sha>, list files with git status --porcelain --untracked-files=all, and read each untracked file's contents. Spawn fresh-context sub-reviewers with spawn_agent, fork_turns "none", model gpt-6.1-sol, reasoning_effort high, as the skill directs; each is a leaf reviewer. Start no codex exec or other reviewer CLI process; if agent tools are missing, say so in the report. No file edits, no Git writes, no publication. Verify the sub-reviewers' findings and write the final verified report. First line: Scope: uncommitted, head <head-sha>, paths <every dirty path, comma-separated>. Second line: Sub-reviewers: <number spawned>.`
+**Mandatory read before launch:** [references/launch-prompts.md](references/launch-prompts.md) holds the branch-diff example command and the complete prompt for each scope (branch diff, single commit, uncommitted work). Read it completely and use the prompt for the resolved scope.
 
 **Author brief.** By default, write `$RUN/brief.md` before launch and add this sentence to the prompt, after the scope: `Author brief: <path to brief.md>; give it only to the intent reviewer, as the skill directs; every other sub-reviewer gets the diff without it.` Its first line is exactly `Author brief <run directory name>` (for example `Author brief codex-fullreview-Ab12Cd34`), a marker Step 4 uses to confirm which sub-reviewers received it. The brief holds facts only: the goal in one or two sentences, the files or behaviors most likely to break, related work in flight (other PRs, merge order), and the checks already run with their results. No verdicts or opinions. The skill's diff-only reviewers never see it, so the run keeps a layer free of the author's framing, while the intent reviewer checks the change against its purpose. Skip the brief when the user asks for a fully blind review; the run then has no intent reviewer. Record in the metadata whether a brief was supplied and its hash.
 
@@ -67,41 +55,9 @@ Monitor the task-owned process with bounded waits. The parent `run.log` can stay
 
 Accept a report only after this process exits successfully, the report is non-empty in this run's newly created directory, and the source manifest still matches the reviewed state. Record exit code, end time, report hash, and the model, effort, and session id from the `run.log` header (its `model:`, `reasoning effort:`, and `session id:` lines); take them from the header, not from session files. If the header does not reveal model resolution, label the model as requested but unverified; never infer a resolved model from the entrypoint title.
 
-**Read the session file, not `run.log`, for tool-call evidence.** `run.log` echoes the skill text and the diff, so a grep there for the skill path or for `spawn_agent` proves nothing. Skill reads, spawn calls, and spawned children come from the session files only. Take the `session id: <id>` line from the `run.log` header; the session file is `${CODEX_HOME:-~/.codex}/sessions/YYYY/MM/DD/rollout-*-<id>.jsonl`. In it:
+**Read the session file, not `run.log`, for tool-call evidence.** `run.log` echoes the skill text and the diff, so a grep there for the skill path or for `spawn_agent` proves nothing. Skill reads, spawn calls, and spawned children come from the session files only. Take the `session id: <id>` line from the `run.log` header; the session file is `${CODEX_HOME:-~/.codex}/sessions/YYYY/MM/DD/rollout-*-<id>.jsonl`.
 
-- **Skill load**: a `custom_tool_call` named `exec` whose `input` (JavaScript source calling `tools.exec_command`) contains `.agents/skills/impartial-review/SKILL.md`, or a `function_call` whose `arguments` contain it. The snippet prints each match; confirm it reads the file chosen in Step 1 rather than searching for the path, and disclose a read of any other copy. A read command chained with others (for example `Get-Content <file>; git diff ...`) counts as a read; a `grep`, `rg`, `find`, or `ls` that only matches the path does not. An injected `<name>impartial-review</name>` block in a user-role message is an optional extra signal only: 0.156.0 injects none for exec prompts.
-- **Spawn calls**: records with `"type":"response_item"` whose payload has `"type":"function_call"` and `"name":"spawn_agent"` (namespace `collaboration`); the `arguments` string holds `fork_turns`, `model`, and `reasoning_effort`. A call can fail, so calls are not sub-reviewers. Arguments that do not parse as JSON leave that call's settings unverified; the snippet reports them instead of crashing.
-- **Spawned children**: other session files whose `session_meta` source carries `"thread_spawn":{"parent_thread_id":"<id>"`. Match that exact prefix: a bare `"parent_thread_id"` match also counts `guardian` sessions (`"subagent":{"other":"guardian"}`), which are not reviewers.
-
-This format was confirmed on codex-cli 0.156.0: spawn calls and spawned children matched the shapes above, and the skill load appeared as a `custom_tool_call` exec read, with no injected block. Recheck it when the CLI version changes.
-
-```bash
-SID=$(sed -n 's/^session id: //p' "$RUN/run.log" | head -n 1)
-node -e '
-const fs = require("fs"), path = require("path");
-const [sid, root, rawMarker] = process.argv.slice(1);
-const marker = (rawMarker ?? "").trim();
-const files = [];
-const walk = d => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (/^rollout-.*\.jsonl$/.test(e.name)) files.push(p); } };
-walk(root);
-const own = files.find(f => f.endsWith(`-${sid}.jsonl`));
-if (!own) { console.log("session file missing: spawn count and skill load unverified"); process.exit(2); }
-const recs = fs.readFileSync(own, "utf8").split("\n").flatMap(l => { try { return [JSON.parse(l)]; } catch { return []; } });
-const parse = s => { try { return JSON.parse(s); } catch { return null; } };
-const calls = recs.filter(j => j.payload?.type === "function_call" && j.payload.name === "spawn_agent").map(j => parse(j.payload.arguments));
-const toolText = j => j.payload?.type === "custom_tool_call" && j.payload.name === "exec" ? String(j.payload.input ?? "") : j.payload?.type === "function_call" ? String(j.payload.arguments ?? "") : "";
-const skillRe = /\.agents[\\/]+skills[\\/]+impartial-review[\\/]+SKILL\.md/;
-const skillReads = recs.map(toolText).filter(t => skillRe.test(t));
-const injected = recs.filter(j => j.payload?.type === "message" && j.payload.role === "user" && JSON.stringify(j.payload.content).includes("<name>impartial-review</name>")).length;
-const stamp = path.basename(own).slice(8, 27);
-const firstLine = f => { const fd = fs.openSync(f, "r"), b = Buffer.alloc(65536), parts = []; try { for (let n; (n = fs.readSync(fd, b, 0, b.length, null)) > 0;) { const i = b.subarray(0, n).indexOf(10); parts.push(Buffer.from(b.subarray(0, i < 0 ? n : i))); if (i >= 0) break; } } finally { fs.closeSync(fd); } return Buffer.concat(parts).toString("utf8"); };
-const children = files.filter(f => f !== own && path.basename(f).slice(8, 27) >= stamp && firstLine(f).includes(`"thread_spawn":{"parent_thread_id":"${sid}"`));
-const briefed = marker ? children.filter(f => fs.readFileSync(f, "utf8").includes(marker)).length : null;
-console.log({ session: own, spawnCalls: calls.length, malformedSpawnArgs: calls.filter(a => !a).length, spawnedChildren: children.length, failedSpawns: calls.length - children.length, briefedChildren: briefed, skillReads: skillReads.length, skillInjected: injected });
-for (const a of calls) console.log(a ? [a.task_name, a.fork_turns, a.model, a.reasoning_effort].join(" ") : "malformed spawn arguments: settings unverified");
-for (const t of skillReads) console.log("skill read:", t.slice(0, 200));
-' "$SID" "${CODEX_HOME:-$HOME/.codex}/sessions" "$(head -n 1 "$RUN/brief.md" 2>/dev/null)"
-```
+**Mandatory read before counting:** [references/session-evidence.md](references/session-evidence.md) gives the record shapes for skill load, spawn calls, and spawned children, and the Node snippet that counts them. Read it completely and run the snippet; the rules below interpret its output.
 
 Record the session file path and all counts in the manifest.
 

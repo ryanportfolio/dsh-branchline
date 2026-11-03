@@ -1,6 +1,6 @@
 ---
 name: "refine"
-description: "Explicit workflow-improvement review; user preferences → rules or skill; recurring task friction justifying a narrow skill or reference change; unattended weekly review ($refine weekly)."
+description: "Explicit workflow-improvement review; user preferences → rules or skill; recurring task friction justifying a narrow skill or reference change; unattended weekly review."
 ---
 
 # Improve the working process

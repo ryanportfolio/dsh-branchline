@@ -1,0 +1,14 @@
+{
+  "baseUrl": "https://app.example.com",
+  "secretFile": "~/.claude/secrets/example-test-account.token",
+  "viewport": { "width": 1440, "height": 900 },
+  "login": {
+    "url": "/login",
+    "before": ["[data-testid=switch-to-login]"],
+    "user": "input[type=email]:visible",
+    "password": "input[type=password]:visible",
+    "submit": "button[type=submit]:visible",
+    "settleMs": 3000
+  },
+  "check": { "url": "/api/auth/me", "status": 200 }
+}

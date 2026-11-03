@@ -1,6 +1,6 @@
 ---
 name: "dare"
-description: "$dare, first principles, questioning the problem: 4 fresh stages decompose, audit, recombine, test; immutable goals + constraints kept."
+description: "First principles, questioning the problem: 4 fresh stages decompose, audit, recombine, test; immutable goals + constraints kept."
 ---
 
 # dare: first-principles chain with fresh-context steps
