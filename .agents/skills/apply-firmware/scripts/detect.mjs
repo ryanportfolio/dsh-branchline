@@ -146,6 +146,8 @@ const sections = (text) =>
 
 // Hook commands in a hooks.<Event> array of matcher groups.
 const hookCommands = (groups) => groups.flatMap((g) => g?.hooks ?? []).map((h) => h?.command).filter(Boolean);
+// The same command quoted or spaced differently, such as an older unquoted $CLAUDE_PROJECT_DIR path.
+const hookKey = (c) => c.replace(/["']/g, '').replace(/\s+/g, ' ').trim();
 
 function jsonDiff(a, b, path = '', out = { add: [], conflict: [], arrayAdds: [], hookAdds: [] }) {
   for (const [k, tv] of Object.entries(b)) {
@@ -154,9 +156,12 @@ function jsonDiff(a, b, path = '', out = { add: [], conflict: [], arrayAdds: [],
     const av = a[k];
     if (path === 'hooks' && Array.isArray(tv) && Array.isArray(av)) {
       // A template hook is present when its command is, whatever its matcher, timeout or other fields.
+      // A template command that differs from a project one only in quoting replaces it.
       const have = new Set(hookCommands(av));
+      const byKey = new Map(hookCommands(av).map((c) => [hookKey(c), c]));
       const missing = hookCommands(tv).filter((c) => !have.has(c));
-      if (missing.length) out.hookAdds.push({ path: p, commands: missing });
+      const replaces = Object.fromEntries(missing.filter((c) => byKey.has(hookKey(c))).map((c) => [c, byKey.get(hookKey(c))]));
+      if (missing.length) out.hookAdds.push({ path: p, commands: missing, replaces });
     } else if (Array.isArray(tv) && Array.isArray(av)) {
       const have = new Set(av.map((x) => JSON.stringify(x)));
       const missing = tv.filter((x) => !have.has(JSON.stringify(x)));
@@ -315,7 +320,7 @@ for (const m of report.merge) {
     line(`${m.path}: missing sections [${list(m.missing)}]; differing [${list(m.differs)}]; project-only [${list(m.localOnly)}]; FILL IN markers ${m.fillIn}`);
   } else if (m.kind === 'json') {
     line(`${m.path}: add keys [${list(m.add)}]; array additions [${list(m.arrayAdds.map((a) => `${a.path} +${a.count}`))}]; ` +
-      (m.path === '.claude/settings.json' ? `hook additions [${list(m.hookAdds.flatMap((h) => h.commands.map((c) => `${h.path}: ${c}`)))}]; ` : '') +
+      (m.path === '.claude/settings.json' ? `hook additions [${list(m.hookAdds.flatMap((h) => h.commands.map((c) => `${h.path}: ${c}${h.replaces[c] ? ` (replaces ${h.replaces[c]})` : ''}`)))}]; ` : '') +
       `scalar conflicts [${list(m.conflict.map((c) => c.path))}]`);
   } else {
     line(`${m.path}: append ${m.missing.length} line(s) [${list(m.missing)}]`);

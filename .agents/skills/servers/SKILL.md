@@ -1,6 +1,6 @@
 ---
 name: servers
-description: "$servers, after starting a dev server, or user asks what's running, which port is which, why browsers are open, or to close old servers and browsers."
+description: "After starting a dev server, or user asks what's running, which port is which, why browsers are open, or to close old servers and browsers."
 ---
 
 # Servers and automation browsers

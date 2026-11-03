@@ -1,6 +1,6 @@
 ---
 name: "bro"
-description: "Plain-language restatement. Use: $bro anywhere in msg, 'plain english', 'plain language', 'dumb it down', 'I don't understand', 'what does that mean'."
+description: "Plain-language restatement: 'plain english', 'dumb it down', 'I don't understand', 'what does that mean'."
 ---
 
 # Bro

@@ -1,6 +1,6 @@
 ---
 name: "codex-review"
-description: "Second opinion: Codex CLI (codex exec review, gpt-6.1-sol, high) over PR, branch, commit, or uncommitted diff, then each finding verified. Use: $codex-review, 'have Codex/Sol review this'."
+description: "Second opinion: Codex CLI (gpt-6.1-sol, high) reviews PR, branch, commit, or uncommitted diff; each finding verified. Use: 'have Codex/Sol review this'."
 ---
 
 # Codex review
@@ -38,18 +38,7 @@ Run from the repository root. Create a new run directory atomically; never reuse
 - **External-review path**, when the reviewed repository has `.agents/skills/external-review/SKILL.md`: review mode with a custom prompt and no selector. The prompt tells the reviewer to read that file completely and follow it, states the exact scope, and restates the leaf rules in one line. Name the file, not `$external-review`: on codex-cli 0.156.0 a `$skill` mention in a `codex exec review` prompt is not injected, and the skill's `allow_implicit_invocation: false` policy (kept so ordinary sessions never pick it up) hides it from the reviewer's skills list, so a mention alone never loads it. Review mode exposes no agent-spawning tools; with a bare selector the child reviewer can auto-load a multi-agent review skill, fail to spawn agents, and report that as a gap. The external-review file pins it to a single-context leaf review of the recorded scope.
 - **Selector path**, when that file is absent: the selector from Step 2 and Codex's built-in review rubric, unchanged.
 
-For example, a branch diff in a POSIX shell:
-
-```bash
-mkdir -p .tmp
-RUN=$(mktemp -d .tmp/codex-review-XXXXXXXX)
-git fetch origin main
-BASE=$(git merge-base origin/main HEAD); HEAD_SHA=$(git rev-parse HEAD)
-# External-review path (.agents/skills/external-review/SKILL.md exists):
-codex exec review "Read .agents/skills/external-review/SKILL.md completely and follow it for this review of the branch diff: base $BASE, head $HEAD_SHA. Read the diff with git diff $BASE $HEAD_SHA. Leaf review: no agents, no nested reviews, no edits." -m gpt-6.1-sol -c model_reasoning_effort=high -o "$RUN/report.md" < /dev/null > "$RUN/run.log" 2>&1
-# Selector path (no external-review skill):
-codex exec review --base origin/main -m gpt-6.1-sol -c model_reasoning_effort=high -o "$RUN/report.md" < /dev/null > "$RUN/run.log" 2>&1
-```
+Mandatory read before launching: [references/launch-example.md](references/launch-example.md), the full command for both paths; it sets `$RUN`, `$BASE`, `$HEAD_SHA` for the Step 4 snippet.
 
 On the external-review path each scope has its own complete prompt. Substitute the resolved SHAs; append only a focus the user requests (below):
 
@@ -65,16 +54,7 @@ Before launch, write run metadata: run ID, absolute workspace, requested scope, 
 
 The two paths supply different rubrics: `external-review` on one, the CLI's built-in review rubric on the other. For a special focus the user requests, append it to the external-review prompt; on the selector path, replace the selector with a prompt-only invocation that states the exact scope. Describe which rubric was actually supplied. Preserve least privilege; do not bypass approvals or sandbox protections for the reviewer. The one exception is auto-approving a user-approved browser MCP server (below). The reviewer is a leaf: it must not dispatch a review of its own.
 
-**Live browser, when the user asks for or approves one.** A read-only reviewer cannot launch Chrome itself: the sandbox blocks the profile write, the child process and localhost network. Keep the sandbox and hand it a browser through an MCP server instead; the server is Codex's own child process, so the reviewer drives pages through tools while its shell stays read-only. Verified on codex-cli 0.156.1:
-
-1. Launch headed Chrome on the real GPU with a CDP port, through the project's placed-window launcher where one exists (for example `launchPlacedChrome({ place: 'offscreen', args: ['--remote-debugging-port=9338'] })` from `scripts/lib/launch-chrome.mjs`), in a small script that keeps it open until the reviews finish. Pick a port with no listener before launch (`netstat -ano`, `lsof -i`), then confirm `http://127.0.0.1:<port>/json/version` answers from the Chrome you launched: an answer from an older process means the reviewer would attach to that session. This costs no usage.
-2. Run `codex exec` with a prompt, not `codex exec review`: MCP use under review mode is unverified. Start from the scope prompt above that matches the scope (branch, commit, or uncommitted with its untracked-file steps); replace the external-review sentence with the checks to run live and the URLs to compare, and keep the leaf rules. Open the prompt with a browser check: navigate to one page, evaluate one expression, and stop with the exact error if the tools fail. That keeps the smoke test inside the one authorized run.
-3. Add the server per run with `-c` flags; nothing is written to `config.toml`:
-   `-c 'mcp_servers.pw.command="npx"' -c 'mcp_servers.pw.args=["@playwright/mcp@latest","--cdp-endpoint","http://127.0.0.1:9338","--output-dir","<image dir>"]' -c 'mcp_servers.pw.default_tools_approval_mode="approve"'`.
-   Exec mode's approval policy is `never`, so without `default_tools_approval_mode="approve"` every browser call fails with `MCP tool call requires approval, but approval policy is never`. The setting covers this one server only, and it also approves clicks and form submissions. Give the reviewer a fresh throwaway profile on local or test URLs only, never a signed-in or production app, and say in the prompt not to submit forms or change data. Valid values: `auto`, `prompt`, `writes`, `approve`. The `-c` value is TOML, so write Windows paths with forward slashes (`D:/captures`); a backslash starts an escape and breaks the value. `--output-dir` places only auto-named captures; a screenshot given a relative filename lands in the reviewed workspace and changes its state. Tell the reviewer to omit filenames or pass absolute paths inside the image directory.
-4. Give each reviewer its own browser: one Chrome per reviewer on its own CDP port, or close and relaunch between runs. A reused browser carries the previous reviewer's tabs, cookies and storage into the next review.
-
-A plain `codex exec` run has no review mode, so Step 4 collects it differently. The `-o` report is the reviewer's final message and holds its findings; there is no `ExitedReviewMode` and no review sibling rollout. The run's own rollout, `rollout-*-<session id>.jsonl`, holds the evidence: commands as `custom_tool_call` exec records (scope identity: a `git diff` against the recorded SHAs, as in Step 4), browser calls as `event_msg` items of type `McpToolCall`, spawned agents as `function_call` records named `spawn_agent` (plain exec exposes agent tools; a nonzero count breaks the leaf rules and bills extra runs, so disclose it), and `turn_context` for model and effort. `run.log` shows one `mcp: pw/<tool> (completed)` or `(failed)` line per browser call. Zero completed browser calls means the live checks did not happen: report the review as diff-only when the rollout shows a diff read against the recorded SHAs, and as incomplete when it does not (a failed opening browser check stops the reviewer before the diff). Attribute the rubric as a custom prompt.
+**Live browser, when the user asks for or approves one.** Mandatory read before such a run: [references/live-browser.md](references/live-browser.md). Give the reviewer a fresh throwaway profile on local or test URLs only, never a signed-in or production app, and say in the prompt not to submit forms or change data.
 
 Default effort is `high`. For a broad diff, `medium` is a planning option only when the user did not explicitly select effort. Astra keeps its own medium default. State the selected setting before launch; runtime duration is not predictable from file count alone.
 
@@ -84,54 +64,12 @@ Monitor the task-owned process and logs with bounded waits. Log silence alone do
 
 Accept a report only after this process exits successfully, the report is non-empty in this run's newly created directory, and the source manifest still matches the reviewed state. Record exit code, end time, report hash, and the model, effort, and session id from the `run.log` header (its `model:`, `reasoning effort:`, and `session id:` lines). The reviewer rollout's `turn_context` repeats them, and the snippet below prints them as a cross-check: disclose a mismatch with the header. If the header does not reveal model resolution, label the model as requested but unverified; never infer a resolved model from the entrypoint name.
 
-**Read the session files, not `run.log`, for tool-call evidence.** `run.log` echoes the prompt and the diff, so a grep there for the skill path proves nothing. Skill reads, spawn calls, and diff reads come from the rollouts only; model, effort, and session id come from the `run.log` header. Take the `session id: <id>` line from the `run.log` header. These `codex exec review` patterns were confirmed on codex-cli 0.156.0:
-
-- **Parent rollout** `${CODEX_HOME:-~/.codex}/sessions/YYYY/MM/DD/rollout-*-<id>.jsonl` holds only the `EnteredReviewMode` and `ExitedReviewMode` items. `ExitedReviewMode.review_output` carries `findings`, `overall_correctness`, `overall_explanation`, and `overall_confidence_score`.
-- **Reviewer rollout**: a sibling file whose `session_meta` has `"parent_thread_id":"<id>"` and `"source":{"subagent":"review"}` (and `"multi_agent_version":"disabled"`, so no spawn tools). The reviewer's turn lives there; take all evidence below from it.
-- **Skill load**: a `custom_tool_call` named `exec` whose `input` (JavaScript source calling `tools.exec_command`) contains `.agents/skills/external-review/SKILL.md`, or a `function_call` whose `arguments` contain it. The snippet prints each match; confirm it reads the file rather than searching for the path. A read command chained with others (for example `Get-Content <file>; git diff ...`) counts as a read; a `grep`, `rg`, `find`, or `ls` that only matches the path does not. An injected `<name>external-review</name>` block in a user-role message is an optional extra signal only: 0.156.0 injects none for exec prompts.
-- **Spawn calls**: `function_call` records named `spawn_agent`. Expect zero.
-- **Commands**: the `custom_tool_call` exec `input` and `function_call` `arguments` strings.
-
-```bash
-SID=$(sed -n 's/^session id: //p' "$RUN/run.log" | head -n 1)
-node -e '
-const fs = require("fs"), path = require("path");
-const [sid, root, base, head] = process.argv.slice(1);
-const files = [];
-const walk = d => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (/^rollout-.*\.jsonl$/.test(e.name)) files.push(p); } };
-walk(root);
-const load = f => fs.readFileSync(f, "utf8").split("\n").flatMap(l => { try { return [JSON.parse(l)]; } catch { return []; } });
-const firstLine = f => { const fd = fs.openSync(f, "r"), b = Buffer.alloc(65536), parts = []; try { for (let n; (n = fs.readSync(fd, b, 0, b.length, null)) > 0;) { const i = b.subarray(0, n).indexOf(10); parts.push(Buffer.from(b.subarray(0, i < 0 ? n : i))); if (i >= 0) break; } } finally { fs.closeSync(fd); } return Buffer.concat(parts).toString("utf8"); };
-const own = files.find(f => f.endsWith(`-${sid}.jsonl`));
-if (!own) { console.log("parent rollout missing: skill load, spawns, scope identity, and findings unverified"); process.exit(2); }
-const exited = load(own).filter(j => j.payload?.item?.type === "ExitedReviewMode").map(j => j.payload.item.review_output);
-const stamp = path.basename(own).slice(8, 27);
-const siblings = files.filter(f => { if (f === own || path.basename(f).slice(8, 27) < stamp) return false; const m = firstLine(f); return m.includes(`"parent_thread_id":"${sid}"`) && m.includes(`"source":{"subagent":"review"}`); });
-if (siblings.length !== 1) { console.log({ parent: own, reviewSiblings: siblings.length, note: "need exactly one review sibling: skill load, spawns, and scope identity unverified" }); process.exit(3); }
-const recs = load(siblings[0]);
-const meta = recs[0]?.type === "session_meta" ? recs[0].payload : {};
-const turn = recs.find(j => j.type === "turn_context")?.payload ?? {};
-const toolText = j => j.payload?.type === "custom_tool_call" && j.payload.name === "exec" ? String(j.payload.input ?? "") : j.payload?.type === "function_call" ? String(j.payload.arguments ?? "") : "";
-const texts = recs.map(toolText).filter(Boolean);
-const skillRe = /\.agents[\\/]+skills[\\/]+external-review[\\/]+SKILL\.md/;
-const skillReads = texts.filter(t => skillRe.test(t));
-const injected = recs.filter(j => j.payload?.type === "message" && j.payload.role === "user" && JSON.stringify(j.payload.content).includes("<name>external-review</name>")).length;
-const spawnCalls = recs.filter(j => j.payload?.type === "function_call" && j.payload.name === "spawn_agent").length;
-const wanted = head ? [`git diff ${base} ${head}`, `git diff ${base}..${head}`] : [`git diff ${base}`];
-const diffReads = texts.filter(t => wanted.some(w => t.includes(w))).length;
-const untrackedListed = texts.some(t => t.includes("--untracked-files=all"));
-console.log({ parent: own, sibling: siblings[0], multiAgent: meta.multi_agent_version, turnModel: turn.model, turnEffort: turn.effort, toolCalls: texts.length, skillReads: skillReads.length, skillInjected: injected, spawnCalls, diffReads, untrackedListed, exitedReviewMode: exited.length });
-for (const t of skillReads) console.log("skill read:", t.slice(0, 200));
-console.log(JSON.stringify(exited.at(-1) ?? null, null, 2));
-' "$SID" "${CODEX_HOME:-$HOME/.codex}/sessions" "$BASE" "$HEAD_SHA"
-```
-
-For a single commit pass its base and head. For uncommitted work pass the head SHA and an empty string (`"$HEAD_SHA" ""`); the check then looks for `git diff <head-sha>`. Record the output in the manifest.
+**Read the session files, not `run.log`, for tool-call evidence.** `run.log` echoes the prompt and the diff, so a grep there for the skill path proves nothing. Skill reads, spawn calls, and diff reads come from the rollouts only; model, effort, and session id come from the `run.log` header. Mandatory read at this step: [references/rollout-evidence.md](references/rollout-evidence.md); run its snippet and record the output in the manifest.
 
 - **Skill not loaded** (zero `skillReads` on the external-review path): attribute the run as a plain custom-prompt review, never as external-review. Review mode forces its own output schema, so external-review's `Scope:`, `Unavailable checks`, and `Verdict:` lines never reach the `-o` report. They are not a load signal on this path, and their absence is not a failure.
 - **Findings**: on 0.156.0 the `-o` report can hold only `overall_explanation`. When it lacks per-finding detail, take the findings from `review_output` in the parent's `ExitedReviewMode`, which the snippet prints. In review mode, no `ExitedReviewMode` means the review did not finish; a plain `codex exec` browser run never has one (Step 3).
 - **Nonzero `spawnCalls`** contradicts the leaf rules: disclose it.
-- A plain `codex exec` browser run (Step 3) has no review sibling, so this snippet does not apply: take its evidence from the run's own rollout as Step 3 describes. The sibling requirements below are review-mode only.
+- A plain `codex exec` browser run (Step 3) has no review sibling, so this snippet does not apply: take its evidence from the run's own rollout as the last paragraph of [references/live-browser.md](references/live-browser.md) describes; mandatory re-read at this step. The sibling requirements below are review-mode only.
 - In review mode, a missing parent, not exactly one review sibling, or records that do not match these shapes leave skill load, spawn count, and scope identity unverified; say so, never report them as zero.
 
 Check scope identity from the reviewer's commands. It is verified only when `diffReads` is at least 1 for the recorded SHAs (`git diff <base> <head>` or `git diff <base>..<head>`), and, for uncommitted work, `untrackedListed` is true and the manifest's dirty paths and hashes still match the working tree. Otherwise scope identity is unverified and the attribution says so. On the selector path the CLI builds the diff from the selector, and the parent and sibling layout was confirmed only for the custom-prompt path; run the same snippet with the resolved base and head, and treat scope identity as unverified when the reviewer's commands show no diff read against the recorded SHAs.
@@ -158,7 +96,7 @@ Drop only on evidence, never because a finding seems minor. Treat BLOCKING findi
 
 ## Step 6: Present
 
-Order findings by severity globally (🔴 BLOCKING, 🟡 SHOULD-FIX, 🟢 NITPICK), each with `path:line`, a concrete description, and a specific fix. Map Codex's native labels onto that scheme during verification (for example P0, P1, or critical to 🔴, P2 or major to 🟡, P3 or minor to 🟢), re-ranking where your verification disagrees. Then list "Things I checked and verified fine" (merge Codex's list with your verification results), then a "Recommendation" that is concrete about merge readiness.
+Order findings by severity globally (🔴 BLOCKING, 🟡 SHOULD-FIX, 🟢 NITPICK), each with `path:line`, a concrete description, and a specific fix. Map Codex's native labels onto that scheme during verification (for example P0, P1, or critical to 🔴, P2 or major to 🟡, P3 or minor to 🟢), re-ranking where your verification disagrees. Grade against the change's goal: a finding limited to another code path, a rare input, a small performance cost, or extra compatibility is 🟢 whatever Codex labeled it, unless it breaks the goal; security, auth, and data-loss findings keep their impact severity. Then list "Things I checked and verified fine" (merge Codex's list with your verification results), then a "Recommendation" that is concrete about merge readiness.
 
 Attribute the source from recorded run metadata: "Codex (<observed model and effort, or requested setting with resolution unverified>) reviewed <scope at source identity> via <external-review (skill read verified) | built-in rubric with `--base`/`--commit`/`--uncommitted` | custom prompt>, scope identity <verified | unverified>; N of M findings survived verification." State that the review ran from Codex and is same-vendor. Include material unavailable checks and the run evidence path.
 

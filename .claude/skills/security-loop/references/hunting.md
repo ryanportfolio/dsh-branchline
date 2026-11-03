@@ -6,9 +6,33 @@ Step 3 of the loop. Adapted from upstream `HUNTING.md` (Cloudflare, MIT).
 
 Assign `planned` units to hunters. One hunter may own closely related units in one subsystem; never combine unrelated boundaries, and never leave a unit silently unassigned. A unit the budget cannot reach becomes `deferred` with reason `budget_cannot_reserve_critics_and_validation`.
 
-Priority order when hunters are capped: (1) unauthenticated or lowest-trust entry surfaces; (2) boundaries protecting the most valuable resources (credentials, cross-tenant data, code execution, release authority); (3) prior gaps, revalidation and fixed-finding variant units, changed source, units seeded from signals, and variant units seeded from `history-fixes.json` (sibling paths of a past fix, and fixes that were reverted); (4) classes that historically yield confirmed findings for this target type. Ties break by `coverage_id`. Record the ordering rationale in the ledger.
+Priority order when hunters are capped: (1) unauthenticated or lowest-trust entry surfaces; (2) boundaries protecting the most valuable resources (credentials, cross-tenant data, code execution, release authority); (3) prior gaps, revalidation and fixed-finding variant units, changed source, units seeded from signals, and variant units seeded from `history-fixes.json` (sibling paths of a past fix, and fixes that were reverted), and the run's exploratory unit (below); (4) classes that historically yield confirmed findings for this target type. Ties break by `coverage_id`. Record the ordering rationale in the ledger.
 
 Before launch the parent sets each assigned unit to `in_progress`, gives it a canonical `agent_id`, and creates `agents/<id>/scratch/` and `agents/<id>/artifacts/`. Launch the whole wave in one message.
+
+### One exploratory unit per run
+
+Units seeded from the threat model send hunters only where recon already expected trouble, so the hunt stays anchored to recon's first guesses. To counter that, every run seeds exactly one extra exploratory unit with the ordinary block `ATTACK-CLASSES.md#Wildcard`, in one of two forms:
+
+- **Low-risk sweep**: a surface or component that recon rated low-risk or left out of the threat model, so recon seeded no unit for it; never an area the user put out of scope. Its brief carries `architecture.md` as usual but tells the hunter to set aside every safety assumption the summary makes about that area and check each one in source.
+- **Cold start**: a file or directory picked without consulting the threat model (for example, by position in a sorted file list). Its brief replaces only hunter brief item 3 (`architecture.md`) with the starting path and one open question such as "what does this code trust that a lower-trust caller controls?" Every other brief item stays. Items 4 and 8 carry the starting path and the ledger values below, not threat-model content. The unit gets its own hunter, and if a critic reassigns it, the fresh hunter gets the same cold-start brief.
+
+Ledger values for the unit, used in `canonical_refs` and the matching human fields:
+
+- `surface`: the starting path.
+- `boundary`: for a low-risk sweep, the boundary recon recorded for that area; for a cold start, the fixed literal `exploratory/cold-start`.
+- `subsystem`: the package path that contains the starting path, or `profile/quick/all-in-scope-subsystems` in a quick run.
+- `attack_class` and `ordinary_attack_class_block`: `ATTACK-CLASSES.md#Wildcard`.
+- `selected_companion_blocks` and `excluded_blocks`: empty for a cold start, because it considers no companion blocks. The coverage critic does not count that as an unjustified exclusion.
+- A bookkeeping field `exploratory` holds the form, the starting path, and the rule that picked it: `{"form": "low-risk-sweep" | "cold-start", "start": "<path>", "picked_by": "<rule>"}`.
+
+A real boundary the hunter finds goes under `uncovered`, so the parent can seed a proper unit for it. The unit's canonical references must differ from any existing unit's; if they would match an existing unit's, pick another starting path.
+
+Limits:
+
+- One new unit per run. An exploratory unit carried forward from a prior run (recon.md) is ordinary current work, and the run still seeds one new exploratory unit. It never multiplies into a wave of its own, and quick runs get it too. In a scoped run it stays inside the scope the user set.
+- It passes the same candidate gate (below) as every other unit. It does not lower the bar for a finding.
+- It joins the first wave only after the recon agents, the mandatory critics, and the verification reserve are set aside. If the budget cannot fund it after those, it becomes `deferred` with reason `budget_cannot_reserve_critics_and_validation`, like any other unit. It is never funded ahead of a reserve.
 
 ## Hunter brief
 
@@ -16,7 +40,7 @@ Every hunter brief contains, in this order:
 
 1. Role, two sentences: find source-grounded security invariant failures in the assigned units, then write exactly one JSON object matching the result contract to `<agent root>/result.json` and reply with only that path and one status line.
 2. The rules from SKILL.md (Rules every phase and every brief carries) and the tier for each assigned path, with the owner-local command template when the tier allows local checks.
-3. `architecture.md` verbatim.
+3. `architecture.md` verbatim. A cold-start exploratory brief replaces this item, and only this item, with the starting path and one open question (above).
 4. The assigned coverage IDs, subsystem, boundary, starting paths, and each unit's block map from the ledger.
 5. The selected blocks copied verbatim: each ordinary class block from `classes/ATTACK-CLASSES.md`, and from each selected companion (including `local-classes.md`) its `Core discipline`, each chosen class subsection, `Universal moves`, and `Validation rules`. Never send a block name alone.
 6. Excluded blocks, each with its reason.
@@ -137,7 +161,9 @@ the redacted preview from signals.
    finding. A candidate disproved by source is not needs_validation.
 6. Use the same source-derived fingerprint for the same root cause in every state. It
    matches ^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$ and contains no line, wave, agent, severity,
-   or verdict.
+   or verdict. Candidates kept apart because one proof would not settle both count as
+   different root causes: give each a fingerprint naming the control or entry path that
+   differs.
 7. Return an empty candidate array when nothing survives these gates.
 ```
 
@@ -195,7 +221,7 @@ After the wave's agents finish:
 1. For every local check, run `node <skill>/scripts/promote-artifact.mjs --scratch <agent>/scratch --artifacts <agent>/artifacts <each relative path>`. A rejected file is not evidence: turn that check into an unresolved fact naming the rejection, which moves the unit to `blocked` or keeps its candidate as `needs_validation`.
 2. Validate each unit result and map it to exactly one assigned `coverage_id`. Reject duplicate or absent IDs, unsafe agent IDs, source checks with artifacts, and local artifacts that were not promoted into the check owner's folder. A failed, malformed, or unsupported unit result leaves that unit `planned` for reassignment.
 3. Copy `reviewed_paths`, `checks` (into `local_checks`), artifact paths, fingerprints, and unresolved facts into the unit. Keep the hunter's `hardening` notes in a bookkeeping field on the unit for the report.
-4. Consolidate candidates by fingerprint, then by root cause. One root cause with several entry paths is one candidate with the strongest complete trace; related but independent missing controls get separate fingerprints. Record duplicates in their units and send each root cause to validation once.
+4. Consolidate candidates by fingerprint, then by root cause. One root cause with several entry paths is one candidate with the strongest complete trace; related but independent missing controls get separate fingerprints. The two mistakes cost different amounts: a false merge can hide a real vulnerability behind another candidate's verdict, while a missed merge only leaves a duplicate in plain view. So merge two candidates only when one proof and one verdict would settle both, and keep a group separate when a single proof would not settle every member: each member is then an independent finding with its own fingerprint naming the control or entry path that differs. Record duplicates in their units and send each fingerprint to validation once.
 5. Run `validate-coverage-ledger.cjs`. An invalid ledger cannot drive another assignment.
 
 ## Coverage critics

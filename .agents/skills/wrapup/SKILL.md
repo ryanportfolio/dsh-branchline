@@ -1,6 +1,6 @@
 ---
 name: wrapup
-description: "$wrapup, or user asks if session is done, OK to archive, or what's left: one verdict from git, the PR, scratch files, running servers or browsers."
+description: "User asks if session is done, OK to archive, or what's left: one verdict from git, the PR, scratch files, running servers or browsers."
 ---
 
 # Wrap up

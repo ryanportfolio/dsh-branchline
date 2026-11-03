@@ -38,7 +38,7 @@ For this repository:
    require agents or external authorization.
 4. Run `node .claude/scripts/sync-codex-skills.mjs --write`, its `--check` mode, and
    `node .claude/scripts/test-codex-contract.mjs`. Run relevant sync regression cases after
-   changing registration logic. Preserve the catalog budget.
+   changing registration logic.
 5. When editing Harness-Firmware itself, add each new skill to exactly one `skills.groups`
    entry in `.agents/template-manifest.json` and run
    `node bootstrap/tests/check-template-manifest.mjs`. These groups supply the skill choices
@@ -52,7 +52,7 @@ show the meaningful difference, preserve it in a backup, and reconcile only the 
 skills. Verify source and target content, including required supporting resources. Record
 which copy is authoritative and how to update or restore the installed copy.
 
-Write every `description` in caveman-ultra style, in both runtime copies: fragments, no articles or filler, `→` for a hand-off to a neighboring skill. Keep the exact trigger text (the `/name` or `$name` command, quoted user phrases) and any gating limit ("only on explicit", "never from") word for word. The Codex catalog of every skill name plus description has a 7,500-character budget that `node .claude/scripts/test-codex-contract.mjs` checks; a new or edited skill must keep the total inside it.
+Write `description`, `SKILL.md` body and references caveman-ultra, both runtime copies: fragments, no articles or filler, `→` for causality or hand-off to neighboring skill, one meaning in one place. Verbatim: code, commands, paths, identifiers, error strings, exact trigger text (`/name` or `$name` command, quoted user phrases). Safety, authorization and gating lines ("only on explicit", "never from", "unless the user asks") stay full sentences, every qualifier word for word. Output the skill emits for humans (reports, PR bodies, docs, templates) stays normal prose. Editing older skill → apply to lines touched; whole-skill rewrite = material change → evaluation record.
 
 Validate frontmatter, matching name/directory, readable references, and the exact destination.
 Codex discovers repository skills from the working directory toward the repository root;

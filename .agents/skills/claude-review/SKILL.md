@@ -1,6 +1,6 @@
 ---
 name: "claude-review"
-description: "$claude-review, Claude or Fable asked to review Codex-written code, or cross-vendor review via Claude CLI."
+description: "Claude or Fable asked to review Codex-written code, or cross-vendor review via Claude CLI."
 ---
 
 # Claude review

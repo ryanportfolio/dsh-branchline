@@ -1,6 +1,6 @@
 ---
 name: showpiece
-description: "Push an artifact past what people expect of its kind, any medium. Use: $showpiece, ambitious creative direction, portfolio-quality work, replacing generic AI styling. Not quiet or faithful work (forms, dashboards, exact recreations, brand matching) → project UI skill. Skip routine edits unless invoked."
+description: "Push an artifact past what is expected of its kind, any medium. Use: ambitious creative direction, portfolio-quality work, replacing generic AI styling. Not quiet or faithful work (forms, dashboards, exact recreations, brand matching) → ui-quality or project UI skill. Skip routine edits unless invoked."
 ---
 
 # Showpiece
@@ -56,7 +56,7 @@ Choose techniques for their result. Photography, illustration, existing assets, 
 Let the medium shape the execution:
 
 - **Documents and PDFs:** reading order, sustained readability, page turns, and export or print behavior.
-- **Sites and interactive work:** actual tasks, responsive composition checked in the same pass at the narrowest phone width the work supports (375 px when it supports phones and names no width), meaningful states, keyboard access, and behavior under interaction.
+- **Sites and interactive work:** actual tasks, responsive composition checked in the same pass at the narrowest phone width the work supports (375 px when it supports phones and names no width), meaningful states, keyboard access, and behavior under interaction. For landing-page effects (background video, scroll-driven stages, glass over footage), start from the `motion-design` skill's `references/web-effects.md`: recipes with cost ratings and reduced-motion and touch fallbacks.
 - **Decks:** the audience's viewing distance, the presenter's role, pacing between slides, and whether the deck must also work alone.
 - **Posters:** recognition at intended distance, a clear focal point, and what closer viewing adds.
 - **Video and audio:** duration, rhythm, transitions, sound, and comprehension as time passes. Still frames cannot establish timing quality.

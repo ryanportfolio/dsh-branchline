@@ -9,10 +9,9 @@ Critique an existing build from real screenshots and get generated redesigns of 
 
 Script paths below are from the repository root. When this skill came from a plugin or a personal skills folder, run the scripts from the `scripts/` folder in this skill's base directory instead. Either way, run them from the workspace root, because every path they write is relative to it.
 
-## 0. Preflight and cost
+## 0. Preflight
 
 - `codex --version && codex login status` must say `Logged in using ChatGPT`. Otherwise stop and ask the user to run `codex login` in their own terminal; never handle credentials.
-- Each image costs about 60-70k Codex tokens on the user's subscription, so 10 images is roughly 700k. Say so before starting the batch.
 - Pick a fresh scratch dir inside the workspace that git ignores, for example `.tmp/redesign-<n>/`. Codex's `workspace-write` sandbox reads and writes only inside the workspace, so references and outputs both live there.
 - Load the project's own UI or art-direction skill or reference first, if it has one, and carry its constraints into the shared identity line.
 

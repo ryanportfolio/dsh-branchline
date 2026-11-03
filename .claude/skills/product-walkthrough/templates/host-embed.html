@@ -1,0 +1,75 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Host page: embedded walkthrough</title>
+<style>
+  /* Stand-in for the product page that hosts the tour (onboarding screen, help menu). */
+  body{margin:0;min-height:100vh;font:16px/1.5 system-ui,sans-serif;background:radial-gradient(120% 90% at 50% 0%,#2a2350,#0d0d14);color:#eee;display:grid;place-items:center}
+  body.light{background:radial-gradient(120% 90% at 50% 0%,#fff,#ece9f7);color:#16161a}
+  #welcome{text-align:center;transition:opacity .3s,filter .3s}
+  #welcome.away{opacity:0;filter:blur(8px);pointer-events:none}
+  button{font:inherit;padding:12px 20px;border-radius:12px;border:0;background:#6d5efc;color:#fff;font-weight:700;cursor:pointer;margin:6px}
+  button.ghost{background:transparent;border:1px solid currentColor;color:inherit;font-weight:500}
+  /* The player runs in a full-viewport iframe: product CSS stays inside it, and ?embed=1
+     makes its page transparent so this page shows around the stage. */
+  #tour{position:fixed;inset:0;width:100vw;height:100vh;border:0;background:transparent;opacity:0;visibility:hidden;transition:opacity .35s}
+  #tour.on{opacity:1;visibility:visible}
+  #log{position:fixed;left:12px;bottom:10px;font:12px ui-monospace,monospace;opacity:.7;white-space:pre}
+</style></head>
+<body>
+<div id="welcome">
+  <h1>Welcome</h1>
+  <p id="sub">Two minutes, ten things you can do here.</p>
+  <button id="go">Show me around</button><button class="ghost" id="theme">Toggle theme</button>
+</div>
+<iframe id="tour" title="Product tour" tabindex="-1"></iframe>
+<div id="log"></div>
+<script>
+  const frame = document.getElementById("tour"), welcome = document.getElementById("welcome"), go = document.getElementById("go");
+  const PLAYER = "player.html?embed=1";           // same origin in production too, when possible
+  const PLAYER_ORIGIN = location.origin;           // targetOrigin for messages to the player
+  let theme = "dark", phase = "off";               // off -> loading -> on -> off
+  const log = (m) => { const el = document.getElementById("log"); el.textContent = (m + "\n" + el.textContent).split("\n").slice(0, 8).join("\n"); };
+  const post = (m) => frame.contentWindow && frame.contentWindow.postMessage(m, PLAYER_ORIGIN);
+
+  function start() {
+    if (phase !== "off") return;
+    phase = "loading";
+    welcome.classList.add("away");
+    if (!frame.src) frame.src = `${PLAYER}&theme=${theme}`; // first load sends "ready" by itself
+    else post({ type: "reset", theme });                     // later runs restart from chapter 1
+  }
+  function finish(d) {
+    phase = "off";
+    frame.classList.remove("on");
+    welcome.classList.remove("away");
+    go.textContent = "Replay the tour";
+    go.focus({ preventScroll: true });                       // return focus to where the user was
+    localStorage.setItem("tour-seen", JSON.stringify({ at: Date.now(), skipped: d.skipped, reached: d.index + 1, of: d.total }));
+  }
+  addEventListener("message", (e) => {
+    if (e.source !== frame.contentWindow || e.origin !== PLAYER_ORIGIN) return;
+    const d = e.data || {};
+    if (d.source !== "walkthrough") return;
+    log(JSON.stringify(d));
+    if (d.type === "ready" && phase === "loading") {
+      // d.actor is the guide's rect in the iframe viewport (here equal to this page's),
+      // for a handoff: fly the host's own mascot to it, then crossfade.
+      phase = "on"; frame.classList.add("on"); frame.focus(); post({ type: "start" });
+    } else if (d.type === "tour-done") finish(d);
+    else if (d.type === "cta") {
+      // Follow only same-origin paths, whatever the message says.
+      const target = new URL(d.href, location.origin);
+      if (target.origin !== location.origin) { log("refused cta " + d.href); return; }
+      post({ type: "reset", theme }); finish({ skipped: false, index: -1, total: 0 });
+      log("navigate to " + target.pathname + target.search); /* location.assign(target.pathname + target.search + target.hash) */
+    }
+  });
+  // Escape while focus is on the host page still ends the tour.
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && phase !== "off") post({ type: "skip" }); });
+  go.onclick = start;
+  document.getElementById("theme").onclick = () => {
+    theme = theme === "dark" ? "light" : "dark";
+    document.body.classList.toggle("light", theme === "light");
+    post({ type: "theme", theme });
+  };
+</script></body></html>

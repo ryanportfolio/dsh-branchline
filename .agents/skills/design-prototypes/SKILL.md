@@ -1,6 +1,6 @@
 ---
 name: design-prototypes
-description: "$design-prototypes: brief → distinct image concepts (sections, features, interactions, branding) → compare → refine pick. Before build; built UI → redesign-concepts."
+description: "$design-prototypes: brief → distinct image concepts (sections, features, branding) → compare → refine pick. Before build; built UI → redesign-concepts."
 ---
 
 # Design prototypes

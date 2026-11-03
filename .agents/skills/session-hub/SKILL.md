@@ -1,6 +1,6 @@
 ---
 name: "session-hub"
-description: "Coordinate parallel agent sessions via shared append-only HTML hub. Use: $session-hub, 'run parallel sessions on this', joining a hub, or proactively when the checkout shows edits or commits this session didn't make."
+description: "Coordinate parallel agent sessions via shared append-only HTML hub. Use: 'run parallel sessions on this', joining a hub, or proactively when the checkout shows edits or commits this session didn't make."
 ---
 
 # Shared ledger for parallel sessions

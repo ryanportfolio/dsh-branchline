@@ -1,6 +1,6 @@
 ---
 name: "adopt-repo"
-description: "Mirror external repo privately under user's account + overlay firmware: clone, strip template-only files, privacy-sweep, init-project. Use: $adopt-repo <url>, 'pull this repo into our firmware'."
+description: "Mirror external repo privately under user's account + overlay firmware: clone, strip template-only files, privacy-sweep, init-project. Use: 'pull this repo into our firmware'."
 ---
 
 # Overlay the firmware onto an existing repo

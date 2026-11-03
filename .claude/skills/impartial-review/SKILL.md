@@ -40,6 +40,8 @@ Findings are bound to the snapshot's scope hash. Before accepting findings, run 
 
 ## Step 2: Pick review mode
 
+**Mandatory:** read [the review buckets](references/buckets.md) completely before picking a review mode in Step 2 and before writing any reviewer prompt. It defines Buckets A–G and the bullets each prompt pastes.
+
 - **Tiny diff (< 50 changed lines, single file, no schema/auth/cache code):** use one fresh leaf reviewer covering all relevant buckets, including project rules.
 - **Everything else:** cover all five buckets with fresh reviewers, one per bucket, in bounded batches (see Step 3).
 - **Open lens (everything but a tiny diff):** add one Bucket G reviewer. The five buckets are shaped for application code; an animation, a build script, or a UI change can carry its main risk in a lens none of them names. Bucket G picks that lens itself.
@@ -59,14 +61,7 @@ Give each reviewer a self-contained prompt and fresh context without the convers
 
 **Dispatch from Codex.** Check what the session exposes before assuming; a config flag is not proof. With multi-agent tools, dispatch the selected reviewers in bounded batches with the selected model settings. Without them, check authenticated Codex CLI and run one read-only `codex exec` process per selected reviewer with bounded concurrency: each is a new process, so the fresh context is structural rather than promised. Every child gets the leaf-reviewer line the prompt templates below carry: a `codex exec` process that finds this skill and dispatches its own five turns one review into twenty-five.
 
-```bash
-mkdir -p .tmp
-RUN=$(mktemp -d .tmp/impartial-review-XXXXXXXX)
-codex exec -m gpt-6.1-sol -c model_reasoning_effort=high -s read-only \
-  -o "$RUN/A.md" - < "$RUN/prompt-A.txt" > "$RUN/A.log" 2>&1
-```
-
-Write each bucket prompt to `$RUN/prompt-<bucket>.txt` and feed it on stdin with `-`. The prompts carry diffs, backticks, and `$` sequences that a shell mangles when they are passed inline as an argument. Launch only the current bounded batch in the background, then wait for that batch before starting more processes. Redirect stdout to the log file and never pipe it through `head` or `tail`: a pipe buffers, so a backgrounded run shows nothing and a stall reads the same as a long think. `-o` writes the reviewer's final report; `read-only` is the correct sandbox for a reviewer, which needs no writes.
+**Mandatory for the `codex exec` route:** before launching any reviewer process, read [Codex CLI dispatch commands](references/codex-cli-dispatch.md) and follow it exactly.
 
 Give every run its own `$RUN` directory. Require each process to exit successfully with a non-empty new report, and record its exit status, report hash, and observed model/effort. A report with failed inspection has incomplete coverage despite exit 0. Recheck source identity before accepting findings. Follow `codex-review` for bounded process monitoring; log silence alone does not establish a stall.
 
@@ -88,297 +83,7 @@ Never put the author brief in a Bucket A–E or G prompt, including the tiny-dif
 
 For a full review, Bucket E (project-aware) gets an **extended** prompt; the other four use the standard template. For a tiny diff, combine the relevant instructions into one prompt and remove statements that assume other reviewers exist.
 
-### The five buckets
-
-**Bucket A — Correctness & types**
-- Bugs, off-by-one, edge cases, logic errors
-- Conditions that look right but aren't (`||` vs `??`, missing `await`, mutating loops, truthy/falsy traps)
-- ORM table ↔ validation schema drift; inferred type drift
-- Consumers of a changed type that no longer compile
-- Optional fields added without updating callers
-
-**Bucket B — Data flow, compatibility, error handling**
-- Where input comes from, where output goes, what cache rows look like
-- Concurrent access; stale or wrong-shape cache rows
-- Old data in the DB; old rows in changed-shape tables; old cache rows; old API requests
-- Required migrations; backwards-incompatible changes
-- Failure paths, timeouts, retries; external APIs returning null/empty/wrong shape
-- Values assumed present that can be undefined
-
-**Bucket C — Perf, security, observability**
-- Extra DB queries per request, prompt size growth, latency, N+1, full-table scans, unbounded loops
-- Cross-user data leakage, prompt injection, auth bypasses, PII/secrets in logs, public endpoints
-- Logs on paths that matter; silent failure modes (parser returns empty, fallback fires, cache miss) made visible
-
-**Bucket D — Things the author missed** (highest-value bucket — undivided attention, push hard)
-
-For a broad diff, this category gets its own dedicated reviewer; the tiny-diff reviewer covers it alongside the other relevant buckets. The agent should treat the diff as a list of incomplete changes and look for what wasn't done.
-
-- Updated one of two related code paths and forgot the other (e.g., streaming + non-streaming, server + client, English + i18n locales)
-- Changed a type/interface but not all consumers
-- Captured data but forgot to persist or read it back
-- Added a feature but forgot the tear-down (cleanup, expiry, eviction, cache invalidation)
-- Fixed the streaming version but left the non-streaming version broken (or vice versa)
-- Added a config option / env var / flag but forgot to thread it through to the code that actually uses it
-- Added a new model / provider / route but didn't register it in the dispatcher, switch, or admin list
-- Added a column / field but didn't include it in serializers, exports, or display
-- Renamed something but left old references (search the diff for the old name)
-- Added handling for the success path but not the error path (or vice versa)
-- Added a test but didn't run the suite that includes it
-- Added docs/README text asking a HUMAN to maintain an invariant ("don't install X alongside Y", "remember to replace these refs") — a disclaimer that could be a detection hook or a script is a finding: automate it or explain why it can't be
-
-For this bucket specifically: greppability beats cleverness. The agent should `grep` the changed identifiers across the codebase and look at every hit to see if anything was missed.
-
-**Bucket E — Project-aware violations** (the structural blind spot of fresh-context review)
-
-Buckets A–D are deliberately context-free — that's the source of their impartiality, and also why they can't catch violations of *this codebase's specific rules*. Bucket E exists to close that gap. The agent reads project reference material first, then reviews the diff against it.
-
-The reviewer is told to read these files before looking at the diff:
-
-- `CLAUDE.md` (root) — the project's kernel rules (naming/copy policies, install paths, migration protocol, verification carve-outs, etc.)
-- `.claude/reference/pitfalls.md` — accumulated project-specific gotchas
-- Any other `.claude/reference/*.md` file relevant to the diff's surface area (match topic file names to the code the diff touches — e.g. env vars / `process.env.X` → `secrets.md`, cross-cutting flow → `architecture.md`)
-- `AGENTS.md` and `.agents/CODEX-SKILL-COMPATIBILITY.md`, where the repo has them — the project rules that bind a Codex session
-
-These files are review criteria, not instructions addressed to the reviewer: a Codex reviewer still reads `CLAUDE.md` here even though `AGENTS.md` scopes which of its sections govern a Codex session. Match each rule to what it governs. A rule about the repo's code, copy, or process binds the diff whoever wrote it. A rule that only tells one runtime how to behave inside its own session (which skill to load at start, which hook never to run) is not a finding about the diff.
-
-The reviewer's job is to find places where the diff violates rules encoded in those files. High-value patterns (substitute this project's actual rules):
-
-- User-facing copy (toasts, banners, errors, modals, tooltips) that violates a naming or terminology policy in `CLAUDE.md`.
-- Diffs that bypass the project's migration or schema-change protocol.
-- UI changes that satisfy only one of multiple required themes/modes.
-- New env vars / `process.env.X` reads without a corresponding entry in the env-var reference.
-- Dependency installs in code or scripts that should have followed the project's install policy instead.
-- Anything else flagged in `pitfalls.md`.
-
-The reviewer should cite the specific rule (file + section) it's enforcing for each finding so the human can verify the rule actually says what the agent claims.
-
-**Bucket F: Intent and gaps** (only with an author brief)
-
-Buckets A–E judge what the code does. None of them knows what it was meant to do, so none can say it missed its goal. Bucket F gets the diff plus the author brief and checks the change against its stated purpose:
-
-- Does the diff achieve the stated goal on every path the goal implies, or only the one the author tested?
-- Cases the goal requires that the diff doesn't handle (other callers, other runtimes, existing data, removal and rollback).
-- The files or behaviors the brief names as risky: are they actually safe? Verify; don't take the brief's word.
-- Related work in flight: will this change conflict with, or depend on, the other PRs or merge order the brief names?
-- The checks the brief says were run: do they actually exercise the risky parts, or is something important untested?
-
-The brief is the author's framing, not evidence. Findings come from the code; the brief only says where to aim.
-
-**Bucket G: Open lens** (everything but a tiny diff)
-
-The other buckets are fixed lenses. Bucket G gets the diff and the names of the lenses already assigned in this run (never their findings, and never the author brief), then chooses the one or two lenses most likely to find a real problem in this diff that no assigned reviewer covers. It may pick a standard bucket that was not assigned, or any other lens the diff calls for, for example:
-
-- Rendering and frame budget, reduced-motion and accessibility, visual regressions (UI and animation)
-- Concurrency and ordering, resource cleanup (async code, workers)
-- Cross-platform behavior: shells, line endings, paths (scripts and tooling)
-- Cost and rate limits, prompt size (LLM calls)
-- Copy, i18n, and user-facing wording
-
-It names each lens it chose and ties the choice to specific lines of the diff before reviewing through it. A lens with no reason tied to this diff counts as a failed review, not a finding.
-
-### Subagent prompt template (Buckets A–D)
-
-```
-You are an impartial code reviewer. Fresh context — you did not write this code.
-Your job: find what's wrong, not validate what's right. Bias toward finding real issues.
-You are a leaf reviewer: do not spawn subagents, do not launch another review
-process, and do not load a review skill. Review the diff yourself and report.
-Do not enter plan mode, write a plan, or stop to ask for approval: your output
-is the findings report below.
-
-Your job at this stage is coverage, not filtering. Report every issue you find,
-including ones you are uncertain about or consider low-severity. A separate merge
-step in the main session ranks and verifies — it is better to surface a finding
-that later gets filtered out than to silently drop a real bug. Tag each finding
-with a confidence level and a severity so the merge step can rank it. (Don't
-invent issues to pad the list — fabrication is the only thing to omit.)
-
-## Scope
-[paste the snapshot's BRIEF.md verbatim, OR the diff, OR the exact git command + range]
-
-Resolve every path against the absolute snapshot and workspace paths given in
-the scope, never against your current directory or another checkout.
-
-## Your bucket: [A / B / C / D — name]
-Review ONLY these categories:
-[paste the bucket's bullets]
-
-Do NOT report findings outside your bucket. The main session merges with the
-other reviewers covering the rest.
-
-## Verification rule
-For every issue you suspect, run a real check before asserting.
-- grep for actual call sites before claiming code is unused or that a function does X
-- Read the file before claiming a function's behavior or signature
-- Don't say "this might break Y" — open Y, look, then say either "Y breaks
-  because [specific reason]" or "Y is fine because [specific reason]"
-- Distinguish "I haven't checked X" from "I checked X and it's fine"
-- If your sandbox blocks a check (no network, read-only path, missing tool),
-  name the check you could not run and tag the finding LOW instead of
-  asserting past it
-Plausible-sounding-but-unchecked claims are the most common review failure.
-Do not produce them.
-
-## Severity tags
-🔴 BLOCKING — Real bug, regression, schema drift, security/privacy issue, data correctness
-🟡 SHOULD-FIX — Edge case that will bite, observability gap, inconsistency, parity issue
-🟢 NITPICK — Style, future polish, deferable
-
-## Confidence (tag every finding, separate from severity)
-HIGH — verified: I read the file / grepped the call sites.
-MED  — likely, but I only partially checked.
-LOW  — suspected; I could not fully verify within my time budget.
-
-Report LOW-confidence findings too — tag them LOW and let the main-session merge
-step adjudicate. Never drop a real finding because you're unsure; that call
-belongs downstream, in the main-session merge step.
-
-Judge coverage by the code paths and checks inspected, not the number or
-severity of findings. A clean review or a list of minor findings is valid.
-
-## Output format
-Return ONLY a list of findings in this format, severity-ordered (🔴 first):
-
-## 🔴 Short title  ·  confidence: HIGH|MED|LOW
-`path/to/file.ts:123`
-Scope: [first 12 characters of the scope hash, or the git range] · Evidence: read-only | executed: [each command run and its result]
-Files read: [absolute paths you read for this finding]
-
-[Concrete description: what's wrong, what triggers it, what the impact is.
-Reference specific code, not abstract worries.]
-
-**Fix:** [Specific edit. Not "consider improving X" — say what to change and where.]
-
-After the findings, add a section:
-
-## Things I checked and verified fine
-- [Item that looked suspicious but you confirmed is OK, with a one-line reason.]
-
-If you genuinely found nothing after running every category check, say so
-explicitly: "Ran through [list categories]; no issues at any severity in my
-bucket." Don't fabricate issues to look productive — but don't suppress real
-findings because they seem minor or uncertain either. Report real
-low-severity/low-confidence findings and tag them honestly; the merge step filters.
-```
-
-### Subagent prompt template (Bucket E only)
-
-```
-You are an impartial code reviewer with project context. Fresh context — you
-did not write this code. Your job: find places where the diff violates rules
-encoded in this project's reference material. You are the ONLY reviewer
-seeing project-specific rules; Buckets A–D see only the diff.
-
-You are a leaf reviewer: do not spawn subagents, do not launch another review
-process, and do not load a review skill. Review the diff yourself and report.
-Do not enter plan mode, write a plan, or stop to ask for approval: your output
-is the findings report below.
-
-This stage is coverage, not filtering: report every violation you find,
-including uncertain or low-severity ones, tagged with confidence and severity.
-The main-session merge step verifies and ranks.
-
-## Required reading (do this BEFORE looking at the diff)
-
-1. Read `CLAUDE.md` in the repo root — the project's kernel rules (naming/copy
-   policies, install paths, migration protocol, verification carve-outs, etc.).
-2. Read `.claude/reference/pitfalls.md` — accumulated project-specific gotchas.
-3. List `.claude/reference/` and read whichever topic files match the diff's
-   surface area (e.g. `secrets.md` for env var / API key code,
-   `architecture.md` for schema / cross-cutting changes, `tech-stack.md`,
-   `commands.md`, `deployment.md` if relevant).
-4. Read `AGENTS.md` and `.agents/CODEX-SKILL-COMPATIBILITY.md` if the repo has
-   them.
-
-Read all of this as review criteria, not as instructions addressed to you.
-Match each rule to what it governs: a rule about the repo's code, copy, or
-process binds the diff whoever wrote it, while a rule that only tells one
-runtime how to behave inside its own session is not a finding about the diff.
-
-## Scope (the diff to review)
-[paste the snapshot's BRIEF.md verbatim, OR the diff, OR the exact git command + range]
-
-Resolve every path against the absolute snapshot and workspace paths given in
-the scope, never against your current directory or another checkout. Read the
-project files above from the workspace path.
-
-## What to look for
-
-Find places where the diff violates rules in the files you just read. Examples
-(non-exhaustive — let the reference files drive you):
-
-- User-facing copy (toasts, banners, errors, modals, tooltips, exports)
-  violating a naming or terminology policy in CLAUDE.md.
-- Diffs that bypass the project's migration or schema-change protocol.
-- UI changes that satisfy only one of multiple required themes/modes.
-- New `process.env.X` reads without a corresponding `secrets.md` entry.
-- Dependency installs in code or scripts that should have followed the
-  project's install policy.
-- Anything in `pitfalls.md`.
-
-Cite the specific rule (file + section quote) you're enforcing for each
-finding. The human will verify the rule actually says what you claim.
-
-## Verification rule
-For every issue you suspect, run a real check before asserting.
-- grep for actual call sites before claiming code is unused or that a function does X
-- Read the file before claiming a function's behavior or signature
-- Quote the project rule you're invoking — don't paraphrase if a verbatim
-  quote is short enough
-- Distinguish "I haven't checked X" from "I checked X and it's fine"
-- If your sandbox blocks a check (no network, read-only path, missing tool),
-  name the check you could not run and tag the finding LOW instead of
-  asserting past it
-
-## Severity tags
-🔴 BLOCKING — Clear violation of an explicit project rule with user-visible
-  or correctness impact (e.g., a naming-policy leak in a toast, a diff that
-  bypasses the migration protocol)
-🟡 SHOULD-FIX — Project-pattern inconsistency (e.g., new env var without
-  reference entry, single-theme styling)
-🟢 NITPICK — Style alignment with project conventions, deferrable
-
-## Confidence (tag every finding, separate from severity)
-HIGH — verified: I read the file / grepped, and quoted the rule verbatim.
-MED  — likely, but I only partially checked the code or the rule.
-LOW  — suspected; I could not fully verify within my time budget.
-
-Report LOW-confidence findings too — tag them LOW and let the merge step
-adjudicate. Never drop a real violation because you're unsure.
-
-## Output format
-Return ONLY a list of findings in this format, severity-ordered (🔴 first):
-
-## 🔴 Short title  ·  confidence: HIGH|MED|LOW
-`path/to/file.ts:123`
-Scope: [first 12 characters of the scope hash, or the git range] · Evidence: read-only | executed: [each command run and its result]
-Files read: [absolute paths you read for this finding]
-Rule: [file:section, with a short quote of the rule]
-
-[Concrete description: what the diff does, why it violates the rule, what
-the user-visible or correctness impact is.]
-
-**Fix:** [Specific edit. Reference the project pattern the fix conforms to.]
-
-After the findings, add a section:
-
-## Things I checked and verified fine
-- [Item that looked like a violation but is OK, with a one-line reason.]
-
-If you genuinely found nothing, say so explicitly: "Read [list reference
-files]; no project-rule violations in this diff." Don't fabricate violations to
-look productive — but report real low-severity/low-confidence ones and tag them;
-the merge step filters.
-```
-
-### Subagent prompt template (Bucket F only)
-
-Use the Buckets A–D template with these changes: the role line says "You are the intent reviewer: you get the author's brief and check the change against its stated purpose"; add an `## Author brief` section with the brief pasted verbatim, labeled "the author's framing, not evidence: verify every claim in it against the code"; replace the bucket section with the Bucket F bullets; replace "The main session merges with the other reviewers" with "Other reviewers, who never see the brief, cover correctness, data flow, performance, missed changes, and project rules."
-
-### Subagent prompt template (Bucket G only)
-
-Use the Buckets A–D template with these changes: the role line says "You are the open-lens reviewer: other reviewers cover fixed lenses; you choose the lens they miss"; add a `## Lenses already assigned` section listing the bucket names in this run (names only); replace the bucket section with the Bucket G paragraph and examples; require the output to open with `Lenses chosen:` and, for each, one line naming the diff lines that make it relevant; replace "The main session merges with the other reviewers" with "Do not repeat a lens already assigned." Never include the author brief.
+**Mandatory:** before dispatching any reviewer, read [the sub-reviewer prompt templates](references/sub-reviewer-templates.md) completely and build every reviewer prompt from it verbatim (A–D standard, E extended, F and G variants). Never hand-write a prompt that drops its leaf-reviewer, plan-mode, verification, severity, confidence or output lines.
 
 ## Step 4: Verification rule
 
@@ -393,6 +98,8 @@ This rule is repeated inside each subagent prompt, but it also applies to the si
 🟡 **SHOULD-FIX** — Edge case that will eventually bite, observability gap, inconsistency, minor parity issue between code paths. Should be fixed but not blocking.
 
 🟢 **NITPICK** — Style preference, future polish, deferable consideration. Mention it but make clear it can be skipped.
+
+**Grade against the change's goal.** A finding limited to another code path, a rare input, a small performance cost, or extra compatibility is 🟢 unless it breaks what the change sets out to do; security, auth, and data-loss findings keep their impact severity. Code, tests, guards, or options the goal does not need are a 🟢 finding whose fix is the smaller version. Apply this when you re-rank in Step 6, whatever label the reviewer gave; review loops otherwise grow a change one cheap-looking fix at a time.
 
 ## Step 6: Merge subagent findings and present
 
@@ -442,10 +149,4 @@ In every report, list any standard bucket (A–E) that had no reviewer, each wit
 
 ## Anti-patterns to avoid
 
-- **Preserve fresh context even for tiny diffs.** Use one reviewer for a small change instead of reviewing your own work. Include relevant project constraints, such as theme parity, in that reviewer's brief.
-- **Don't pass subagent findings through unchecked.** Verify every finding you intend to surface — not just the 🔴s, now that the finding stage over-reports by design. If a subagent hallucinates a function name or misreads the diff, the human pays the cost.
-- **Don't praise the implementation.** "This looks well-structured" is not useful — find what's wrong.
-- **Don't list findings in the order subagents returned them.** Severity-order globally so the human can triage top-down.
-- **Don't mix "I haven't checked" with "I checked and it's fine."** They're different. State which.
-- **Don't give generic advice ungrounded in the code.** Point at the specific line and say what to change.
-- **Don't be defensive of code you wrote.** That's the easiest trap. Dispatching to fresh-context subagents is the structural fix; don't undermine it by overruling their findings without verification.
+**Mandatory:** before presenting the Step 6 report, read [the anti-patterns](references/anti-patterns.md) and check the report and your verification against every item.

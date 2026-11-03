@@ -31,7 +31,7 @@ Record only traits the samples show. Save the reference where user or repository
 
 Settle silently: who reads this; what they should understand, decide, or do; what the prompt really asks (a challenge question may want judgment, not chronology); hard constraints; which facts carry the answer. Lead with those facts.
 
-Form follows the job. Application answer: answer, one example, what it reveals. Email: purpose, context, next step. Explanation: answer, then how. Proposal: problem, recommendation, why. Memo: decision, then implications. Bio: most relevant work first. Essay: a claim, then earn it. Product copy: the user's outcome, never the product describing itself.
+Form follows the job. Application answer: answer, one example, what it reveals. Email: purpose, context, next step. Explanation: answer, then how. Proposal: problem, recommendation, why. Memo: decision, then implications. Bio: most relevant work first. Essay: a claim, then earn it. Product copy: the user's outcome, never the product describing itself. Pull request: the title names the effect or a measured result, not the mechanism ("cut websocket frames by 70% with compression", not "negotiate permessage-deflate"), since a squash merge turns it into the commit subject; the body opens with the problem as the user met it, then the fix in a sentence or two, then how it was checked. Never lead with an inventory of changed files or functions.
 
 If the piece depends on the author's experience or judgment, use supplied notes first. Ask only for missing material that could change the answer: a relevant event, observation, decision, or result. Never invent personal material. Routine or reference copy needs no interview.
 

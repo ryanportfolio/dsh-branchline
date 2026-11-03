@@ -8,7 +8,7 @@ resources. A skill should change decisions, not narrate one successful session.
 
 Use a kebab-case folder and SKILL.md with YAML name and description. Describe the capability
 and the circumstances that should select it; include neighboring exclusions only when they
-prevent likely misrouting. Keep descriptions short, in caveman-ultra style (SKILL.md). State concrete completion conditions,
+prevent likely misrouting. Keep descriptions short; write descriptions, body and references caveman-ultra (rules in SKILL.md). State concrete completion conditions,
 real constraints and relevant tools without pretending unavailable tools exist.
 
 Keep the entrypoint lean. Put substantial optional procedures in linked references, reusable
@@ -16,6 +16,10 @@ executable mechanics in scripts, and output templates in assets. Package needed 
 inside the skill for standalone installs. One strong example beats several near-duplicates;
 use a small flowchart only for a decision that prose cannot express clearly. Read references
 only when the task needs them. Do not duplicate other skills or impose a universal workflow.
+Keep each SKILL.md under 20,000 bytes (run `node .claude/scripts/check-skill-size.mjs`; the
+template's own CI runs it): after compaction Claude Code re-attaches an invoked skill cut at
+about 20,000 characters and drops the rest. Put stop rules, caps, gates and verification
+steps early in the body; move rarely needed sections to references.
 
 Match specificity to risk. Give open-ended tasks room for judgment; prescribe exact steps
 for fragile mechanics and authorization boundaries. Preserve explicit user choices and
