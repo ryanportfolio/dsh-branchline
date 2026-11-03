@@ -51,6 +51,16 @@ When you run this yourself before presenting a pick:
 - Skip the Step 4 review format. Present the refined recommendation in the session's normal style with one added line: `Pressure-tested (/why): <what the reviewer changed or confirmed>`. If the check overturns the pick, lead with the new pick and say why on that line.
 - No file edits for the pick until the user answers.
 
+## Session-brief mode
+
+Brief opens with a `/why` step (session chip from `start_session` `own_initiative`) → run it first, skip weighty gate.
+
+- Pick under review = brief's rec. Ground it (Step 2) against freshly fetched `origin/main`; feed reviewer (Step 3) the brief only.
+- Rejected → report why, stop. Do not start the brief's work until the user answers.
+- Refined → apply refinement, proceed with the work, state the change in first report.
+- Confirmed → proceed.
+- Skip Step 4 format; one line in first report: `Pressure-tested (/why): <what the reviewer changed or confirmed>`.
+
 ## Step 4: Write the review
 
 One line restating the pick (Step 1), then lead with the header, then go conversational and tight:
@@ -73,7 +83,7 @@ A real header (`### Why it matters`). One to three sentences: the stakes, the pr
 - **Specific over generic.** "Wouter has no built-in data loaders, so route-level data fetching you bolt on yourself" beats "there are tradeoffs to consider."
 - **Don't re-litigate the thread.** Review the pick, not the conversation.
 - **Render the review as terse fragments without abbreviations or arrows**, even when the session runs caveman ultra. A review carries reasoning and nuance that ultra's compression mangles; plain fragments stay terse but readable. Resume the session's normal mode afterward. If the session isn't in caveman at all, just write plainly.
-- This skill **reviews and explains — it does not implement.** No file edits while running it. If the review changes the user's mind, that's a separate follow-up.
+- This skill **reviews and explains — it does not implement.** No file edits while running it. If the review changes the user's mind, that's a separate follow-up. Session-brief mode is the one exception: after a confirmed or refined check, the brief's own work proceeds.
 
 ## Worked example
 
