@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["categories", "gaps"],
+  "properties": {
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category", "ranking", "reason", "defects"],
+        "properties": {
+          "category": { "type": "string" },
+          "ranking": {
+            "description": "Best first. Each inner array is one tier; letters in the same tier are tied.",
+            "type": "array",
+            "items": { "type": "array", "items": { "type": "string" } }
+          },
+          "reason": { "type": "string" },
+          "defects": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["label", "view", "element", "problem", "fix"],
+              "properties": {
+                "label": { "type": "string" },
+                "view": { "type": "string" },
+                "element": { "type": "string" },
+                "problem": { "type": "string" },
+                "fix": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "gaps": { "type": "array", "items": { "type": "string" } }
+  }
+}

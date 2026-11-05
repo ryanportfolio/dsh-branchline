@@ -23,11 +23,13 @@ One fresh subagent per angle, spawned concurrently via exposed multi-agent tools
 
 **proof sheet**: every fact copy may cite: figures, dates, names, authors, credentials, client names, awards, counts, prices, each w/ source file/URL. Mark which are visible on the page vs only in code/data. Facts only in code/data (client names, internal counts) need owner OK before public use. Output: table. This sheet is the integrity source of truth; facts not on it need owner confirmation.
 
-**off-site**: where the site is already mentioned or listed (directories, communities, docs, app stores, review sites, Google Business Profile for local businesses), found by web search for the site name + domain (no web search tool → say so, list only what the site itself links). Output: list w/ URL + what it says about the site; missing or wrong listings as recommendations. Never buy, swap or plant links or reviews.
+**off-site**: where the site is already mentioned or listed (directories, communities, docs, app stores, review sites), found by web search for the site name + domain (no web search tool → say so, list only what the site itself links). Output: list w/ URL + what it says about the site; missing or wrong listings as recommendations. Never buy, swap or plant links or reviews.
+
+**local** (only when the business serves people at a place or in an area; else skip, say why): name, address, phone, hours exactly as the site states them, per page/template (footer, contact, JSON-LD), w/ file/URL; Google Business Profile found by web search for name + city (business name, address, phone, hours, categories, website link, review count + whether owner replies; no web search tool → say so); same for the directories off-site finds. Output: mismatch table (field | site | profile | directory | source URLs), service areas + places the site really serves (its own statements only), `LocalBusiness` JSON-LD present? matches visible text? Recommendations only: profile + directory fixes = owner's list w/ exact wording ([guidelines](https://support.google.com/business/answer/3038177)). Never write, request in exchange for anything, or filter reviews; suggest the owner replies to reviews themself.
 
 **paths**: how a visitor gets from each landing page type to the main action (sign up, search, buy, read). Dead ends, missing next steps, pages w/ no link to the action. Output: path list + gaps. Deep conversion work → `conversion-ux`, not here.
 
-**technical baseline**: run [technical](technical.md) Baseline (seo-check + willaicite) on the measure target; output triage table per that file.
+**technical baseline**: run [technical](technical.md) Baseline (seo-check + willaicite + Core Web Vitals field data) on the measure target; output triage table per that file.
 
 ## Synthesis (main thread)
 

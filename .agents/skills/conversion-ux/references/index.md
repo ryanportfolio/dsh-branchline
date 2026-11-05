@@ -56,6 +56,7 @@ Every rule and honesty item, with the file that holds it. Prefixes name the stag
 | CO4 | Reachable when the user is ready | [stages/4-commit.md](stages/4-commit.md) |
 | CO5 | Inputs beside the action they feed | [stages/4-commit.md](stages/4-commit.md) |
 | CO6 | Emphasis without shouting | [stages/4-commit.md](stages/4-commit.md) |
+| CO7 | Ask only what the next step needs | [stages/4-commit.md](stages/4-commit.md) |
 | GA1 | Gates keep the user's place | [stages/5-gate.md](stages/5-gate.md) |
 | GA2 | Give before asking | [stages/5-gate.md](stages/5-gate.md) |
 | GA3 | Let them make something first | [stages/5-gate.md](stages/5-gate.md) |

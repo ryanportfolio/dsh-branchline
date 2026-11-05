@@ -40,6 +40,13 @@
    regression exits 1 even when other findings can't be compared. Info findings
    are left out of the comparison.
 
+   A production run also requests the other forms of the landing origin (http or
+   https, with or without www) and reports any that serve the site instead of
+   redirecting to it. Pages served over https, or a local preview whose
+   --public-origin is https (URLs written as http:// only), are checked for
+   scripts, stylesheets, images, frames and media loaded over plain http,
+   unless a Content-Security-Policy upgrades them.
+
    Finding ids are stable across runs (rule plus URL or duplicate key), so diff
    can say which findings a round fixed and which it introduced. */
 
@@ -492,11 +499,15 @@ const NAME_CODE = new Map(CODED.map((n, i) => [n, i + 1]));
 const OTHER = CODED.length + 1;
 const HEAD = NAME_CODE.get('head'), BODY = NAME_CODE.get('body'), H1 = NAME_CODE.get('h1');
 // Elements whose attributes parseHtml reads.
-const KEEP_ATTRS = new Set(['base', 'title', 'meta', 'link', 'a', 'img']);
+const KEEP_ATTRS = new Set(['base', 'title', 'meta', 'link', 'a', 'img', 'iframe', 'source', 'video', 'audio']);
+// <link> types the browser fetches as part of the page; an http one on an https page is mixed content.
+const SUBRESOURCE_RELS = new Set(['stylesheet', 'icon', 'preload', 'modulepreload', 'manifest']);
+const UPGRADE_INSECURE = /(?:^|[;,])\s*upgrade-insecure-requests\s*(?:[;,]|$)/i;
 
 function parseHtml(html, pageUrl) {
   const jsonld = [];
   const titleTexts = [];
+  const scriptSrcs = [];
   let doc = '';
   // Every tag is matched whole, so "<script>" or "<!--" inside a quoted attribute stays attribute text.
   // DOCTYPE and bogus comments (<!x>, <?x>, </ x>, </>) end at the first '>' and are dropped.
@@ -521,7 +532,11 @@ function parseHtml(html, pageUrl) {
     const c = close.exec(html);
     const inner = html.slice(m.index + m[0].length, c ? c.index : html.length);
     pos = c ? c.index + c[0].length : html.length;
-    if (name === 'script' && (attrs(m[3]).type ?? '').trim().toLowerCase() === 'application/ld+json') jsonld.push(inner);
+    if (name === 'script') {
+      const a = attrs(m[3]);
+      if ((a.type ?? '').trim().toLowerCase() === 'application/ld+json') jsonld.push(inner);
+      if (a.src) scriptSrcs.push(a.src);
+    }
     // Kept as an empty element so the head scan sees where it was; the text is looked up by index.
     if (name === 'title') { doc += `<title data-seo-title="${titleTexts.length}"></title>`; titleTexts.push(decodeEntities(inner).replace(/\s+/g, ' ').trim()); }
     else doc += `<${name}></${name}>`;
@@ -605,6 +620,23 @@ function parseHtml(html, pageUrl) {
     } catch { /* unparseable href */ }
   }
 
+  // Files the page loads over plain http: mixed content when the page itself is https.
+  const httpSubresources = [];
+  // `explicit`: written as http://. A relative or //host URL takes the page's scheme, so on an
+  // http preview of an https site it is http here and https in production.
+  const sub = (kind, raw) => {
+    try { const u = new URL(raw.trim(), base); if (u.protocol === 'http:') httpSubresources.push({ kind, url: u.href, explicit: /^\s*http:/i.test(raw) }); } catch { /* unparseable URL */ }
+  };
+  scriptSrcs.forEach((s) => sub('script', s));
+  for (const l of tags('link')) if (l.href && (l.rel ?? '').toLowerCase().split(/\s+/).some((t) => SUBRESOURCE_RELS.has(t))) sub('link', l.href);
+  for (const name of ['img', 'iframe', 'source', 'video', 'audio']) {
+    for (const t of tags(name)) {
+      if (t.src) sub(name, t.src);
+      if (t.poster) sub(name, t.poster);
+      for (const c of (t.srcset ?? '').split(',')) { const s = c.trim().split(/\s+/)[0]; if (s) sub(name, s); }
+    }
+  }
+
   return {
     base, // document base URL: <base href>, else the page URL; relative metadata URLs resolve against it
     headBreaker, // what ended <head> before its </head>, or null
@@ -620,6 +652,8 @@ function parseHtml(html, pageUrl) {
     imgsNoAlt: tags('img', (t) => !inHead(t)).filter((i) => !('alt' in i)).length,
     jsonld,
     links: [...new Set(links)],
+    httpSubresources,
+    upgradeInsecure: metas.some((m) => (m['http-equiv'] ?? '').trim().toLowerCase() === 'content-security-policy' && UPGRADE_INSECURE.test(m.content ?? '')),
   };
 }
 
@@ -755,6 +789,83 @@ async function check(opts) {
   else add('robots-missing', 'info', origin + '/robots.txt', `no robots.txt (${robotsRes.error ?? `HTTP ${robotsRes.status}`}); crawlers treat that as "allow everything"`);
   if (robots && !googlebotAllowed(robots, origin + '/')) add('robots-blocks-root', 'fail', origin + '/robots.txt', 'robots.txt disallows / for Googlebot');
 
+  // Host variants: the other forms of the landing origin (http or https, with or without www)
+  // must redirect to it, or the site is served, and can be indexed, at two addresses.
+  const hostVariants = []; // variants with a settled answer; diff counts only these as rechecked
+  const variantsUnsettled = [];
+  if (local) limits.push('Host variants (http/https, www/non-www) are not checked on a local run; check them on production.');
+  else if (start.port) limits.push(`Host variants are not checked: the landing origin ${origin} names a port.`);
+  else {
+    // An IP address has no www form.
+    const ipHost = /^[\d.]+$|^\[/.test(start.hostname);
+    const altHost = ipHost ? null : start.hostname.startsWith('www.') ? start.hostname.slice(4) : `www.${start.hostname}`;
+    const httpsSameHost = `https://${start.hostname}/`;
+    let httpsServes = false; // the start URL lands on http while https on the same host serves the site
+    const variants = [`http://${start.hostname}/`, httpsSameHost, ...(altHost ? [`https://${altHost}/`, `http://${altHost}/`] : [])];
+    for (const v of variants) {
+      if (new URL(v).origin === origin) continue;
+      // Like every other fetch: robots.txt is checked before the variant and before each redirect hop.
+      if (!googlebotAllowed(await robotsFor(new URL(v).origin), v)) { variantsUnsettled.push(`${v} (disallowed by its robots.txt)`); continue; }
+      const res = await timed(v, startGuard);
+      // A host with no DNS record or nothing listening serves nothing: not a variant. Only on the
+      // first request: a redirect into a dead endpoint is a broken variant.
+      if (res.chain.length === 1 && res.error && /ENOTFOUND|ECONNREFUSED/.test(res.error)) { hostVariants.push(v); continue; }
+      const hops = res.chain.map((c) => `${c.status ?? 'not fetched'} ${c.url}`).join(' -> ');
+      // The variant is judged up to its first hop on the landing origin; what the site does after
+      // that (locale redirects, its own errors) is the site's, not the variant's.
+      const reach = res.chain.findIndex((c) => new URL(c.url).origin === origin);
+      const own = reach > 0 ? res.chain.slice(0, reach) : res.chain;
+      // A robots.txt that answered 5xx/429 or failed leaves crawler access to that host unknown.
+      const robotsUnknown = [...new Set(own.map((c) => new URL(c.url).origin))].find((o) => {
+        const r = robotsCache.get(o);
+        return r && (r.status >= 500 || r.status === 429 || (r.status === null && !/ENOTFOUND|ECONNREFUSED|redirect/.test(r.error ?? '')));
+      });
+      if (reach > 0 && !robotsUnknown) {
+        hostVariants.push(v);
+        // Reached through a temporary redirect, Google may keep showing the variant's URL.
+        const temp = own.find((c) => [302, 303, 307].includes(c.status));
+        if (temp) add('host-variant-temporary-redirect', 'warn', v, `${v} reaches ${origin} through a temporary ${temp.status} redirect; use 301 or 308 (${hops})`);
+        continue;
+      }
+      // Errors, server errors, rate limits, auth or bot walls, robots-stopped redirects and unreadable
+      // robots.txt may pass: reported, never counted as rechecked, so a diff can't read them as a fix.
+      if (robotsUnknown || res.error || res.status === null || res.stopped || res.status >= 500 || [401, 403, 429].includes(res.status)) {
+        const why = robotsUnknown ? `an unreadable robots.txt on ${robotsUnknown}` : res.stopped ?? res.error ?? `HTTP ${res.status}`;
+        variantsUnsettled.push(`${v} (${why})`);
+        add('host-variant-error', 'info', v, `${v} answers ${why} instead of redirecting to ${origin}; visitors and links that use it may get an error (${hops})`);
+        continue;
+      }
+      hostVariants.push(v);
+      // 204/205 carry no page: nothing indexable there, but nothing redirects either.
+      if (res.status >= 400 || res.status === 204 || res.status === 205) {
+        add('host-variant-error', 'warn', v, `${v} answers HTTP ${res.status} instead of redirecting to ${origin}; visitors and links that use it get ${res.status >= 400 ? 'an error' : 'an empty page'} (${hops})`);
+        continue;
+      }
+      if (res.status < 200 || res.status >= 300) continue;
+      if (v === httpsSameHost && res.finalUrl.startsWith(httpsSameHost)) {
+        httpsServes = true;
+        add('host-variant-duplicate', 'fail', v, `${res.finalUrl} serves the site (HTTP ${res.status}) while ${origin} does not redirect to it; redirect http to https with a 301, then audit from https (${hops})`);
+        continue;
+      }
+      // Served without a redirect. A canonical pointing at the landing origin softens it.
+      let canonOrigin = null;
+      try {
+        const h = res.body !== null && /html/i.test(res.headers['content-type'] ?? '') ? parseHtml(res.body, res.finalUrl) : null;
+        if (h?.canonicals.length === 1 && h.canonicals[0]) canonOrigin = new URL(h.canonicals[0], h.base).origin;
+      } catch { /* unreadable page or canonical: treated as none */ }
+      // Once https on the same host works, every variant should end there, not on the http start URL.
+      const target = httpsServes ? new URL(httpsSameHost).origin : origin;
+      if (canonOrigin === origin) add('host-variant-duplicate', 'warn', v, `${res.finalUrl} serves the site (HTTP ${res.status}) instead of redirecting to ${target}; its canonical points to ${origin}, but a 301 is the stronger signal (${hops})`);
+      else add('host-variant-duplicate', 'fail', v, `${res.finalUrl} serves the site (HTTP ${res.status}) instead of redirecting to ${target}, so the site can be indexed at two addresses (${hops})`);
+    }
+    if (start.protocol === 'http:') {
+      add('https-missing', 'warn', start.href, httpsServes
+        ? `the site lands on plain HTTP (${start.href}) although ${httpsSameHost} works; browsers mark http pages "Not secure" and Google prefers HTTPS pages as canonical`
+        : `the site lands on plain HTTP (${start.href}); browsers mark it "Not secure" and Google prefers HTTPS pages as canonical`);
+    }
+    if (variantsUnsettled.length) limits.push(`Host variants without a settled answer (not counted as rechecked): ${variantsUnsettled.join(', ')}`);
+  }
+
   // sitemaps
   const sitemapUrls = new Set();
   let sitemapComplete = true; // every sitemap file found was read; membership findings depend on it
@@ -882,6 +993,7 @@ async function check(opts) {
       // Cut at MAX_BYTES, where Google stops reading too: the page is judged on what Google sees.
       truncated: Boolean(res.truncated),
       xRobots: (res.headers['x-robots-tag'] ?? '').toLowerCase(),
+      csp: res.headers['content-security-policy'] ?? '',
     };
     if (rec.truncated) bigPages.add(url);
     rec.noindex = hasNoindex(`${rec.xRobots}\n${rec.html?.robots ?? ''}`);
@@ -1032,6 +1144,19 @@ async function check(opts) {
     if (!h.descriptions.length || !h.descriptions[0].trim()) add('description-missing', 'warn', url, 'no meta description; Google writes its own snippet');
     if (!h.h1.length) add('h1-missing', 'info', url, 'no <h1>');
     if (h.imgsNoAlt) add('img-alt-missing', 'info', url, `${h.imgsNoAlt} <img> without an alt attribute`);
+    // An https page, or a local preview of an https production site. On a preview, http URLs on this
+    // machine are the preview's own files and become https in production.
+    const preview = !rec.finalUrl.startsWith('https:');
+    // A Content-Security-Policy with upgrade-insecure-requests (header or meta) has the browser fetch them over https.
+    const upgrades = UPGRADE_INSECURE.test(rec.csp) || h.upgradeInsecure;
+    if (!upgrades && (!preview || (local && publicOrigin?.startsWith('https:')))) {
+      const byUrl = new Map(h.httpSubresources.filter((r) => !preview || (r.explicit && !isLocal(new URL(r.url).hostname))).map((r) => [r.url, r]));
+      const mixed = [...byUrl.values()];
+      if (mixed.length) {
+        const kinds = [...new Set(mixed.map((r) => r.kind))].join(', ');
+        add('mixed-content', 'warn', url, `${mixed.length} file(s) load over plain http on an https page (${kinds}); browsers block or upgrade them and may mark the page "Not secure": ${mixed.slice(0, 3).map((r) => r.url).join(', ')}${mixed.length > 3 ? ` and ${mixed.length - 3} more` : ''}`);
+      }
+    }
 
     // canonical
     if (h.bodyCanonicals.length && !h.canonicals.length) add('canonical-in-body', 'warn', url, 'rel=canonical sits in <body>, where Google ignores it');
@@ -1155,7 +1280,7 @@ async function check(opts) {
 
   return {
     tool: 'seo-check',
-    version: 2,
+    version: 3,
     mode: list ? 'urls' : 'crawl',
     url: start.href,
     requestedUrl: requested.href,
@@ -1166,6 +1291,8 @@ async function check(opts) {
     fetches,
     publicOrigin,
     robots: { status: robotsRes.status, sitemaps: robots?.sitemaps ?? [] },
+    hostVariants, // other forms of the landing origin that were requested
+
     sitemap: { files: sitemapFiles, read: sitemapsRead, complete: sitemapComplete, urls: sitemapUrls.size, list: [...sitemapUrls] },
     // Same-origin URLs some crawled page links to: diff uses it to tell a removed link from an unchecked page.
     linked: [...linkedFrom.keys()],
@@ -1211,7 +1338,7 @@ function normalize(report, label) {
     // Every URL the run fetched and got an answer from. A finding counts as fixed
     // only if the later run fetched its URL again (a robots.txt block is not a fetch).
     const origin = new URL(report.url).origin;
-    const covered = new Set([report.url, origin, origin + '/robots.txt', ...(report.sitemap?.files ?? [])]);
+    const covered = new Set([report.url, origin, origin + '/robots.txt', ...(report.sitemap?.files ?? []), ...(report.hostVariants ?? [])]);
     const coveredHtml = new Set(); // pages whose whole HTML was read, so HTML findings were rechecked
     for (const p of report.pages ?? []) {
       if (p.blocked || p.status === null) continue;
@@ -1235,6 +1362,7 @@ function normalize(report, label) {
       pages: new Map((report.pages ?? []).map((p) => [p.url, p])),
       refs: new Map((report.pages ?? []).map((p) => [p.url, new Set([p.canonical, ...(p.alternates ?? [])].filter(Boolean))])),
       linked: new Set(report.linked ?? []),
+      hostVariants: new Set(report.hostVariants ?? []),
       sitemapComplete: report.sitemap?.complete === true, sitemapFiles: new Set(report.sitemap?.files ?? []),
       sitemapList: new Set(report.sitemap?.list ?? []),
       findings: report.findings.filter((f) => f.severity !== 'info'), scores: {},
@@ -1310,7 +1438,7 @@ function diff(beforePath, afterPath) {
   if (b.kind === 'seo-check') {
     // Findings read from a page's HTML need that page's HTML read again; status and
     // redirect findings only need it fetched.
-    const statusRule = /^(http-error|http-no-content|fetch-error|redirect-chain|sitemap-|robots-|start-unreadable|needs-public-origin|linked-url-|listed-url-)/;
+    const statusRule = /^(http-error|http-no-content|fetch-error|redirect-chain|sitemap-|robots-|start-unreadable|needs-public-origin|linked-url-|listed-url-|host-variant-|https-missing)/;
     // Sitemap-membership findings need the later run to have read every sitemap file, in a full crawl.
     const membershipRule = /^(not-in-sitemap|orphan|sitemap-url-|sitemap-bad-url$|sitemap-foreign-url$)/;
     // Findings about one sitemap entry are settled once a complete later sitemap no longer lists it.
@@ -1331,6 +1459,10 @@ function diff(beforePath, afterPath) {
       if (brokenRule.test(f.rule) && fullCrawl && !b.covered.has(f.url) && !b.linked.has(f.url) && !b.sitemapList.has(f.url)) return true;
       return (f.urls ?? [f.url]).every((u) => coverage(f).has(u)) && (f.deps ?? []).every((u) => depChecked(f, u));
     };
+    // A variant answered before but not now (timeout, 5xx, bot wall): its state is unknown, and its
+    // info-level error is left out of the comparison, so a break there would otherwise pass.
+    const variantsLost = [...a.hostVariants].filter((v) => !b.hostVariants.has(v));
+    if (variantsLost.length) notes.push(`${variantsLost.length} host variant(s) answered in ${beforePath} but got no settled answer in ${afterPath}; rerun the later check:\n${variantsLost.map((v) => `  ${v}\n`).join('')}`);
     const unchecked = gone.filter((f) => !settled(f));
     if (unchecked.length) {
       unchecked.forEach((f) => unsettled.add(f));

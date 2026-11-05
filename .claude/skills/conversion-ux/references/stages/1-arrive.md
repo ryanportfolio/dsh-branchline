@@ -12,7 +12,7 @@ Write down what the user decided before this screen: search terms, a plan clicke
 
 ### Applies when: always
 
-**AR1. A clear job, a clear first read.** Name the action the screen exists to get and the element read first. If you cannot name the first read, users cannot either. Fix: one primary action; size, weight and position follow the order of the user's questions. Screens that serve several jobs (a home page, a dashboard, a two-sided marketplace) name their top two or three jobs in priority order, give the first one the strongest action, and walk each job's path. U7jTCgIWS4w 1:45. Craft.
+**AR1. A clear job, a clear first read.** Name the action the screen exists to get and the element read first. If you cannot name the first read, users cannot either. Fix: one primary action; size, weight and position follow the order of the user's questions. Screens that serve several jobs (a home page, a dashboard, a two-sided marketplace) name their top two or three jobs in priority order, give the first one the strongest action, and walk each job's path. U7jTCgIWS4w 1:45. Craft. On a screen reached from outside the product (an ad, a search result, a shared link, the home page), also run the five-second check: from the first view at phone width, a new reader can say what this is, who it is for and what to do next; any of the three missing is a finding. Convention.
 
 **AR2. Show the commitment already made.** Destination, cart, chosen plan. Fix: keep it visible so the remaining decision is small, and keep it visible in later stages. zr37ibqXl1U 9:13. Presenter.
 
