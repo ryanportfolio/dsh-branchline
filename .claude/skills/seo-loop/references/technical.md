@@ -10,7 +10,7 @@ npx -y github:ryanportfolio/willaicite#v1.4.0 <page-url> --json --out <dir>/geo-
 node .claude/skills/seo-loop/scripts/seo-check.mjs diff <before.json> <after.json>
 ```
 
-- seo-check: Node 20+, no deps. Crawl, status + redirects, robots.txt, sitemap, canonical, noindex, hreflang, titles, descriptions, JSON-LD syntax. Exit 0 no fail, 1 fail findings, 2 incomplete. 200 ms between fetches on prod, none on localhost; never lower on prod. Same `--max-pages` both sides of a diff. Follows every link, so sort/filter/page query links can fill the budget; truncated crawl → orphan + sitemap results partial (say so).
+- seo-check: Node 20+, no deps. Crawl, status + redirects, robots.txt, sitemap, canonical, noindex, hreflang, titles, descriptions, JSON-LD syntax, mixed content; on prod also host variants (http/https, www/non-www must 301 or 308 to the landing origin). Reports from an older script version don't diff (exit 2) → new baseline. Exit 0 no fail, 1 fail findings, 2 incomplete. 200 ms between fetches on prod, none on localhost; never lower on prod. Same `--max-pages` both sides of a diff. Follows every link, so sort/filter/page query links can fill the budget; truncated crawl → orphan + sitemap results partial (say so).
 - Local preview of a site w/ a production origin → always `--public-origin <prod origin>`, else run incomplete (`needs-public-origin`).
 - Exit 2 for a page that still exists → crawl: rerun w/ `--include <file listing it>`; `--urls` run: add it to the list (flags don't combine); budget hit: rerun both w/ higher `--max-pages`.
 - willaicite (owner's AI-readiness audit): AI crawler access per bot incl. firewall blocks, raw-HTML renderability, answer-readiness, topical focus, evidence, structured data, freshness, entity, SEO foundation. Pinned tag; never `npx geo-audit` (unrelated npm pkg). Always exits 0, prints a score even for a dead page → validity = diff's job. No origin flag: on localhost a correct canonical to prod reads "points away" (seoFoundation drops) → known artifact, never "fix" it. Overall score = context, never a target; round target = a fail/warn evidence line.
@@ -20,7 +20,21 @@ node .claude/skills/seo-loop/scripts/seo-check.mjs diff <before.json> <after.jso
 
 1. Both tools on the measure target (no local target yet → live prod, read-only) → `round-0-prod`, else `round-0`; key pages for willaicite ≤5 (start page + 1 per template + owner's picks). Read output, not only exit codes.
 2. Run again → round-0b; diff. Anything fixed/new → find drift cause (date-relative text, A/B, random content), record before any change.
-3. Triage table: finding (rule, or willaicite dimension + evidence line) | pages | severity | why ([checks](checks.md)) | fix location | effort | owner input? Order: access + indexing fails → other fails → warns; tie → key pages first, then page count. Info → count line.
+3. Core Web Vitals field data for the key pages + origin (below) → `<run>/tech/cwv.md`.
+4. Triage table: finding (rule, or willaicite dimension + evidence line) | pages | severity | why ([checks](checks.md)) | fix location | effort | owner input? Order: access + indexing fails → other fails → warns; tie → key pages first, then page count. Info → count line.
+
+## Core Web Vitals (field data)
+
+Google's own real-user measurements (Chrome UX Report, CrUX): 75th percentile over the last 28 days, per URL when it has enough traffic; origin data is queried separately. Part of Google's page experience signals; read-only, never a batch gate (28-day lag).
+
+- Source, in order:
+  1. CrUX API ([docs](https://developer.chrome.com/docs/crux/api)) w/ a Google API key the owner provides in a file or env var, never in chat (`secret-file` skill where installed). Query `url` and `origin` separately, `formFactor` `PHONE` then `DESKTOP`. CLS comes as a decimal string.
+  2. PageSpeed Insights API v5 (`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=<url>&strategy=mobile&key=<key>`); Google plans to drop CrUX data from it. `loadingExperience` = this URL only when `origin_fallback` is absent or false; true → it is origin data, page = "not enough real-user traffic". `CUMULATIVE_LAYOUT_SHIFT_SCORE.percentile` = CLS × 100 (10 = 0.10). No `loadingExperience` at all → field data may be gone from the API; check source 3, never record as low traffic.
+  3. `https://pagespeed.web.dev/analysis?url=<url>` in headed Chrome (direct URL, no form), "Discover what your real users are experiencing", "This URL" tab; only "Origin" shown → page has no URL data.
+  Keyless API calls share a global daily quota (429 `Quota exceeded`) → never rely on them.
+- Record per key page + origin, mobile then desktop: LCP, INP, CLS p75 + Google's rating (good / needs improvement / poor; thresholds LCP 2.5 s / 4 s, INP 200 ms / 500 ms, CLS 0.1 / 0.25, [web.dev/vitals](https://web.dev/articles/vitals)), source, date. No data → "not enough real-user traffic", never fill from a lab run.
+- Lab scores (Lighthouse, the PageSpeed performance score) = diagnosis only, labeled lab; never reported as what users get.
+- Needs improvement or poor → plan row; fix work → `perf-loop`. Re-check: same source ≥28 days after deploy; earlier → "window still includes pre-change visits".
 
 ## Measuring
 

@@ -25,6 +25,8 @@ Starts at sign-in, sign-up, email or phone verification, or a consent step, and 
 
 **GA5. Ask for the account when it has a reason.** At the moment there is something to save, sync or share. 2TlIg3VokY8 3:49-7:03. Presenter.
 
+Fields on a sign-up form: CO7 in [4-commit.md](4-commit.md).
+
 ## Honesty items here
 
 HO4 (pre-ticked consent or marketing boxes), HO11 (progress padded with steps not done), HO13 (marketing consent bundled into the account or an alert). Details in [honesty.md](../honesty.md).

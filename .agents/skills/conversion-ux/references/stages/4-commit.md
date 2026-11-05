@@ -19,11 +19,15 @@ Starts at the primary action and the line beside it; ends when the user presses 
 
 **CO3. Light verbs for first steps.** "Subscribe" signals a recurring commitment; "Start my free trial" a beginning. zr37ibqXl1U 3:23. Presenter. Guard: the CO2 line still states billing and its date.
 
-**CO4. Reachable when the user is ready.** People decide after reading further down. Fix: a sticky action on long pages, labelled with the plan and price, that does not cover content. GGg61sdEjeI 12:15. Craft.
+**CO4. Reachable when the user is ready.** People decide after reading further down. Fix: a sticky action on long pages, labelled with the plan and price, that does not cover content. GGg61sdEjeI 12:15. Craft. On a long marketing or service page without a sticky action, repeat the same action, with the same label, right after the section that answers the main objection (the process, the price, the proof); a long page whose only actions are at the top and in the footer is a finding. Craft.
 
 **CO5. Inputs beside the action they feed.** Quantity far from "Add to cart"; units outside the control. Fix: group them; put the unit inside the selector. GGg61sdEjeI 11:09. Craft.
 
 **CO6. Emphasis without shouting.** All caps, oversized, aggressive buttons. Fix: weight and colour carry priority; sentence case. GGg61sdEjeI 10:55. Craft.
+
+### Applies when: the action submits a form (contact, quote, booking request, sign-up, lead)
+
+**CO7. Ask only what the next step needs.** Each required field is one more reason to stop. For every required field, name the step it unlocks; a required field that is merely useful later ("company size", "budget", "how did you hear about us") is a finding. Fix: required fields only for what the next step cannot happen without (for a first contact, usually a name and one way to reply); everything else optional, marked as optional, or asked later in conversation or after the account exists; order fields from easy (name, email) to sensitive (phone, budget, address). A short setup step before an account (GA3) is not a CO7 finding. Convention. Guard: never drop a field the service, the law or a safety check really needs; beside any such field whose need is not obvious (phone, date of birth, an ID number), say why. The confirmation after submit: JO3.
 
 Something covering the button or the CO2 line (a chat widget, a cookie bar): SC1. A button a keyboard cannot reach: SC3. Both in [every-screen.md](../every-screen.md).
 
@@ -38,7 +42,8 @@ Design the action:
 - Words on the control: verb plus outcome, with the live count or full total (CO1).
 - A light verb for a first step, while the line beside it states billing plainly (CO3, CO2).
 - Inputs that feed the action sit next to it (CO5).
-- On long pages the action follows the user as a labelled sticky bar (CO4).
+- A form asks only what the next step needs, easy fields first (CO7).
+- On long pages the action follows the user as a labelled sticky bar, or repeats after the section that answers the main objection (CO4).
 - Nothing auto-opens over the action or the price (SC1).
 - Every control reachable by keyboard with visible focus, named for screen readers, and large enough to tap (SC3).
 - An upsell that interrupts a task gets an equal "Not now" (EX1).

@@ -46,6 +46,7 @@ Every upsell has a decline of equal weight that leaves the user where they were:
 - `design-prototypes`: image concepts from a brief, before anything is built.
 - `showpiece`: ambitious creative direction. This skill judges whether a user can decide and act, not originality.
 - `ui-quality`: the accessibility and state floor, measured on the rendered page; run it on screens this skill audits or builds.
+- `perf-loop`: load time and responsiveness; a first view that loads slowly or janks goes there.
 - `writing`: final polish of UI copy once this skill has decided what the copy must answer.
 - When installed: `frontend-design` (visual styling), `design-brief` (a design-build prompt), `product-walkthrough` (animated product demos).
 
