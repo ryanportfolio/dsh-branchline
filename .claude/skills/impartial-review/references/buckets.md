@@ -1,6 +1,6 @@
 # Review buckets A–G
 
-Loaded from `SKILL.md` Step 2 and used again when writing reviewer prompts in Step 3. Moved verbatim; each reviewer prompt pastes its bucket's bullets from here.
+Loaded from `SKILL.md` Step 2 and used again when writing reviewer prompts in Step 3. Each reviewer prompt pastes its bucket's bullets from here.
 
 ### The five buckets
 
@@ -24,7 +24,7 @@ Loaded from `SKILL.md` Step 2 and used again when writing reviewer prompts in St
 - Cross-user data leakage, prompt injection, auth bypasses, PII/secrets in logs, public endpoints
 - Logs on paths that matter; silent failure modes (parser returns empty, fallback fires, cache miss) made visible
 
-**Bucket D — Things the author missed** (highest-value bucket — undivided attention, push hard)
+**Bucket D — Things the author missed** (highest-value bucket; gets its own reviewer on a broad diff)
 
 For a broad diff, this category gets its own dedicated reviewer; the tiny-diff reviewer covers it alongside the other relevant buckets. The agent should treat the diff as a list of incomplete changes and look for what wasn't done.
 

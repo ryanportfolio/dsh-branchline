@@ -42,6 +42,8 @@ Reject:
 
 ## Storyboard
 
+Open `STORYBOARD.md` with two lines for the whole tour: `Audience:` (who watches and where, from the owner's answer) and `Tour:` (one sentence on what that viewer can do after watching). The review's blind `point` check compares against `Tour:`, so keep that sentence out of on-screen copy.
+
 For each chosen chapter write, in `STORYBOARD.md`:
 
 1. **Title:** verb-led, says what the viewer can do ("Chat across your library", not "Library chat").

@@ -80,9 +80,9 @@ The parent parses `result.json`. A missing, malformed, or prose-wrapped result i
 
 Pick from the request, or propose one from size and stakes and state it with an agent estimate before launch. Ask for a go when the estimate passes about 25 agents.
 
-- **quick** (default for a first run of a small or low-stakes repo, and for every rerun): coarse units (surface x boundary x attack class, subsystem `profile/quick/all-in-scope-subsystems`), one hunter wave, one final critic, one verifier per candidate covering Phases 3 and 5. Critic discoveries become `deferred` work for the next run, so quick runs in a loop approach standard coverage.
+- **quick** (default for a first run of a small or low-stakes repo, and for every rerun): coarse units (surface x boundary x attack class, subsystem `profile/quick/all-in-scope-subsystems`), one hunter wave, one final critic, one verifier per candidate covering Steps 4 and 6. Critic discoveries become `deferred` work for the next run, so quick runs in a loop approach standard coverage.
 - **standard**: the full workflow; critic waves until a final clean critic.
-- **deep**: units split per subsystem and lifecycle mode, critic waves to a clean pass, separate Phase 3 and Phase 5 verifiers, and a second independent pass on same-source units covered before.
+- **deep**: units split per subsystem and lifecycle mode, critic waves to a clean pass, separate Step 4 and Step 6 verifiers, and a second independent pass on same-source units covered before.
 
 **`live-local`** can be added to any profile and is never on by default; it runs only when the user asks for it. It starts the owner's app on loopback with dummy data to settle candidates that need runtime behavior ([live-local.md](references/live-local.md)). Added cost: one mapping agent, up to one checking agent per selected class that has candidates, and one fresh re-verifier per proposed change. These agents count against a user budget like any other agents; when the budget cannot cover them, the step is skipped and the report says so.
 

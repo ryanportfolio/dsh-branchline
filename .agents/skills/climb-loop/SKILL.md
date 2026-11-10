@@ -1,6 +1,6 @@
 ---
 name: climb-loop
-description: "Hill-climb a target round after round: Opus, Sol and Astra rank our UI blind against named reference apps until all rank ours first, or a scripted eval climbs to perfect. Use: 'make our UI beat <app>', 'hill climb this'."
+description: "Hill-climb a target round after round: Opus, Sol and Astra rank our UI blind against named reference apps (none → redesign-concepts, build the pick, climb past our own versions) until all rank ours first, or a scripted eval climbs to perfect. Use: 'make our UI beat <app>', 'climb our UI without a reference', 'hill climb this'."
 ---
 
 # Climb loop for Codex
@@ -8,11 +8,11 @@ description: "Hill-climb a target round after round: Opus, Sol and Astra rank ou
 Give the agent a hill it can measure → it climbs. Two hills:
 
 - **Scripted hill** (prefer): program emits a number → push it up. Section 7.
-- **Judged hill**: no program can measure it (UI taste) → council of three models ranks captures. Sections 1–6.
+- **Judged hill**: no program can measure it (UI taste) → council of three models ranks captures. Sections 1–6. No reference product → section 8.
 
-Neighbors: `$wow-loop` = written quality contract, binary checks, own critics. `$perf-loop` = speed/size targets. This skill = beat named rivals, judged by Opus + Sol + Astra, or an eval mined from history.
+Neighbors: `$wow-loop` = written quality contract, binary checks, own critics. `$perf-loop` = speed/size targets. This skill = beat named rivals or our own best version, judged by Opus + Sol + Astra, or an eval mined from history.
 
-Invocation input: target (app, screens or eval) plus optional references and round cap. Discussing or editing this skill does not start it.
+Invocation input: target (app, screens or eval) plus optional references and round cap. References are optional. Discussing or editing this skill does not start it.
 
 ## Stop rules (read first)
 
@@ -78,7 +78,7 @@ Judge JSON = `result.json` `.result` text; `is_error` must be false. Attribute t
 
 Write `.tmp/climb-loop/<slug>/contract.md`:
 
-- **References**: 2+ products ours must beat, named by user. If the user named none, ask before capturing.
+- **References**: 2+ products ours must beat, named by user. If the user named none, offer the section 8 options and wait for a pick before capturing.
 - **Views**: states captured identically for ours and every reference: viewport, theme (light and dark), data fixture, zoom. Name each view.
 - **Categories** (edit per product): hierarchy, typography, color and contrast, spacing and density, consistency (labels, radius, icons across surfaces), affordance (controls read as controls), iconography, states (focus, hover, empty, error).
 - **Seat pass**: one valid result from one seat with ours alone in `ranking[0]` of every category.
@@ -128,5 +128,33 @@ Fuzzy problem → eval → climb. Fits skill descriptions, kernel size, MCP or t
 5. Commit the eval with the change → later edits stay testable. Source run result: 52% fewer tokens, 78% with tool search on.
 
 No council needed here; the project's normal PR review still applies.
+
+## 8. No reference
+
+User names no rival → suggest this path. Before any image generation or judge call, wait for the user's go, and agree the round cap and usage budget in that same exchange. The go states the concept count (default 10 image calls, plus retries); that spend counts against the budget and goes into `state.json` spend.
+
+1. **Redesign first.** Run `$redesign-concepts` on the current UI through `synthesis.md` only. Skip its build-work and contract-amendment paragraph: the climb contract stays frozen, and step 4 builds. A picked concept that needs data or backend the product lacks → user chooses: build that first, or drop it. Never fake its data.
+2. **Views.** Set contract views after the pick: screens and states in both the current UI and `synthesis.md`. A state the pick removes gets its replacement under the same view name, written in `contract.md`.
+3. **Baseline.** Capture current UI under those views and the section 2 rig, before any build. Frozen for the whole climb. Reuse `$redesign-concepts` captures only if they match the views and rig exactly and were taken at the baseline commit.
+4. **Build the picked concept(s).** One writer, own commit, scripted floor. Pass the builder `synthesis.md` and the picked concept images by absolute path. That commit = first champion.
+5. **Self climb** from it, below.
+
+User declines the redesign, or it cannot run (no Codex login or image tool) → say so, offer self climb from current UI (champion = baseline). User names or supplies references later (products, screenshots) → sections 1–6 instead.
+
+Concept images are builder targets only. Never give one to a judge as a letter: judges would rank render style (mockup vs live capture), not the design.
+
+Self climb changes only these parts. Stop rules, council, judge folder, valid result, contract categories, scripted floor, capture rig, brief and ratchet (section 4 step 6) all hold.
+
+- **No round 0 judging.** Round 1 is the first judge call.
+- **Letters per round**: baseline, champion (best accepted version, commit recorded), 2 challengers, each a separate commit branched from the champion commit, each a distinct direction from ours' defects (round 1: gaps between build and picked concept). Champion = baseline → 3 letters. Judges never learn which letter holds which role.
+- **Beats** (X beats Y for one seat): X sits in a lower tier than Y in no category, and in a strictly higher tier than Y (not tied) in at least half the categories.
+- **Seat accepts** a challenger that beats the champion.
+- **Short-circuit** (replaces staged admission): seats judge one at a time in section 4 step 2 order on the same captures (without Opus: Sol, then Astra). After each seat, keep only challengers every seat so far accepted; none left → round over, remaining seats skip.
+- **Champion change**: only a challenger every seat accepted. Two left → more categories in a strictly higher tier than champion, summed over seats; tie → smaller diff. Losing challengers stay on their commits, unmerged.
+- **Regression**: 2+ seats in one round put baseline in a higher tier than champion in a category → stop and tell the user before another round (the redesign may be worse there). One seat alone = noise, logged.
+- **Gate (plateau)**: two build rounds in a row with no champion change; replaces section 4's no-gain stop. Champion still = baseline → no confirmation round; report no gain, ask the user. Else one confirmation round, champion vs baseline only, fresh shuffle and judges: champion beats baseline for every seat. Fail → report, ask the user.
+- **Taste**: no rival sets the bar → show the user each new champion; their notes become contract amendments (section 4 step 7).
+- **`state.json`** adds role per letter, champion commit, challenger commits, plateau count. Resume (section 6) reruns the seats of the interrupted round.
+- **Report**: only after a passed confirmation round, state that ours beat its own baseline, with no outside bar. Cap, budget, regression stop or failed confirmation → report "not shown better than baseline". Never claim it beats or matches other products. History table: round × seat × challenger, accepted or not, champion commit; each picked concept named.
 
 Source: Theo, "Agents Sucked At UI (Until Today)", 2026-11-03, https://www.youtube.com/watch?v=xq0eB8vxeqk. Figures above are that one run's, not benchmarks.

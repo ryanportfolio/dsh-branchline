@@ -37,5 +37,5 @@ checks suffice for metadata or documentation corrections that do not change beha
 
 Report observed results, limitations and source provenance. One successful case establishes
 only that case; it does not establish general reliability or justify stronger instructions.
-The retired writing-skills manuals and examples are no longer shipped; the originals remain
-in obra/superpowers as optional source material, not active deployment requirements.
+Optional source material: the original writing-skills manuals and examples in
+obra/superpowers; not needed for deployment.

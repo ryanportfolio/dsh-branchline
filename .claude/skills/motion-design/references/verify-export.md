@@ -4,7 +4,7 @@
 
 Run WebGL checks in headed Chrome on the real GPU. Headless Chromium renders WebGL through SwiftShader on the CPU, which burns the machine and makes frame timings meaningless.
 
-- **Launcher.** If the repository has `scripts/lib/launch-chrome.mjs`, use its `launchPlacedChrome({ place: 'offscreen', channel: 'chrome' })`. Otherwise launch with `--window-position=-2400,-2400` plus `--disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding`.
+- **Launcher.** If the repository has `scripts/lib/launch-chrome.mjs`, use its `launchPlacedChrome({ place: 'offscreen', channel: 'chrome' })`. Otherwise launch with `--window-position=-2400,-2400 --mute-audio` plus `--disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding`.
 - **Never minimize the window instead.** A minimized window drops `requestAnimationFrame` to 1 fps.
 - **Placement is in the environment.** Honor `CHROME_PLACE` when it is set, and pass the placement to any subagent or Codex brief that opens a browser, since they don't inherit it.
 - **Screenshots.** Save them where the machine's rules say (for example a screenshots drive), not in the repository.
@@ -17,7 +17,7 @@ Run WebGL checks in headed Chrome on the real GPU. Headless Chromium renders Web
 node .claude/skills/motion-design/scripts/stills.mjs <file-or-url> 2,10,17.5 <out-dir>
 ```
 
-Take stills at one point inside every chapter, including mid-transition times. Check them for overlaps, orphaned words, colour that has saturated to white, and labels colliding with shapes. Then watch the piece play at 1x to judge pacing and easing.
+Take stills at one point inside every chapter, including mid-transition times. Check them for overlaps, orphaned words, colour that has saturated to white, and labels colliding with shapes. Then judge pacing and easing from frame strips of a 1x capture (Reviewing motion from the export, below).
 
 ## Checks that caught real bugs (MAIMCOIL trailer, 2026-09-29)
 
@@ -52,7 +52,7 @@ Every MP4 of a canvas animation is encoded in the page with WebCodecs. Never rea
 
 1. Create a second canvas and renderer at the export resolution. The WebGL context needs `preserveDrawingBuffer: true` so `new VideoFrame(canvas, { timestamp, duration })` reads the finished frame.
 2. Pick the first supported config from `avc1.640033`, `avc1.4d0033`, `avc1.640028`, `avc1.42003e` via `VideoEncoder.isConfigSupported`, with `avc: { format: 'avc' }`.
-3. Mux with the MIT-licensed [mp4-muxer](https://github.com/Vanilagy/mp4-muxer) (`ArrayBufferTarget`, `fastStart: 'in-memory'`). Vendor the UMD build with its licence notice. mp4-muxer is now deprecated "in favor of Mediabunny" and gets no fixes; use [Mediabunny](https://github.com/Vanilagy/mediabunny) for new work. Its `CanvasSource` docs show no colour-space option, so check the output's colour tags with ffprobe.
+3. Mux with [Mediabunny](https://github.com/Vanilagy/mediabunny); vendor its build with its licence notice. Steps 2 and 4 encode, so feed it packets, not a canvas: `new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() })`, one `new EncodedVideoPacketSource('avc')` added with `output.addVideoTrack(source)`, then `await output.start()`. Pass each encoded chunk as `EncodedPacket.fromEncodedChunk(chunk)` in decode order, awaiting each `add`, with the encoder's `metadata` (its `decoderConfig`) on the first. After the last frame: `await encoder.flush()`, `source.close()`, `await output.finalize()`; the file is `output.target.buffer`. Check its colour tags with ffprobe. Pieces that already ship the MIT-licensed [mp4-muxer](https://github.com/Vanilagy/mp4-muxer) (`ArrayBufferTarget`, `fastStart: 'in-memory'`, UMD build vendored with its licence notice) keep it; it is deprecated "in favor of Mediabunny" and gets no fixes.
 4. For each frame: render at `t = f / fps`, encode with a keyframe every 2 s, close the VideoFrame, and wait for `dequeue` when `encodeQueueSize > 6`. Yield to the event loop every 30 frames so progress can paint.
 5. Download through an anchor with `download`. From Playwright, capture it with `page.waitForEvent('download')` and `saveAs`; returning the bytes through `evaluate` is too large.
 6. Browsers without WebCodecs need a clear error, not a silent failure. Wrap the export in `try/finally` so a thrown error still restores the live render loop.
@@ -156,6 +156,8 @@ ffmpeg -v error -ss 30.5 -t 4 -i out.mp4 -vf "fps=6,scale=480:-1,tile=4x6" -fram
 ```
 
 Cut one strip per transition and one strip of the whole piece at 1 fps for pacing. Tile long runs of stills into contact sheets (a page of `<img>` tags screenshotted by the same headed browser), so a full-timeline review costs a few images instead of dozens.
+
+To check every frame (a one-frame skip or cut that 6 fps sampling can miss), drop `fps=`: cut one 1 s strip per window, e.g. `-ss <t> -t 1 -vf "scale=320:-1,tile=6x5"` for 30 fps, and step `<t>` across the clip.
 
 ## Frame-stepped PNG export (last resort, owner's OK required)
 

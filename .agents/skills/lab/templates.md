@@ -3,15 +3,15 @@
 Two copy-paste starting points. Both are single self-contained files (inline JS+CSS, no imports, no build). Adapt the knob list to the element you're tuning — the structure (live-bound controls, seeded defaults, Copy Settings → JSON keyed by real constant names) stays the same.
 
 Shared rules:
-- Seed every control `value` at the element's CURRENT real value (opens at parity).
+- Seed every control `value` at the element's current real value (opens at parity).
 - Each control's `id` / JSON key = the real constant name (1:1 port map).
-- The `<pre>` mirror is the PRIMARY channel: it shows the JSON live (updates on every input) so the user can read/screenshot/paste it. `Copy Settings` is a best-effort OS-clipboard copy on top — it must never be the only way out, because `navigator.clipboard` is commonly `undefined` on `file://` (see SKILL.md step 3).
+- The `<pre>` mirror is the main channel: it shows the JSON live (updates on every input) so the user can read/screenshot/paste it. `Copy Settings` is a best-effort OS-clipboard copy on top — it must never be the only way out, because `navigator.clipboard` is commonly `undefined` on `file://` (see SKILL.md step 3).
 
 ---
 
 ## A. Canvas / game-feel lab
 
-Procedurally mocks the effect (here: a particle burst on a throttle). Replace the `KNOBS` list and the `render()`/`burst()` bodies with your element. Do NOT import the real engine — reproduce the look.
+Procedurally mocks the effect (here: a particle burst on a throttle). Replace the `KNOBS` list and the `render()`/`burst()` bodies with your element. Do not import the real engine — reproduce the look.
 
 ```html
 <!doctype html><html><head><meta charset="utf-8"><title>fx lab</title>

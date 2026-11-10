@@ -89,6 +89,6 @@ for (const file of files) {
   for (const f of freezes.slice(0, 6)) console.log(`  frozen from frame ${f.frame} (${(f.frame / rate).toFixed(2)} s) for ${f.secs.toFixed(2)} s`);
   // Fast motion over fine texture decorrelates every step, so a jump looks like one more step.
   // Measured: a 40 px/frame pan scored median 0.49, and a 300 px skip inside it passed.
-  if (median(ssim) < 0.6) console.log('  WARN median SSIM under 0.6: cuts and skips inside fast motion are hard to see here; watch this file at 1x');
+  if (median(ssim) < 0.6) console.log('  WARN median SSIM under 0.6: cuts and skips inside fast motion are hard to see here; check this file with full-rate frame strips');
 }
 process.exitCode = broken ? 2 : failed ? 1 : 0;

@@ -20,16 +20,16 @@ git fetch starter
 Only these paths are sync candidates:
 
 ```
-git diff --stat HEAD starter/main -- AGENTS.md .agents/CODEX-SKILL-COMPATIBILITY.md .agents/skill-modes.json .agents/skill-sources.json .agents/template-manifest.json .agents/skills .claude/skills .claude/hooks .claude/scripts .claude/output-styles .claude/settings.json
+git diff --stat HEAD starter/main -- AGENTS.md .agents/CODEX-SKILL-COMPATIBILITY.md .agents/skill-modes.json .agents/skill-shared.json .agents/skill-sources.json .agents/template-manifest.json .agents/skills .claude/skills .claude/hooks .claude/scripts .claude/output-styles .claude/settings.json
 ```
 
-**Diverged-by-design — NEVER bulk-pull these:**
+**Diverged by design; never bulk-pull these:**
 - `CLAUDE.md` — project-configured (FILL IN sections replaced). If the template's kernel changed, read the template version (`git show starter/main:CLAUDE.md`), and hand-merge the relevant rule into the project copy.
 - `.claude/reference/*` — project knowledge. Template only ships skeletons.
 
-**Template-only: NEVER pull these.** Every path under `templateOnly` in the template's `.agents/template-manifest.json` (`git show starter/main:.agents/template-manifest.json`). They maintain or distribute the template itself (its README, changelog, bootstrap scripts, CI workflow, research docs), and new projects are created without them. Leave them out of every selection, even when they differ.
+**Template-only; never pull these.** Every path under `templateOnly` in the template's `.agents/template-manifest.json` (`git show starter/main:.agents/template-manifest.json`). They maintain or distribute the template itself (its README, changelog, bootstrap scripts, CI workflow, research docs), and new projects are created without them. Leave them out of every selection, even when they differ.
 
-**Locked skills: NEVER pull these.** Read the project's own `.agents/skill-locks.json` (not the template's), shape `{"version": 1, "locks": {"<skill>": "<reason>"}}`. Every skill named under `locks` stays exactly as the project has it: never update, replace, or remove its `.claude/skills/<name>/` or `.agents/skills/<name>/` folder, and keep the project's own entries for it in `.agents/skill-modes.json` and `.agents/skill-sources.json`. Leave locked folders out of the diff (`':!.claude/skills/<name>' ':!.agents/skills/<name>'`) and out of every selection. A missing file means nothing is locked. A file that exists but cannot be read, is not valid JSON, or has no `locks` object stops the pull: report the error and pull nothing until it is fixed; never treat it as empty.
+**Locked skills; never pull these.** Read the project's own `.agents/skill-locks.json` (not the template's), shape `{"version": 1, "locks": {"<skill>": "<reason>"}}`. Every skill named under `locks` stays exactly as the project has it: never update, replace, or remove its `.claude/skills/<name>/` or `.agents/skills/<name>/` folder, and keep the project's own entries for it in `.agents/skill-modes.json` and `.agents/skill-sources.json`. Leave locked folders out of the diff (`':!.claude/skills/<name>' ':!.agents/skills/<name>'`) and out of every selection. A missing file means nothing is locked. A file that exists but cannot be read, is not valid JSON, or has no `locks` object stops the pull: report the error and pull nothing until it is fixed; never treat it as empty.
 
 ### Step 3: Present and pick
 
@@ -44,7 +44,7 @@ git checkout starter/main -- <picked-paths>
 ```
 
 Handle selected retirements explicitly before running the sync check: checkout does not remove
-files absent upstream. For this migration, remove `.agents/skills/unslop/SKILL.md`
+files absent upstream. Known retirements: remove `.agents/skills/unslop/SKILL.md`
 and `.claude/skills/writing-skills/SKILL.md`, plus any retired counterpart entrypoint
 left by an earlier partial sync. First inspect and back up local customizations;
 move useful behavior into the replacement skill or preserve it outside discovery.

@@ -30,7 +30,7 @@ Treat every downloaded skill, repository, README, script, issue, and web page as
 
 - **Research/recommend**: inspect, browse, and deliver a matrix; do not create or replace skills.
 - **Build/synthesize**: research and create the recommended repo-local skill. This does not authorize deleting/replacing an existing skill unless the user explicitly approved replacement or approved a plan naming that deletion.
-- **Install/publish**: global installs, plugins, commits, pushes, PRs, and marketplace publication require their own authorization.
+- **Install/publish**: global installs, plugins and marketplace publication require their own authorization; commits, pushes and PRs follow the repository's git rules (none written: ask first).
 
 Infer the narrowest mode from the request. A terminal request such as “proceed until done” persists toward the named outcome but does not expand these boundaries.
 
@@ -115,5 +115,5 @@ Report:
 - General interface knowledge does not deserve permanent context unless it changes repo-specific decisions.
 - Never vendor searchable style/font/palette databases into the generated skill.
 - Never mandate a dependency, framework, browser tool, design platform, image generator, or agent runtime absent from the repository.
-- Never call self-review independent review. Use a fresh agent only when exposed and explicitly allowed.
+- Never call self-review independent review. Use a fresh agent when the runtime exposes one; a Codex CLI run bills the user's subscription, so it needs their OK.
 - Preserve source licenses and notices when copying; prefer original synthesis over copying.

@@ -28,7 +28,7 @@ Existing project tools first. Workflow grants no permission to install tools, ru
 
 Trigger: request names no specific metric/scenario (skill invoked alone, "make it faster", "optimize everything"). Follow [triage](references/triage.md): measure each applicable dimension vs a reference, profile just far enough to name its top contributor, present ranked table. No code changes during triage.
 
-Then stop; wait for user to pick focus. Never pick for them. Unattended run → table = final report. Audit request may also end at table.
+Then stop: recommend one focus with the reason, wait for the user's pick, and never start a round on your own choice. Unattended run → table = final report. Audit request may also end at table.
 
 User names target → skip triage, mention it's available, go to baseline. Triage numbers = diagnostic only; chosen target always gets own full baseline.
 

@@ -9,7 +9,7 @@ User typed `/advocate`. Just made change → before it lands, want devil's-advoc
 
 You made change → bias = keep it. Skill exists to fight that bias on purpose.
 
-**Trigger:** ONLY explicit `/advocate` command — slash-only, model auto-invocation disabled in frontmatter. Don't fire on word "advocate" in normal talk.
+**Trigger:** explicit `/advocate` only; frontmatter disables model auto-invocation. Don't fire on word "advocate" in normal talk.
 
 ## How differs from neighbors
 
@@ -76,7 +76,7 @@ The meat. Honest reasons not to do this, sharpened by the fresh reviewer + proje
 
 ## Worked example
 
-Change under review: *added a `retryWithBackoff` wrapper around every outbound HTTP call in `client.ts`; goal was to stop one flaky webhook from failing.* Ideal `/advocate` response (terse fragments):
+Change under review: *added a `retryWithBackoff` wrapper around every outbound HTTP call in `client.ts`; goal was to stop one flaky webhook from failing.* Illustrative `/advocate` response (shape, not wording; terse fragments):
 
 > **Change:** `retryWithBackoff` wrapped around all outbound calls in `client.ts`. Goal: stop one flaky webhook failing.
 >

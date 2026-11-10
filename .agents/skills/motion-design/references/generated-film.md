@@ -94,11 +94,11 @@ Exit 0 pass, 1 fail, 2 could not measure (missing file, not a video, under 8 fra
 Measured 2026-10-28 on synthetic clips (ffmpeg 8.0.1): smooth zoom PASS (median 0.989); hard cut caught (0.504 vs local 0.986); cut to the inverted frame caught (SSIM goes negative; parsed signed); zoom jump mid-push caught (0.482 vs 0.984); 1.5 s hold caught as 1.54 s freeze; textured pan 40 px/frame PASS (median 0.488).
 
 Limits:
-- Median SSIM under 0.6 (fast motion over fine texture) → gate prints WARN: a 300 px skip inside the 40 px/frame pan passed. Watch those files at 1x.
+- Median SSIM under 0.6 (fast motion over fine texture) → gate prints WARN: a 300 px skip inside the 40 px/frame pan passed. Check those files with full-rate frame strips (verify-export.md, Reviewing motion from the export), or ask the owner to watch them at 1x.
 - Moving over featureless area (flat sky, black) counts as frozen. On a scroll film it reads as one; recompose or shorten.
 - Pinned clips often ease in and out → stall at each seam. Gate flags it on the joined film; trim ease frames or retime.
 - Not for ping-pong loops: frames mirror around the reversal, so the turnaround reads as a freeze (measured 0.71 s on a 4 s loop). Gate the source clip before reversing it.
-- Gate proves continuity only. Still watch film at 1x and slow scroll for wobble, morphing faces, physics.
+- Gate proves continuity only. Still check the film for wobble, morphing faces and physics: full-rate frame strips, a slow-scroll capture, and the owner's 1x watch.
 
 ## Show it
 

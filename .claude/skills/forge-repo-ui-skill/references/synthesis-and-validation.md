@@ -119,7 +119,7 @@ Evaluate at least these repository-adjusted prompts:
 6. **Absent-tool temptation**: should not introduce shadcn, Motion, Figma, image generation, or another absent dependency.
 7. **Conflicting external advice**: local product/design truth must win.
 
-Use a fresh independent agent only when the environment exposes one and the user permits it. Pass the skill and realistic task, not expected conclusions. Otherwise label validation as direct/static, never independent.
+Use a fresh independent agent when the environment exposes one (a Codex CLI run needs the user's OK: it bills their subscription). Pass the skill and realistic task, not expected conclusions. Otherwise label validation as direct/static, never independent.
 
 ## Repository checks
 
@@ -148,4 +148,4 @@ Scenario validation:
 Unverified:
 ```
 
-Do not commit, push, publish, install dependencies, or modify an external checkout unless explicitly authorized.
+Do not publish, install dependencies, or modify an external checkout unless explicitly authorized; commit and push in this repository per its git rules (none written: ask first).

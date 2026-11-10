@@ -60,7 +60,7 @@ A template leftover is a folder under `.claude/skills/` or `.agents/skills/` wit
 
 Links in the firmware layer are listed under SYMLINKS and never followed; a copy through one can land outside the folder, so decide each by hand. A shallow template clone gets a WARNING line: stale detection then sees only part of the history, so re-clone as in Step 1.
 
-Skill dependencies: detect lists DEPENDENCY GAPS, computed over the skills the project will have (present, plus ADD, minus SKIPPED): each `skills.dependencies` need missing from that set, marked when the project recorded it as removed, and each `skills.required` skill the project recorded as removed (it is kept or added anyway, so the record needs fixing). Say so in the preview. Adding the dependency is the default; leaving it out means the dependent skill cannot run.
+Skill dependencies: detect lists DEPENDENCY GAPS, computed over the skills the project will have (present, plus ADD, minus SKIPPED): each `skills.dependencies` need missing from that set or turned `off` in the project's `.claude/settings.json` `skillOverrides` (a dependent that is itself off is skipped), marked when the project recorded it as removed or turned it off, and each `skills.required` skill the project recorded as removed (it is kept or added anyway, so the record needs fixing). Say so in the preview. Adding the dependency is the default; leaving it out means the dependent skill cannot run. A need the project recorded as removed or turned off was the user's own choice, so it is asked per item in Step 3, not applied on the preview approval.
 
 ## Step 3: preview and ask
 
@@ -68,7 +68,8 @@ Show one grouped preview before writing anything: additions (counts plus skill n
 
 - each CONFLICT: keep mine (default), take template, or hand-merge;
 - each kernel section present in both but differing: keep mine (default) or show the template text so the user can adopt parts;
-- any JSON scalar conflict (for example a different `outputStyle`): keep mine by default.
+- any JSON scalar conflict (for example a different `outputStyle`): keep mine by default;
+- each optional dependency need the project recorded as removed or turned off: bring it back (default; copy it back, and delete its name from `.agents/removed-skills.json` and drop its `off` override, whichever apply) or leave it out (the skills that need it cannot run). A required skill is not asked: it is restored anyway, and its record entry and `off` override go.
 
 ADD, UPDATE-STALE, and additive MERGE items apply on one approval of the preview. Nothing the user edited is replaced without an explicit per-item yes.
 
@@ -76,13 +77,13 @@ ADD, UPDATE-STALE, and additive MERGE items apply on one approval of the preview
 
 Before replacing or rewriting any existing file, copy it to `.tmp/apply-firmware-backup-<timestamp>/<same path>` and make sure `.tmp/` is gitignored.
 
-- **ADD / UPDATE-STALE**: copy from the clone, preserving path. Copy whole skill folders including `references/`, `scripts/`, `assets/`, and license files.
+- **ADD / UPDATE-STALE**, and SKIPPED skills brought back in Step 3: copy from the clone, preserving path. Copy whole skill folders including `references/`, `scripts/`, `assets/`, and license files.
 - **CLAUDE.md**: missing file gets the template kernel. Existing file: append missing `##` sections in template order, keep every project section and every configured FILL IN answer, never rewrite a section the user changed without approval. Missing rows in the reference-library table get added.
 - **AGENTS.md**: same section merge; it owns Codex runtime safety, so missing sections matter.
-- **`.claude/settings.json`**: deep merge. Add missing keys, union arrays (`permissions.allow`, `permissions.deny`), keep project hooks and add template hooks whose `command` is absent (detect lists them as hook additions, by command). An addition marked `replaces` differs from a project hook only in quoting: swap that project command for the template one instead of adding a second hook. Keep the project value on scalar conflicts unless approved.
+- **`.claude/settings.json`**: deep merge. Add missing keys, union arrays (`permissions.allow`, `permissions.deny`), keep project hooks and add template hooks whose `command` is absent (detect lists them as hook additions, by command). An addition marked `replaces` differs from a project hook only in quoting: swap that project command for the template one instead of adding a second hook. Keep the project value on scalar conflicts unless approved. Remove only the `skillOverrides` `off` entries for skills brought back in Step 3 or required.
 - **`.mcp.json`**: add missing `mcpServers` entries; a same-name server with a different config is a CONFLICT.
-- **`.agents/skill-modes.json`**: add missing entries; keep project entries, including deliberate `disabled` choices. Leave out entries for SKIPPED skills; detect already drops them from the keys to add.
-- **`.agents/removed-skills.json`**: the project's record; keep it as is. Copy the template's empty record only when the file is missing.
+- **`.agents/skill-modes.json`**: add missing entries; keep project entries, including deliberate `disabled` choices. Leave out entries for SKIPPED skills not brought back; detect already drops them from the keys to add, so add the entries for skills brought back from the template's file.
+- **`.agents/removed-skills.json`**: the project's record; keep it as is, except names the user chose to bring back in Step 3 and required skills, which leave the record. Copy the template's empty record only when the file is missing.
 - **RETIRED**: delete only the files the user approved; back them up first like any replaced file.
 - **`.gitignore` / `.gitattributes`**: append missing lines under a `# Harness` comment; never reorder or drop existing lines.
 - **`.claude/reference/*`**: add missing skeleton files only. Existing files are project knowledge.
@@ -94,7 +95,7 @@ If the kernel has FILL IN markers after merging, or the project has no `.github/
 
 ## Step 6: verify and report
 
-Rerun `detect.mjs`. Expected result: ADD and UPDATE-STALE are empty; MERGE lists only items the user chose to keep; CONFLICT and RETIRED list only declined items. Validate every JSON file parses, `bash -n .claude/hooks/*.sh`, and that the skill folder names match their frontmatter `name`.
+Rerun `detect.mjs`. Expected result: ADD and UPDATE-STALE are empty; MERGE lists only items the user chose to keep; CONFLICT and RETIRED list only declined items; DEPENDENCY GAPS lists only needs the user chose to leave out. Validate every JSON file parses, `bash -n .claude/hooks/*.sh`, and that the skill folder names match their frontmatter `name`.
 
 Report: files added, refreshed, merged (with the keys and sections), conflicts kept or replaced, backup path, validation output, remaining FILL IN markers, and that new skills and settings load only in a new session: a new Codex session discovers the added `.agents/skills/`, and Claude Code needs a restart.
 

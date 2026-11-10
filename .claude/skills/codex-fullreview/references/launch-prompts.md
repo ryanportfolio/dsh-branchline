@@ -1,6 +1,6 @@
 # codex-fullreview: launch command and per-scope prompts
 
-Mandatory read from `../SKILL.md` Step 3 before launch. Moved verbatim from Step 3.
+Mandatory read from `../SKILL.md` Step 3 before launch.
 
 For example, a branch diff in a POSIX shell:
 ```bash

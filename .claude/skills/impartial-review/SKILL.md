@@ -4,7 +4,7 @@ description: "Review, audit, or stress-test recent code changes with fresh indep
 
 # Impartial review
 
-You are reviewing work that was probably written too fast — possibly by you. Your job is to find what's wrong, not validate what's right. **If you wrote the code yourself, look harder, not softer.** Bias toward finding real issues, even at the cost of being uncomfortable.
+The work under review may be this session's own. Report what is wrong; confirming what works is not the goal.
 
 The hardest bias to overcome is defending code you just wrote. The fix is mechanical: dispatch the actual review to fresh-context reviewer subagents that have not seen the conversation that produced the code. Your job in the main session is to gather the diff, brief the subagents, and consolidate findings.
 
@@ -40,7 +40,7 @@ Findings are bound to the snapshot's scope hash. Before accepting findings, run 
 
 ## Step 2: Pick review mode
 
-**Mandatory:** read [the review buckets](references/buckets.md) completely before picking a review mode in Step 2 and before writing any reviewer prompt. It defines Buckets A–G and the bullets each prompt pastes.
+Before picking a review mode in Step 2 and before writing any reviewer prompt, read [the review buckets](references/buckets.md) completely. It defines Buckets A–G and the bullets each prompt pastes.
 
 - **Tiny diff (< 50 changed lines, single file, no schema/auth/cache code):** use one fresh leaf reviewer covering all relevant buckets, including project rules.
 - **Everything else:** cover all five buckets with fresh reviewers, one per bucket, in bounded batches (see Step 3).
@@ -61,7 +61,7 @@ Give each reviewer a self-contained prompt and fresh context without the convers
 
 **Dispatch from Codex.** Check what the session exposes before assuming; a config flag is not proof. With multi-agent tools, dispatch the selected reviewers in bounded batches with the selected model settings. Without them, check authenticated Codex CLI and run one read-only `codex exec` process per selected reviewer with bounded concurrency: each is a new process, so the fresh context is structural rather than promised. Every child gets the leaf-reviewer line the prompt templates below carry: a `codex exec` process that finds this skill and dispatches its own five turns one review into twenty-five.
 
-**Mandatory for the `codex exec` route:** before launching any reviewer process, read [Codex CLI dispatch commands](references/codex-cli-dispatch.md) and follow it exactly.
+For the `codex exec` route: before launching any reviewer process, read [Codex CLI dispatch commands](references/codex-cli-dispatch.md) and follow it exactly.
 
 Give every run its own `$RUN` directory. Require each process to exit successfully with a non-empty new report, and record its exit status, report hash, and observed model/effort. A report with failed inspection has incomplete coverage despite exit 0. Recheck source identity before accepting findings. Follow `codex-review` for bounded process monitoring; log silence alone does not establish a stall.
 
@@ -83,7 +83,7 @@ Never put the author brief in a Bucket A–E or G prompt, including the tiny-dif
 
 For a full review, Bucket E (project-aware) gets an **extended** prompt; the other four use the standard template. For a tiny diff, combine the relevant instructions into one prompt and remove statements that assume other reviewers exist.
 
-**Mandatory:** before dispatching any reviewer, read [the sub-reviewer prompt templates](references/sub-reviewer-templates.md) completely and build every reviewer prompt from it verbatim (A–D standard, E extended, F and G variants). Never hand-write a prompt that drops its leaf-reviewer, plan-mode, verification, severity, confidence or output lines.
+Before dispatching any reviewer, read [the sub-reviewer prompt templates](references/sub-reviewer-templates.md) completely and build every reviewer prompt from it verbatim (A–D standard, E extended, F and G variants). Never hand-write a prompt that drops its leaf-reviewer, plan-mode, verification, severity, confidence or output lines.
 
 ## Step 4: Verification rule
 
@@ -149,4 +149,4 @@ In every report, list any standard bucket (A–E) that had no reviewer, each wit
 
 ## Anti-patterns to avoid
 
-**Mandatory:** before presenting the Step 6 report, read [the anti-patterns](references/anti-patterns.md) and check the report and your verification against every item.
+Before presenting the Step 6 report, read [the anti-patterns](references/anti-patterns.md) and check the report and your verification against every item.

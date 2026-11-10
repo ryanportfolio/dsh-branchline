@@ -1,6 +1,6 @@
 # Sub-reviewer prompt templates
 
-Loaded from `SKILL.md` Step 3. Moved verbatim; build every reviewer prompt from these.
+Loaded from `SKILL.md` Step 3. Build every reviewer prompt from these.
 
 ### Subagent prompt template (Buckets A–D)
 
@@ -26,10 +26,10 @@ Resolve every path against the absolute snapshot and workspace paths given in
 the scope, never against your current directory or another checkout.
 
 ## Your bucket: [A / B / C / D — name]
-Review ONLY these categories:
+Review these categories only:
 [paste the bucket's bullets]
 
-Do NOT report findings outside your bucket. The main session merges with the
+Report nothing outside your bucket. The main session merges with the
 other reviewers covering the rest.
 
 ## Verification rule
@@ -61,14 +61,13 @@ MED  — likely, but I only partially checked.
 LOW  — suspected; I could not fully verify within my time budget.
 
 Report LOW-confidence findings too — tag them LOW and let the main-session merge
-step adjudicate. Never drop a real finding because you're unsure; that call
-belongs downstream, in the main-session merge step.
+step adjudicate.
 
 Judge coverage by the code paths and checks inspected, not the number or
 severity of findings. A clean review or a list of minor findings is valid.
 
 ## Output format
-Return ONLY a list of findings in this format, severity-ordered (🔴 first):
+Return findings in this format, severity-ordered (🔴 first), then the sections below:
 
 ## 🔴 Short title  ·  confidence: HIGH|MED|LOW
 `path/to/file.ts:123`
@@ -87,9 +86,7 @@ After the findings, add a section:
 
 If you genuinely found nothing after running every category check, say so
 explicitly: "Ran through [list categories]; no issues at any severity in my
-bucket." Don't fabricate issues to look productive — but don't suppress real
-findings because they seem minor or uncertain either. Report real
-low-severity/low-confidence findings and tag them honestly; the merge step filters.
+bucket."
 ```
 
 ### Subagent prompt template (Bucket E only)
@@ -107,7 +104,8 @@ is the findings report below.
 
 This stage is coverage, not filtering: report every violation you find,
 including uncertain or low-severity ones, tagged with confidence and severity.
-The main-session merge step verifies and ranks.
+The main-session merge step verifies and ranks. Do not invent violations;
+fabrication is the only thing to omit.
 
 ## Required reading (do this BEFORE looking at the diff)
 
@@ -178,7 +176,7 @@ Report LOW-confidence findings too — tag them LOW and let the merge step
 adjudicate. Never drop a real violation because you're unsure.
 
 ## Output format
-Return ONLY a list of findings in this format, severity-ordered (🔴 first):
+Return findings in this format, severity-ordered (🔴 first), then the sections below:
 
 ## 🔴 Short title  ·  confidence: HIGH|MED|LOW
 `path/to/file.ts:123`
@@ -197,9 +195,7 @@ After the findings, add a section:
 - [Item that looked like a violation but is OK, with a one-line reason.]
 
 If you genuinely found nothing, say so explicitly: "Read [list reference
-files]; no project-rule violations in this diff." Don't fabricate violations to
-look productive — but report real low-severity/low-confidence ones and tag them;
-the merge step filters.
+files]; no project-rule violations in this diff."
 ```
 
 ### Subagent prompt template (Bucket F only)

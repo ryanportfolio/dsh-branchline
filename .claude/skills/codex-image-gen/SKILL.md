@@ -15,8 +15,8 @@ Codex CLI runs on the user's ChatGPT/Codex subscription and its agent carries an
 codex --version && codex login status
 ```
 
-- Expect `Logged in using ChatGPT`. Not logged in → STOP and ask the user to run `codex login` (browser OAuth) in their own terminal. Never handle credentials yourself.
-- If the project has its own art-direction or visual-style skill/reference, load it FIRST and fold its constraints into the image prompt.
+- Expect `Logged in using ChatGPT`. Not logged in → stop and ask the user to run `codex login` (browser OAuth) in their own terminal. Never handle credentials yourself.
+- If the project has its own art-direction or visual-style skill/reference, load it before writing the image prompt and fold its constraints in.
 
 ## Recipe
 

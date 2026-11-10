@@ -46,7 +46,7 @@ Before building, write one sentence per visual saying what it acts out, for exam
 
 ## Intro
 
-Elements rise from below and resolve from blur to sharp, staggered in reading order. Defaults: text and rows rise 10 px from a 4 px blur; whole cards rise 24 px from `scale(0.985)` and a 6 px blur; icons and badges grow from 0.82 to 0.88 of their size around their own centre. Containers start 80 to 90 ms apart, items inside a group 30 to 80 ms apart, and a full frame lands in about 2 to 2.5 s. Inside a container the order is header, labels, values, then visuals. Anything hidden under another layer in the final frame arrives after its cover and leaves before it, so it never shows through.
+Elements rise from below and resolve from blur to sharp, staggered in reading order. Defaults: text and rows rise 10 px from a 4 px blur; whole cards rise 24 px from `scale(0.985)` and a 6 px blur; icons and badges grow from 0.9 to 0.94 of their size around their own centre. Containers start 80 to 90 ms apart, items inside a group 30 to 80 ms apart, and a full frame lands in about 2 to 2.5 s. Inside a container the order is header, labels, values, then visuals. Anything hidden under another layer in the final frame arrives after its cover and leaves before it, so it never shows through.
 
 An app frame built from joined surfaces (a sidebar and a body) keeps those surfaces still and opaque from the first frame; only their contents arrive. Separate cards arrive themselves, with their contents following inside them, and each card clips its own contents to its exact shape and radii.
 

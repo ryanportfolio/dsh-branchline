@@ -57,7 +57,7 @@ Put each spot shot beside its reference capture.
 
 Stills prove layout, not motion. Watch the whole tour at 1x in a headed browser (or read dense frame strips from an export, per the motion-design skill's `verify-export.md`).
 
-- [ ] Pacing: every string readable at the pace it appears; holds long enough for the eye to land.
+- [ ] Pacing: every string readable at the pace it appears; holds long enough for the eye to land, and no longer; each change lands on an actor action.
 - [ ] Easing: arrivals ease out, nothing scales up from 0, no linear moves on UI.
 - [ ] The actor moves with intent and pauses before taps.
 
@@ -76,6 +76,21 @@ Stills prove layout, not motion. Watch the whole tour at 1x in a headed browser 
 - [ ] Nothing plays before the host sends `start`, arrow keys included.
 - [ ] Tab stays inside the caption controls while the tour is open.
 
+## 9. Viewer questions
+
+A walkthrough is the `explainer` type in the motion-design skill's `references/critique.md`. Ask its questions of the finished tour, read as below; steps 1 to 8 already answer the rest.
+
+A failed `loop` or `point` fails the tour. Each verdict cites the capture path and the `t` it judged; one without them is returned.
+
+- Covered above: `read` (steps 3, 6, 7) and `pace` (step 6). Walkthroughs have no audio, so no `sound`.
+- [ ] `loop` (decisive), per chapter: one action carried to its result, as step 2 checks. A tour is separate chapters by design (see inventory.md), so the tour-level "no feature list" half does not apply.
+- [ ] `shown`: in each chapter the stage does the action its title and takeaway claim, with the takeaway's condition visible. Step 5 proves the claim is true; this proves the stage shows it and does not leave it to the caption.
+- [ ] `point`: run `node checks/review-all.mjs --url <player>?capture=1 --out <screenshots>/<project>/walkthrough/blind --themes <default theme>` (stage only, no caption) and copy its per-moment PNGs, renamed `01.png`, `02.png`, ... in play order. Never pass the `sheet-*` files or `meta.json`: they print titles and takeaways. A fresh subagent given only the `Audience:` line and those copies writes one sentence on what the product lets this viewer do. A second fresh agent, given only that sentence and the storyboard's `Tour:` line, returns same or different. The author never makes either call.
+- [ ] `own`: the same critic, ignoring the name and logo, names what else each chapter could be for. A chapter that fits any app of its kind (sign in, invite a teammate) fails.
+- [ ] `land`: the last chapter's end frame and CTA tell the viewer what to do next.
+- [ ] `open`: an embedded tour starts on the host's `start`, so only the second half applies: chapter 1 sets up a goal or problem the rest of the tour delivers on. An MP4 exported for a feed gets the full `open`, judged muted at phone size.
+- Not used: `q-read-time` (needs the motion-design engine's caption records; the step 6 watch judges caption timing instead) and `q-best` (needs wow-loop rounds). A tour run through `wow-loop` adds `q-best` per critique.md.
+
 ## Reporting
 
-For each chapter: pass or the open issues, with the screenshot path. Then the product bug list, the "not in the real UI, so not shown" list from builders, and any visual doubt nobody resolved.
+For each chapter: pass or the open issues, with the screenshot path. Then the step 9 tour results (the `point` sentence and its verdict, `open`, `land`), the product bug list, the "not in the real UI, so not shown" list from builders, and any visual doubt nobody resolved.

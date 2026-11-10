@@ -1,6 +1,6 @@
 # Writing: pattern catalog
 
-Before/after examples for each tell. Read this file only when a pattern named in SKILL.md is ambiguous in the text at hand.
+Before/after examples for each tell. Read this file only when a pattern named in SKILL.md is ambiguous in the text at hand. Where an After states a fact the Before lacks, assume the writer had it on hand; no example licenses adding a fact, source or attribution.
 
 Patterns 1-27 derive from Wikipedia's [Signs of AI writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing) guide (WikiProject AI Cleanup). 28-34 are plain-speech extensions. 35-45 are the rhetoric patterns from petergyang/no-ai-slop (MIT), with examples written here. 46-54 are the marketing-copy patterns from ItsssssJack/SlopMonster (MIT), with examples written here.
 
