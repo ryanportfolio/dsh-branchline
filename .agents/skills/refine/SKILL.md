@@ -133,4 +133,4 @@ pending later use does not block a local edit.
 
 Report changed files, evidence, verification, and limits. Zero changes is valid. Commit,
 push, cross-project synchronization, and another provider's paid review need existing or
-explicit authorization; there is no mandatory one-friction/one-commit rule.
+explicit authorization.

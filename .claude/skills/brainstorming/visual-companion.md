@@ -266,7 +266,6 @@ If `$STATE_DIR/events` doesn't exist, the user didn't interact with the browser 
 
 - **Scale fidelity to the question** — wireframes for layout, polish for polish questions
 - **Explain the question on each page** — "Which layout feels more professional?" not just "Pick one"
-- **Iterate before advancing** — if feedback changes current screen, write a new version
 - **2-4 options max** per screen
 - **Use real content when it matters** — for a photography portfolio, use actual images (Unsplash). Placeholder content obscures design issues.
 - **Keep mockups simple** — focus on layout and structure, not pixel-perfect design

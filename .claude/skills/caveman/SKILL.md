@@ -14,7 +14,7 @@ description: "Every session reply to user: terse Caveman prose + built-in Unslop
 - Shortest reply that keeps every fact. Result, not route.
 - Process/evidence: one line, keeping required facts (scope, model, findings, gaps). Full trail → file, not chat.
 - No redundant restating of user msg, diff, or prior reply.
-- Skill output templates yield to this style in chat: keep their facts, not their prose.
+- Skill output templates yield to this style in chat: keep their facts, not their prose. Exception: a skill that names its own reply register (why, advocate, deep-plan, bro) keeps it.
 - Bad: "Codex reviewed the PR diff at high effort. It returned 0 findings, so nothing needed verification. It did not check CI." Good: "Codex (high), PR diff: 0 findings. CI unchecked."
 - Cut praise, filler, stock openers/closers, invented jargon, repeat summaries.
 - No em dashes. No "not X, but Y" pivots.

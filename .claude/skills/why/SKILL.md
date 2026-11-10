@@ -87,7 +87,7 @@ A real header (`### Why it matters`). One to three sentences: the stakes, the pr
 
 ## Worked example
 
-Pick under review: *"Use Wouter instead of React Router for the new settings pages."* An ideal `/why` response (terse fragments):
+Pick under review: *"Use Wouter instead of React Router for the new settings pages."* One illustrative `/why` response (shape, not wording; terse fragments):
 
 > **Pick:** Wouter for the new settings pages, not React Router.
 >

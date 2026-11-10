@@ -50,7 +50,7 @@ One round per picked finding, in severity order, one implementer at a time (fixe
 - Check visibility: `gh repo view --json visibility -q .visibility`.
 - Commit messages and the PR body describe each change in neutral terms: the invariant now enforced and where ("validate the tenant id against the session in `orders.ts` before the lookup"). For a public repository, no reproduction steps, payloads, exploit framing, severity labels, or links to the output directory until the fix is merged. A private repository may name the finding's title; still no secret values.
 - Before opening the PR, check `gh pr list --head <branch>`; push to an existing PR instead of opening another. Push with `git push -u origin HEAD`, then `gh pr create --head <branch> --body-file <file>`.
-- Opening the PR triggers `$claude-review` in the same turn, per `AGENTS.md`. Verify its findings, fix the confirmed ones, push.
+- Opening the PR triggers the Opus review in the same turn, per `AGENTS.md`. Verify its findings, fix the confirmed ones, push.
 - For a public repository with outside users, offer to draft a private GitHub security advisory for the owner to publish after the fix ships. Publishing is the owner's decision.
 - Never merge as part of this skill unless the owner asks; merging follows the kernel's review rule.
 

@@ -32,18 +32,18 @@ Ground every frame in the real thing: real assets restyled, real product strings
 | No periods in headings or large display text (statements, taglines, end slate); product UI copy keeps its own punctuation | none expected |
 | No MP4 or video export until every wow-loop round passes; export is the last step | "export a draft now" |
 | One approval checkpoint: beat sheet plus animatic, then run to the end | "autonomous" skips it; "check in after each scene" adds more |
-| Maximum parallel fan-out (see Parallelize); Sonnet for subject research, Opus for creative calls; never Haiku | "no subagents", "keep it small" |
+| Maximum parallel fan-out (see Parallelize); Sonnet for subject research, the default subagent model for creative calls (Sonnet if that would be Haiku); never Haiku | "no subagents", "keep it small" |
 | `/codex-fullreview` after each major step; Codex review before any merge | "skip codex" (the before-merge review stays: kernel rule) |
 | Games: trailer structure per motion-design (gameplay fast, hook early, logo on end slate), real enemies, bosses and systems | "teaser only", "no bosses" |
 | Commit and push on a feature branch, open a PR when done | "local only" |
 
 ## Parallelize
 
-Speed comes from fan-out. Serial work that could run side by side is a defect in the run.
+Speed comes from fan-out.
 
 - Launch every independent agent of a step in one message, never one after another. Before each dispatch, ask what else could start now.
 - Subject research runs on Sonnet (`model: "sonnet"`): what the subject is, what it does, how it looks, its copy, assets, store or marketing pages, code facts. Split by source (live site, repo copy, design tokens and assets, feature code, store page, sprites, enemy and boss code) so each agent owns one slice with no overlap. Six or more recon agents is normal for a large subject.
-- Opus (`model: "opus"`) takes the judgment calls: animator research, direction pitches, hero scenes, restyled assets, critics.
+- Judgment calls (animator research, direction pitches, hero scenes, restyled assets, critics) omit `model`, so they run on `CLAUDE_CODE_SUBAGENT_MODEL` when set, else the session model. If that would be Haiku, pass `model: "sonnet"`. Honor explicit user model choices.
 - Steps 2 and 3 start together. Director pitches run in parallel. Build modules with disjoint files run in parallel. Critics of one wow-loop round run in parallel.
 - Serialize only what must be: one writer per file set, one owner per browser profile, performance measurements, and anything that needs a prior result.
 - The orchestrator stays free: it merges reports, keeps `facts.md` and state current, and dispatches the next wave; it does not do recon itself.
@@ -52,10 +52,10 @@ Speed comes from fan-out. Serial work that could run side by side is a defect in
 
 1. **Locate and branch.** Find the subject's repo: current repo, then sibling folders of the current checkout, then `gh repo list`. Verify on GitHub, never the local checkout; branch a fresh worktree off fetched `origin/<default>`. Put the animation where the repo's conventions say; no obvious home → ask once. No repo access → public sources only, say so, mark every claim unverified.
 2. **Ground (fan out, Sonnet).** Parallel Sonnet recon agents, one per source slice, dispatched in one message alongside step 3, build `facts.md` next to the animation: every on-screen string, number, feature, enemy and asset with its source (`file:line` or URL). Checklists per subject type: [grounding.md](references/grounding.md). A claim with no source gets cut, never guessed.
-3. **Research the masters (runs with step 2).** One Opus agent searches for the most respected animators and motion designers as of today's date and what they teach. It writes `inspiration.md` with sources, flags what is new against motion-design's `references/principles.md`, and names 2 to 3 teachings this piece will apply. Propose additions to the motion-design skill in the handover; never edit it mid-run.
-4. **Direct.** Invoke `/motion-design`. Two or three Opus directors each pitch a visual direction plus a one-sentence feeling-and-job line and a timestamped beat sheet, built from `facts.md` and `inspiration.md`. Pick the strongest (or graft), build the animatic, show the user beat sheet plus animatic, wait for OK unless notes say "autonomous". Write the chosen brief, direction and beat sheet to `BRIEF.md` beside the source and commit it.
-5. **Build.** Scene modules with disjoint files, one writer each; Opus on hero scenes and restyled assets, Sonnet on mechanical wiring. `/codex-fullreview` on the build.
-6. **Wow loop.** Run `/wow-loop` (absent → say so and run motion-design's verification by hand). Seed its contract from the four brief goals plus the defaults above as named checks, including one "stranger test" check: after one natural playback a critic states what the subject is and why to use it, and it matches `facts.md`. Critics judge the live JS animation at natural speed, plus stills and contact sheets. Rounds continue until the contract passes or the budget runs out. `/codex-fullreview` after the loop.
+3. **Research the masters (runs with step 2).** One agent (`model` omitted) searches for the most respected animators and motion designers as of today's date and what they teach. It writes `inspiration.md` with sources, flags what is new against motion-design's `references/principles.md`, and names 2 to 3 teachings this piece will apply. Propose additions to the motion-design skill in the handover; never edit it mid-run.
+4. **Direct.** Invoke `/motion-design`. Two or three directors (`model` omitted) each pitch a visual direction plus a one-sentence feeling-and-job line, the piece's type (per motion-design's `references/critique.md`) and a timestamped beat sheet, built from `facts.md` and `inspiration.md`. Pick the strongest (or graft), build the animatic, show the user beat sheet plus animatic, wait for OK unless notes say "autonomous". Write the chosen brief, direction, feeling-and-job line, `Type:` line and beat sheet to `BRIEF.md` beside the source and commit it.
+5. **Build.** Scene modules with disjoint files, one writer each; `model` omitted on hero scenes and restyled assets, Sonnet on mechanical wiring. `/codex-fullreview` on the build.
+6. **Wow loop.** Run `/wow-loop` (absent → say so and run motion-design's verification by hand). Seed its contract from the four brief goals plus the defaults above as named checks, including one "stranger test" check: after one natural playback a critic states what the subject is and why to use it, and it matches `facts.md`. Add the critique questions for the `BRIEF.md` type as checks, with the scripted reading-time check and the protected strongest moment, per motion-design's `references/critique.md`. The stranger test doubles as its blind `q-point`: that critic gets no kickoff brief, `BRIEF.md` or contract text for the check, and its sentence must match both `facts.md` and the feeling-and-job line. Critics judge the live JS animation at natural speed, plus stills and contact sheets. Rounds continue until the contract passes or the budget runs out. `/codex-fullreview` after the loop.
 7. **Export last.** Video per motion-design's `references/verify-export.md`, only after the loop passes. Silent run: confirm with ffprobe that the file has no audio stream before calling the export done.
 8. **Ship.** Commit, push, PR (`gh pr create --head <branch>`), `/codex-review` before merge, fix surviving findings.
 
@@ -70,7 +70,7 @@ Subagents never see this skill. Paste these into each brief that renders, captur
 - Every on-screen string and number comes from `facts.md`. No periods in display text. On-screen copy passes the `writing` skill (no em dashes, no puffery).
 - Flash limits per motion-design. Reduced motion only when the owner asks.
 - No audio of any kind unless the user's notes asked for sound. When they did, paste the rules from [score.md](references/score.md) into every brief that writes or reviews audio.
-- Model: Opus or Sonnet only.
+- Model: the default subagent model or Sonnet; never Haiku (pass `model: "sonnet"` when the default would be Haiku).
 
 ## Pitfalls
 

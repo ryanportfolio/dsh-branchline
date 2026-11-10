@@ -43,7 +43,7 @@ Ask only what you cannot find out. Defaults in brackets.
 2. **Fidelity kit.** Production CSS and route chunks, theme switch, fonts, icon set, strings, live lists, reference captures of each screen in each theme. See [fidelity.md](references/fidelity.md).
 3. **Contract and a reference chapter.** Fill in [scene-contract.md](references/scene-contract.md) as `SCENES.md`. Build the first chapter yourself, end to end through review, so builders have a finished example.
 4. **Parallel builders.** One agent per chapter or small group, briefed with [builder-brief.md](references/builder-brief.md), spawned together. Each owns its scene file and its own browser and reports what the real UI lacks. Check which agent tools this session exposes first; `multi_agent = true` alone does not prove they exist. No agent tools: say so and build the chapters one after another in the main thread.
-5. **Review loop.** Run [review-checklist.md](references/review-checklist.md): ship-check, class check, determinism in every theme, contact sheets, spot checks at taps and transitions, fidelity against reference captures, truth of the copy, a 1x watch, keyboard and screen-reader basics, the embed. Fix and repeat until it passes.
+5. **Review loop.** Run [review-checklist.md](references/review-checklist.md): ship-check, class check, determinism in every theme, contact sheets, spot checks at taps and transitions, fidelity against reference captures, truth of the copy, a 1x watch, keyboard and screen-reader basics, the embed, and the viewer questions from motion-design's `references/critique.md` as adapted in its step 9. Fix and repeat until it passes.
 6. **Integrate.** Embed with the iframe protocol in [player-api.md](references/player-api.md); `templates/host-embed.html` is a working host. Set `parentOrigin`, run `node checks/ship-check.mjs` (it fails on a wildcard origin, mismatched ids, off-site CTAs, missing alt text and long takeaways), and agree with the owner how it ships and who re-checks it.
 7. **Export (only if asked; experimental).** [export.md](references/export.md): Element Capture into WebCodecs, measured on one Windows machine at one window geometry, with capture start failing now and then. Tell the owner that before relying on it. Never a screenshot per frame without the owner's OK.
 8. **Hand over and clean up.** See the handover list below.
@@ -85,7 +85,7 @@ Tell the owner: where the player runs (URL and the start command), what was veri
 
 ## Maintenance
 
-The Claude Code source at `.claude/skills/product-walkthrough/` is authoritative; this Codex port carries the same `references/` and `templates/`. After changing either, copy the shared folders across and re-apply the Codex-specific lines (invocation, agent-tool check, sandbox, server start, browser placement).
+The Claude Code source at `.claude/skills/product-walkthrough/` is authoritative; this Codex port carries the same `references/` and `templates/`, listed in `.agents/skill-shared.json` so `node .claude/scripts/sync-codex-skills.mjs --check` warns when they differ. After changing either, copy the shared folders across and re-apply the Codex-specific lines (invocation, agent-tool check, sandbox, server start, browser placement).
 
 ## Resources
 

@@ -1,6 +1,6 @@
 # Codex CLI dispatch commands
 
-Loaded from `SKILL.md` Step 3 when reviewers run as `codex exec` processes (no multi-agent tools). Moved verbatim.
+Loaded from `SKILL.md` Step 3 when reviewers run as `codex exec` processes (no multi-agent tools).
 
 ```bash
 mkdir -p .tmp

@@ -11,11 +11,11 @@ Motion inside a product (buttons, popovers, tooltips, toasts, drawers, drag gest
 
 ## Workflow
 
-1. **Name the feeling and the job.** Write one sentence saying what the viewer should feel and understand when the piece ends. Choose techniques after that, never before (Jay Grandin).
+1. **Name the feeling and the job.** Write one sentence saying what the viewer should feel and understand when the piece ends. Choose techniques after that, never before (Jay Grandin). Record the piece's type next to it, per [critique.md](references/critique.md).
 2. **Write the story before any pixels.** For an explainer, open on a concrete moment instead of a definition, chain the beats with "but" and "therefore", and give each beat one idea. Write a beat sheet with timestamps. See [story.md](references/story.md).
 3. **Build an animatic with final timing and rough visuals.** It needs a scrubber, pause and chapter ticks. Get the pacing approved before any polish.
 4. **Block the key poses, then polish the in-betweens:** easing, stagger, overlap and secondary motion.
-5. **Verify in a real browser on the GPU.** Judge motion by watching it play. Stills only prove layout. See [verify-export.md](references/verify-export.md).
+5. **Verify in a real browser on the GPU.** Judge motion from playback, not stills, which only prove layout: read dense frame strips cut from a capture or export ([verify-export.md](references/verify-export.md#reviewing-motion-from-the-export)). An agent cannot watch video; a 1x watch is the owner's. Judge what the viewer gets with the questions for the piece's type in [critique.md](references/critique.md).
 6. **Export to video** when the piece has to travel to feeds that do not run JavaScript. Encode in the page with WebCodecs, never a PNG or screenshot per frame (user instruction, 2026-10-19); see [verify-export.md](references/verify-export.md).
 
 ## Decision rules
@@ -35,7 +35,7 @@ These are defaults. Tune them by eye.
 | Continuity | Morph between states instead of cutting, so one object carries its identity through the change. |
 | Color | One hue per actor, the same everywhere. For example, builder green and reviewer amber. |
 | Text | Browser-only piece: set real DOM text over the canvas and let particles draw pictures. Piece that must export to video: draw text into a 2D canvas layer composited into the frame, so the in-page WebCodecs export carries it; a piece with trail feedback must do this. A piece that keeps DOM text, CSS 3D or several canvases exports by tab capture instead (verify-export.md). Either way, keep a statement to about ten words, with no orphan word on its own line, and set it in a face with character (the brand display or editorial face), not the UI body font. |
-| UI cards, dashboard or mockup | Write one sentence per visual saying what it acts out (a list receives an item, a chart is read), and build that story after the intro. Each story starts and ends on the exact design; cards act offset, in reading order. See [ui-loops.md](references/ui-loops.md). |
+| UI cards, dashboard or mockup | Write one sentence per visual saying what it acts out (a list receives an item, a chart is read), and build that story after the intro (on a live page, a product or dashboard mockup runs the intro, then asks the owner before adding stories: [ui-loops.md](references/ui-loops.md#on-a-live-page)). Each story starts and ends on the exact design; cards act offset, in reading order. See [ui-loops.md](references/ui-loops.md). |
 | Landing-page effect | Background video, seamless or scrubbed loops, glass over footage, entrances, scroll reveals and pinned scroll stages start from the recipe in [web-effects.md](references/web-effects.md). Keep its reduced-motion and touch fallbacks, give autoplaying motion a pause button, and allow one heavy effect per page. |
 | Generated video film | One camera move. Chain the keyframes, pin every clip at both ends, gate each clip for cuts and stalls. Dry run first; spend credits only after the owner confirms the total. See [generated-film.md](references/generated-film.md). |
 | 3D embed or several moving layers on one page | Shield every 3D iframe so the wheel always scrolls the page, and give the page one Off / On / X-ray switch. See [page-runtime.md](references/page-runtime.md). |
@@ -77,6 +77,7 @@ These are defaults. Tune them by eye.
 - [ui-loops.md](references/ui-loops.md): one story per visual for UI cards, dashboards and mockups, accents, intro choreography, the loop cycle, and live-page rules.
 - [web-engine.md](references/web-engine.md): a deterministic `frame(t)` engine with keyframed particle tracks, staggered morphs, phosphor trails, bloom, captions and a transport, plus gotchas measured in practice.
 - [web-effects.md](references/web-effects.md): landing-page recipes with cost ratings, reduced-motion and touch fallbacks: background video, fade and boomerang loops, framing and scrims, cursor- and scroll-scrubbed video, glass and grain, fail-safe entrances, scroll reveals, a sticky cinematic stage, stacking cards and a text crawl. Adapted from the MIT-licensed MotionSites technique library.
+- [critique.md](references/critique.md): viewer questions by piece type (pitch, explainer, story, game, tool), the decisive question per type, how each becomes a wow-loop check, and protecting the strongest moment during repairs.
 - [verify-export.md](references/verify-export.md): headed offscreen Chrome, stills, an fps probe, seek and colour checks, loop checks, delivery specs, encoding checks, WebCodecs export (from a canvas, or by tab capture for DOM pieces) and a last-resort frame-stepped export.
 - [generated-film.md](references/generated-film.md): AI video films: the cost gate, one camera move, chained keyframes, the clip adapter contract, the continuity gate and its measured limits, living-still loops.
 - [page-runtime.md](references/page-runtime.md): the 3D iframe shield with its pointer-forwarding receiver, Spline notes, and the Off / On / X-ray motion switch.

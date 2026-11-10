@@ -12,7 +12,7 @@ Run one fresh Claude CLI reviewer, then verify its findings in the current sessi
 
 Run `claude --version` and `claude auth status`. Require:
 
-- The installed CLI supports the model alias and every flag used below, as checked through current local help. The previous contract required at least 2.1.257; a version number alone does not prove compatibility.
+- The installed CLI supports the model alias and every flag used below, as checked through current local help. Known floor: 2.1.257 or later; a version number alone does not prove compatibility.
 - `loggedIn: true`, `authMethod: claude.ai`, `apiProvider: firstParty`, and `subscriptionType: max`.
 - No `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_PROFILE`, `ANTHROPIC_DEFAULT_FABLE_MODEL`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_USE_FOUNDRY`, or `CLAUDE_CODE_USE_ANTHROPIC_AWS` in the child process environment. Check presence only; never print values.
 

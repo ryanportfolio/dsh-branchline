@@ -1,6 +1,6 @@
 # codex-fullreview: session-file evidence shapes and counting snippet
 
-Mandatory read from `../SKILL.md` Step 4. Moved verbatim from Step 4. The session file is the `rollout-*-<id>.jsonl` named there.
+Mandatory read from `../SKILL.md` Step 4. The session file is the `rollout-*-<id>.jsonl` named there.
 
 In it:
 

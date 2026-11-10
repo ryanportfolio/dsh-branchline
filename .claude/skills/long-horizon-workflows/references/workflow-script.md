@@ -349,7 +349,7 @@ return { batch: a.batch, rounds, finalAudit }
 ```
 
 After return: runId + transcript dir → Workers; per round, `verdict`, `votes`, candidates
-built, `base` → Audit log; then Integrate (below) from each passed round's `base` workspace.
+built, `base` → Audit log; then Integrate (batch-workspaces.md steps 1-4, then SKILL.md Round loop step 5 bookkeeping) from each passed round's `base` workspace.
 `blocked` w/ `executed: true` = executors ran, or may have, before stop (null return, budget
 ceiling, runtime fault) → reconcile as interrupted execution vs recorded baselines, never
 clean round. Cached return on resume ≠ evidence until `journal.jsonl` in transcript dir

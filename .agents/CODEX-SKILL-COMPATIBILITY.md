@@ -24,7 +24,7 @@ for comparison, backup, reconciliation, and discovery checks.
 |---|---|
 | Native | `addskill`, `babysit-ci`, `brainstorming`, `bro`, `caveman`, `enhance-prompt`, `external-review`, `fable-mode`, `forge-repo-ui-skill`, `handoff-audit`, `recall`, `refine`, `servers`, `session-hub`, `showpiece`, `wrapup`, `writing`, `writing-plans` |
 | Adapted | `apply-firmware`, `astra-review`, `claude-review`, `codex-review`, `deep-plan`, `dsh-plugin-permanent`, `dsh-upgrade-audit`, `init-project`, `lab`, `optimize-context`, `opus-fullreview`, `sync-starter` |
-| Capability-gated | `advocate`, `arena`, `cache-loop`, `climb-loop`, `conversion-ux`, `dare`, `design-prototypes`, `impartial-review`, `long-horizon`, `motion-design`, `perf-loop`, `product-walkthrough`, `redesign-concepts`, `security-loop`, `seo-loop`, `ui-quality`, `why`, `wow-animation`, `wow-loop` |
+| Capability-gated | `advocate`, `arena`, `cache-loop`, `climb-loop`, `conversion-ux`, `dare`, `design-prototypes`, `impartial-review`, `long-horizon`, `motion-design`, `perf-loop`, `product-walkthrough`, `redesign-concepts`, `security-loop`, `seo-loop`, `ui-quality`, `untangle`, `why`, `wow-animation`, `wow-loop` |
 | Dangerous | `adopt-repo` |
 | Claude-only | `astra-fullreview`, `codex-fullreview`, `codex-image-gen`, `compact-review`, `coordinate`, `gauntlet`, `long-horizon-workflows`, `merge` |
 

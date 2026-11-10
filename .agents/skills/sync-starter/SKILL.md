@@ -23,7 +23,7 @@ git fetch starter
 Only these paths are sync candidates:
 
 ```
-git diff --stat HEAD starter/main -- AGENTS.md .agents/CODEX-SKILL-COMPATIBILITY.md .agents/skill-modes.json .agents/skill-sources.json .agents/template-manifest.json .agents/skills .claude/skills .claude/hooks .claude/scripts .claude/output-styles .claude/settings.json
+git diff --stat HEAD starter/main -- AGENTS.md .agents/CODEX-SKILL-COMPATIBILITY.md .agents/skill-modes.json .agents/skill-shared.json .agents/skill-sources.json .agents/template-manifest.json .agents/skills .claude/skills .claude/hooks .claude/scripts .claude/output-styles .claude/settings.json
 ```
 
 Diverged by design; never bulk-pull these:
@@ -47,7 +47,7 @@ Compare maintained native bodies and every referenced resource, together with `.
 git checkout starter/main -- <picked-paths>
 ```
 
-Handle selected retirements explicitly before running the sync check: checkout does not remove files absent upstream. For this migration, remove `.agents/skills/unslop/SKILL.md` and `.claude/skills/writing-skills/SKILL.md`, plus any retired counterpart entrypoint left by an earlier partial sync. First inspect and back up local customizations; move useful behavior into the replacement skill or preserve it outside discovery. Keep supporting resources and licenses. Drop the `unslop` ownership entry; an inherited `writing-skills: disabled` entry may remain inert. Confirm no retired name retains a SKILL.md in either root before running the sync check. A retirement never removes a locked skill; report it instead.
+Handle selected retirements explicitly before running the sync check: checkout does not remove files absent upstream. Known retirements: remove `.agents/skills/unslop/SKILL.md` and `.claude/skills/writing-skills/SKILL.md`, plus any retired counterpart entrypoint left by an earlier partial sync. First inspect and back up local customizations; move useful behavior into the replacement skill or preserve it outside discovery. Keep supporting resources and licenses. Drop the `unslop` ownership entry; an inherited `writing-skills: disabled` entry may remain inert. Confirm no retired name retains a SKILL.md in either root before running the sync check. A retirement never removes a locked skill; report it instead.
 
 For `.claude/settings.json`: merge, do not overwrite. The project may have its own permission additions. Read both, union the `allow` lists, keep project-specific hooks. A template hook whose command differs from a project hook only in quoting replaces that hook; never keep both.
 

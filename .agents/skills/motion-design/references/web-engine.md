@@ -78,7 +78,7 @@ Writing a CSS variable every frame always triggers paint; 1,300 elements cost 8 
 - `-(x)**2` is a SyntaxError in JavaScript ("unary operator before exponentiation"). Write `-((x)**2)`.
 - A `file://` page blocks relative `@font-face` loads in Chrome. For a single-file lab, inline the fonts as base64 data URLs with a small build script.
 - The Playwright MCP blocks `file://` and only writes inside the workspace. Drive verification from your own Playwright script instead (see verify-export.md).
-- A still taken while paused shows the converged frame, not the motion trails. Judge motion by playing.
+- A still taken while paused shows the converged frame, not the motion trails. Judge motion from frame strips of a playing capture (verify-export.md).
 - 22,000 particles with per-particle closures and one recursive blend per transition cost well under a frame at 100 Hz. Profile before moving the morph to the GPU.
 
 Measured on the CoreWise promo (2026-09-28: 12,000 CPU particles as instanced quads, 94 s, 2.7 ms render at 1920x1080 on an RX 6600 XT):

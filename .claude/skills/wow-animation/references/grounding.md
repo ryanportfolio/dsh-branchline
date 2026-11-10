@@ -1,6 +1,6 @@
 # Grounding recon
 
-Recon agents gather facts; they do not design. All subject research runs on Sonnet (`model: "sonnet"`), dispatched in parallel in one message, one agent per source slice below so no two read the same material. A large subject can take six or more agents; split further rather than give one agent two slices. Each agent returns its rows for `facts.md` plus a short list of hook candidates. The orchestrator merges the rows; an Opus director later judges what matters (which bosses are the hook, which feature is the real reason to use the product).
+Recon agents gather facts; they do not design. All subject research runs on Sonnet (`model: "sonnet"`), dispatched in parallel in one message, one agent per source slice below so no two read the same material. A large subject can take six or more agents; split further rather than give one agent two slices. Each agent returns its rows for `facts.md` plus a short list of hook candidates. The orchestrator merges the rows; a director (`model` omitted) later judges what matters (which bosses are the hook, which feature is the real reason to use the product).
 
 Default slices: live site or store page; repo copy and product strings; design tokens, fonts and logo; feature or system code; sprites and art (games); enemy and boss code (games); screens and flow of the core task (products).
 

@@ -65,7 +65,7 @@ Avoid editing or reloading after handoff, because it can reset the tune. Capture
 
 ### 6. Port the values
 
-When the user supplies the JSON, map each key to its real constant and edit the actual code. Flag any knob that does not map cleanly so the user knows the lab and the real thing will differ. Example: the lab had a per-effect duration knob, but the real code shares one duration constant across effects, so that knob cannot carry over without a bigger change. Be honest about these gaps.
+When the user supplies the JSON, map each key to its real constant and edit the actual code. Flag any knob that does not map cleanly so the user knows the lab and the real thing will differ. Example: the lab had a per-effect duration knob, but the real code shares one duration constant across effects, so that knob cannot carry over without a bigger change.
 
 ### 7. Tear down
 
