@@ -49,12 +49,13 @@ Accumulate sub-frames: HeyGen's HyperFrames engine defaults to 16 samples per fr
 
 ## Browser API choice
 
-| Job | Use | Status, 2026-09 |
+| Job | Use | Status, 2026-11 |
 |---|---|---|
 | UI transforms and opacity | CSS or WAAPI, which can run on the compositor ([Motion](https://motion.dev/docs/performance)) | stable |
 | Thousands of particles | canvas or WebGL from rAF; for "thousands of small elements" DOM animation loses ([Motion](https://motion.dev/magazine/web-animation-performance-tier-list)) | stable |
 | State morphs in one page | View Transitions | Baseline since 2025-10-14 ([web-features](https://raw.githubusercontent.com/web-platform-dx/web-features/main/features/view-transitions.yml.dist)) |
-| Cross-page transitions, scroll-driven animation | `@view-transition`, `animation-timeline` | no Firefox; ship a fallback |
+| Cross-page transitions | `@view-transition` | no Firefox (Chrome 126, Safari 18.2); ship a fallback ([web-features](https://raw.githubusercontent.com/web-platform-dx/web-features/main/features/cross-document-view-transitions.yml.dist)) |
+| Scroll-driven animation | `animation-timeline` | Baseline since 2026-10-27 (Firefox 159), but Firefox ESR 153 lacks it: `@supports (animation-timeline: scroll())` plus a fallback ([web-features](https://raw.githubusercontent.com/web-platform-dx/web-features/main/features/scroll-driven-animations.yml.dist)) |
 | Custom easing curves | CSS `linear()` | Baseline high since 2026-06-11 |
 
 Writing a CSS variable every frame always triggers paint; 1,300 elements cost 8 ms per frame in Motion's test.
