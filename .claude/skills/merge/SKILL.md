@@ -69,7 +69,7 @@ Goal: find + fix what Codex would find, so Codex rounds come back clean more oft
 
 More files or concerns than 4 → group them. Fewer distinct areas than 4 (tiny PR) → split whole diff by lens instead: false success; common real inputs; error + edge paths; docs vs code.
 
-**Launch.** 4 `Agent` calls, 1 message, run in parallel. `subagent_type: "general-purpose"` on every call, never `"fork"` (fork inherits this conversation → reviewer shares author's reasoning, no longer fresh). `model` omitted, no `isolation` (worktree isolation breaks rtk git calls). Each brief standalone, reviewer has no session context:
+**Launch.** 4 `Agent` calls, 1 message, run in parallel. `subagent_type: "general-purpose"` on every call, never `"fork"` (fork inherits this conversation → reviewer shares author's reasoning, no longer fresh). `model: "opus"` on every call (latest Opus; overrides session model and `CLAUDE_CODE_SUBAGENT_MODEL`, so Fable or Sonnet session still gets Opus reviewers; user's pick, kernel's omit-`model` default doesn't apply here), no `isolation` (worktree isolation breaks rtk git calls). Each brief standalone, reviewer has no session context:
 
 - scope: repo path, base = `git merge-base origin/<target> <head>` SHA (not `origin/<target>` tip: once target moves, two-dot diff from tip shows target's new commits as PR reverts), head SHA, `git diff <base>..<head>` as the diff;
 - files to read + area to cover; other 3 areas named, running in parallel, so it stays in its own;
