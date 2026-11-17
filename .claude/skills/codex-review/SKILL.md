@@ -1,5 +1,5 @@
 ---
-description: "Cross-vendor second opinion: Codex CLI (codex exec review, gpt-6.1-sol, high) over PR, branch, commit, or uncommitted diff, then each finding verified. Use: /codex-review, 'have Codex/Sol review this'."
+description: "Cross-vendor second opinion: Codex CLI (codex exec review, gpt-6.2-sol, high) over PR, branch, commit, or uncommitted diff, then each finding verified. Use: /codex-review, 'have Codex/Sol review this'."
 ---
 
 # Codex review — cross-vendor second opinion
@@ -12,7 +12,7 @@ The requested review does not authorize fixes, publication, machine configuratio
 
 Inspect `codex --version`, `codex login status`, and `codex exec review --help` locally before inference. Verify current support for the selector, the custom `[PROMPT]` argument, model/effort configuration, and output options used below; examples are not product guarantees. Do not probe models by spending usage.
 
-**Model: always the newest Sol, named by its exact id.** `-m` takes a literal model id; there is no "latest Sol" alias, so the command pins one. The pin is `gpt-6.1-sol`. Before launch, check the `model` in `~/.codex/config.toml` and the Sol entries at developers.openai.com/api/docs/models. If a newer Sol exists, run with its exact id and tell the user the pin is stale. Do not edit the pins during the review: bumping every copy that pins `gpt-6.1-sol` (this skill's `.claude` and `.agents` copies, `codex-fullreview`, the global copies in `~/.claude/skills/` and `~/.agents/skills/`, and the Codex example in `impartial-review`) is a separate change the user authorizes. An explicit user model choice still wins. `astra-review` is exempt: it stays on Astra.
+**Model: always the newest Sol, named by its exact id.** `-m` takes a literal model id; there is no "latest Sol" alias, so the command pins one. The pin is `gpt-6.2-sol`. Before launch, check the `model` in `~/.codex/config.toml` and the Sol entries at developers.openai.com/api/docs/models. If a newer Sol exists, run with its exact id and tell the user the pin is stale. Do not edit the pins during the review: bumping every copy that pins `gpt-6.2-sol` (this skill's `.claude` and `.agents` copies, `codex-fullreview`, the global copies in `~/.claude/skills/` and `~/.agents/skills/`, and the Codex example in `impartial-review`) is a separate change the user authorizes. An explicit user model choice still wins. `astra-review` is exempt: it stays on Astra.
 
 Accepted routes, either one: `codex login status` reports a ChatGPT login, or `config.toml` in `$CODEX_HOME` (default `~/.codex`) sets `model_provider` to a gateway, for example a CLIProxyAPI gateway over subscription accounts. Both are normal; record which one ran in the run metadata and add no caveat. When a gateway is set it carries the requests, whatever the login line says. Stop before inference only when neither holds (logged out or API-key login, and no gateway): ask the user to log in through their own terminal. The gateway is the user's own setup and its billing is their choice; never add, change or switch a provider, key or paid credits yourself, and never print credentials.
 

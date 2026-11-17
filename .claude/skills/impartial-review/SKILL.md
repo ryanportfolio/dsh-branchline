@@ -65,7 +65,7 @@ For the `codex exec` route: before launching any reviewer process, read [Codex C
 
 Give every run its own `$RUN` directory. Require each process to exit successfully with a non-empty new report, and record its exit status, report hash, and observed model/effort. A report with failed inspection has incomplete coverage despite exit 0. Recheck source identity before accepting findings. Follow `codex-review` for bounded process monitoring; log silence alone does not establish a stall.
 
-`gpt-6.1-sol` is an example configuration, not proof of availability. Inspect current local help/auth first. If a model is rejected, report the failure; any usage-consuming retry or fallback needs existing explicit authorization or user agreement. Record the requested and actually reported model separately, using "unverified" when the process does not reveal resolution. If neither agents nor an authenticated CLI can supply fresh context, disclose the missing independent review; self-review cannot replace it.
+`gpt-6.2-sol` is an example configuration, not proof of availability. Inspect current local help/auth first. If a model is rejected, report the failure; any usage-consuming retry or fallback needs existing explicit authorization or user agreement. Record the requested and actually reported model separately, using "unverified" when the process does not reveal resolution. If neither agents nor an authenticated CLI can supply fresh context, disclose the missing independent review; self-review cannot replace it.
 
 Reviewers spawned from Codex share the author's vendor, so this buys fresh context, not a cross-vendor second opinion. Say which one you ran rather than implying vendor independence.
 

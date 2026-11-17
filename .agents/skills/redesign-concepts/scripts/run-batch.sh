@@ -42,7 +42,7 @@ run_one() {
   if [ ${#args[@]} -eq 0 ]; then echo "FAILED $name: no refs in ${prompt%.txt}.refs"; return 1; fi
   # Prompt goes on stdin (-): -i is variadic and would swallow a trailing prompt argument.
   # model_provider=openai: a proxy provider in ~/.codex/config.toml hides image_gen.
-  codex exec -m gpt-6-astra -c model_reasoning_effort=medium -c model_provider=openai \
+  codex exec -m gpt-6.2-astra -c model_reasoning_effort=medium -c model_provider=openai \
     -s workspace-write "${args[@]}" - < "$prompt" > "$dir/logs/$name.log" 2>&1
   code=$?
   if valid "$out"; then

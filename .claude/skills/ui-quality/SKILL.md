@@ -1,6 +1,6 @@
 ---
 name: ui-quality
-description: "Everyday UI quality floor (forms, dashboards, settings): build every state; audit by measuring rendered page (axe-core, focus, reflow, contrast). Use: /ui-quality, 'audit accessibility', 'is this UI production-ready', 'check this page on mobile', 'feels wrong on my phone', 'break this UI' with worst-case data. Ambitious look → showpiece; conversion → conversion-ux."
+description: "Everyday UI quality floor (forms, dashboards, settings): build every state; audit by measuring rendered page (axe-core, focus, reflow, contrast). Use: /ui-quality, 'audit accessibility', 'is this UI production-ready', 'check this page on mobile', 'feels wrong on my phone', 'break this UI' with worst-case data. Ambitious look → showpiece; conversion → conversion-ux; friction, too many clicks → user-walk."
 ---
 
 # UI quality

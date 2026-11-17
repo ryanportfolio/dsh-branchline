@@ -1,6 +1,6 @@
 ---
 name: astra-review
-description: "Cross-vendor review on gpt-6-astra, medium. Same CLI lifecycle as codex-review. Use: /astra-review, 'have Astra review this'."
+description: "Cross-vendor review on gpt-6.2-astra, medium. Same CLI lifecycle as codex-review. Use: /astra-review, 'have Astra review this'."
 disable-model-invocation: true
 ---
 
@@ -10,11 +10,11 @@ Read `.claude/skills/codex-review/SKILL.md` and follow its complete execution co
 
 | Setting | Astra default |
 |---|---|
-| Model | `gpt-6-astra` |
+| Model | `gpt-6.2-astra` |
 | Effort | `medium`, regardless of diff size |
 | Run directory prefix | `.tmp/astra-review-` |
 
-Skip the newest-Sol check in `codex-review` Step 1; this entrypoint never swaps Astra for Sol. Honor an explicit user model/effort choice. Confirm supported local options before inference; a model identifier in this file is not proof of availability. `$ARGUMENTS` carries scope as in `codex-review`.
+Skip the newest-Sol check in `codex-review` Step 1; this entrypoint never swaps Astra for Sol. Check for a newer Astra instead: when `codex debug models` lists an Astra slug newer than the pin, run with its exact id and tell the user the pin is stale. Honor an explicit user model/effort choice. Confirm supported local options before inference; a model identifier in this file is not proof of availability. `$ARGUMENTS` carries scope as in `codex-review`.
 
 Example for a branch diff after creating a fresh `$RUN` directory (POSIX shell):
 
@@ -24,9 +24,9 @@ RUN=$(mktemp -d .tmp/astra-review-XXXXXXXX)
 git fetch origin main
 BASE=$(git merge-base origin/main HEAD); HEAD_SHA=$(git rev-parse HEAD)
 # External-review path (.agents/skills/external-review/SKILL.md exists):
-codex exec review "Read .agents/skills/external-review/SKILL.md completely and follow it for this review of the branch diff: base $BASE, head $HEAD_SHA. Read the diff with git diff $BASE $HEAD_SHA. Leaf review: no agents, no nested reviews, no edits." -m gpt-6-astra -c model_reasoning_effort=medium -o "$RUN/report.md" < /dev/null > "$RUN/run.log" 2>&1
+codex exec review "Read .agents/skills/external-review/SKILL.md completely and follow it for this review of the branch diff: base $BASE, head $HEAD_SHA. Read the diff with git diff $BASE $HEAD_SHA. Leaf review: no agents, no nested reviews, no edits." -m gpt-6.2-astra -c model_reasoning_effort=medium -o "$RUN/report.md" < /dev/null > "$RUN/run.log" 2>&1
 # Selector path (no external-review skill):
-codex exec review --base origin/main -m gpt-6-astra -c model_reasoning_effort=medium -o "$RUN/report.md" < /dev/null > "$RUN/run.log" 2>&1
+codex exec review --base origin/main -m gpt-6.2-astra -c model_reasoning_effort=medium -o "$RUN/report.md" < /dev/null > "$RUN/run.log" 2>&1
 ```
 
 Commit and uncommitted prompts, the root-commit and dirty-tree rules, the skill-load and scope-identity checks, prompt escaping, and path attribution follow `codex-review`.
