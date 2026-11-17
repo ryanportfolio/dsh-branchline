@@ -1,14 +1,14 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["categories", "gaps"],
+  "required": ["categories", "unreadable_images"],
   "properties": {
     "categories": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["category", "ranking", "reason", "defects"],
+        "required": ["category", "ranking", "reason", "caveat", "defects"],
         "properties": {
           "category": { "type": "string" },
           "ranking": {
@@ -17,6 +17,10 @@
             "items": { "type": "array", "items": { "type": "string" } }
           },
           "reason": { "type": "string" },
+          "caveat": {
+            "description": "Limits on judging this category from these images, such as a state no view shows or a value estimated from pixels. Empty string when there are none.",
+            "type": "string"
+          },
           "defects": {
             "type": "array",
             "items": {
@@ -35,6 +39,18 @@
         }
       }
     },
-    "gaps": { "type": "array", "items": { "type": "string" } }
+    "unreadable_images": {
+      "description": "Only images that are missing or cannot be read. Empty array when every image is readable. Caveats go in each category's caveat, never here.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "view"],
+        "properties": {
+          "label": { "type": "string" },
+          "view": { "type": "string" }
+        }
+      }
+    }
   }
 }

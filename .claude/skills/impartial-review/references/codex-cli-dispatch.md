@@ -5,7 +5,7 @@ Loaded from `SKILL.md` Step 3 when reviewers run as `codex exec` processes (no m
 ```bash
 mkdir -p .tmp
 RUN=$(mktemp -d .tmp/impartial-review-XXXXXXXX)
-codex exec -m gpt-6.1-sol -c model_reasoning_effort=high -s read-only \
+codex exec -m gpt-6.2-sol -c model_reasoning_effort=high -s read-only \
   -o "$RUN/A.md" - < "$RUN/prompt-A.txt" > "$RUN/A.log" 2>&1
 ```
 

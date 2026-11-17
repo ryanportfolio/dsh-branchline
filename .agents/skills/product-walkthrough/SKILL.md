@@ -1,6 +1,6 @@
 ---
 name: product-walkthrough
-description: "Product tour or onboarding tour replaying real screens (product CSS + markup), guide cursor acts; embed or MP4."
+description: "Product tour or onboarding tour replaying real screens (product CSS + markup), guide cursor acts; embed or MP4. Finding friction → user-walk."
 ---
 
 # Product walkthrough

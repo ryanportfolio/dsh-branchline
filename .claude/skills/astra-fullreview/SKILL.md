@@ -1,6 +1,6 @@
 ---
 name: astra-fullreview
-description: "Full multi-agent Codex review on gpt-6-astra, medium. Same lifecycle as codex-fullreview. Use: /astra-fullreview, 'full Astra review with sub-reviewers'."
+description: "Full multi-agent Codex review on gpt-6.2-astra, medium. Same lifecycle as codex-fullreview. Use: /astra-fullreview, 'full Astra review with sub-reviewers'."
 disable-model-invocation: true
 ---
 
@@ -10,11 +10,11 @@ Read `.claude/skills/codex-fullreview/SKILL.md` and follow its complete executio
 
 | Setting | Astra default |
 |---|---|
-| Model | `gpt-6-astra`, for the Manager and every sub-reviewer |
+| Model | `gpt-6.2-astra`, for the Manager and every sub-reviewer |
 | Effort | `medium`, regardless of diff size |
 | Run directory prefix | `.tmp/astra-fullreview-` |
 
-Skip the newest-Sol check in `codex-fullreview` Step 1; this entrypoint never swaps Astra for Sol. Honor an explicit user model/effort choice. Confirm supported local options before inference; a model identifier in this file is not proof of availability. `$ARGUMENTS` carries scope as in `codex-fullreview`.
+Skip the newest-Sol check in `codex-fullreview` Step 1; this entrypoint never swaps Astra for Sol. Check for a newer Astra instead: when `codex debug models` lists an Astra slug newer than the pin, run with its exact id and tell the user the pin is stale. Honor an explicit user model/effort choice. Confirm supported local options before inference; a model identifier in this file is not proof of availability. `$ARGUMENTS` carries scope as in `codex-fullreview`.
 
 Example for a branch diff after creating a fresh `$RUN` directory (POSIX shell):
 
@@ -23,7 +23,7 @@ mkdir -p .tmp
 RUN=$(mktemp -d .tmp/astra-fullreview-XXXXXXXX)
 git fetch origin main
 BASE=$(git merge-base origin/main HEAD); HEAD_SHA=$(git rev-parse HEAD)
-codex exec -s read-only -m gpt-6-astra -c model_reasoning_effort=medium -o "$RUN/report.md" "Read .agents/skills/impartial-review/SKILL.md completely and act as its Manager on the branch diff: base $BASE, head $HEAD_SHA. Read the diff with git diff $BASE $HEAD_SHA. Spawn fresh-context sub-reviewers with spawn_agent, fork_turns \"none\", model gpt-6-astra, reasoning_effort medium, as the skill directs; each is a leaf reviewer. Start no codex exec or other reviewer CLI process; if agent tools are missing, say so in the report. Author brief: $RUN/brief.md; give it only to the intent reviewer, as the skill directs; every other sub-reviewer gets the diff without it. No file edits, no Git writes, no publication. Verify the sub-reviewers' findings and write the final verified report. First line: Scope: base $BASE, head $HEAD_SHA. Second line: Sub-reviewers: <number spawned>." < /dev/null > "$RUN/run.log" 2>&1
+codex exec -s read-only -m gpt-6.2-astra -c model_reasoning_effort=medium -o "$RUN/report.md" "Read .agents/skills/impartial-review/SKILL.md completely and act as its Manager on the branch diff: base $BASE, head $HEAD_SHA. Read the diff with git diff $BASE $HEAD_SHA. Spawn fresh-context sub-reviewers with spawn_agent, fork_turns \"none\", model gpt-6.2-astra, reasoning_effort medium, as the skill directs; each is a leaf reviewer. Start no codex exec or other reviewer CLI process; if agent tools are missing, say so in the report. Author brief: $RUN/brief.md; give it only to the intent reviewer, as the skill directs; every other sub-reviewer gets the diff without it. No file edits, no Git writes, no publication. Verify the sub-reviewers' findings and write the final verified report. First line: Scope: base $BASE, head $HEAD_SHA. Second line: Sub-reviewers: <number spawned>." < /dev/null > "$RUN/run.log" 2>&1
 ```
 
 Commit and uncommitted prompts (with the Astra model and effort in place of Sol and high), the root-commit base, the file-named skill invocation and prompt escaping, the session-file checks for skill load and spawned children, the scope-line check, and attribution follow `codex-fullreview`. Zero spawned children is reported as "no sub-reviewers ran", never hidden.

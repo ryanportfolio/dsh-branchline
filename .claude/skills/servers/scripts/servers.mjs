@@ -74,15 +74,20 @@ const isNode = (p) => /^node(\.exe)?$/i.test(p?.name || '');
 
 /* Every process (with memory), every listening port (all ports: the protect list may name a low
    one) and loopback connections by client pid and remote port. Throws when the system query
-   fails, so a failed query never looks like "nothing running" and never prunes records. */
-export function snapshot() {
+   fails, so a failed query never looks like "nothing running" and never prunes records.
+   `net: false` asks for processes only and leaves both port lists empty: the two connection
+   queries are the slow part of a snapshot (they can take seconds each on Windows), and a caller
+   that only looks one process up (a browser being recorded, once per launch) has no use for
+   them. The process query is the same either way, so a process reports the same `start`. */
+export function snapshot({ net = true } = {}) {
   if (process.platform === 'win32') {
+    const ports = net ? `$l = @(Get-NetTCPConnection -State Listen | Select-Object @{n='port';e={[int]$_.LocalPort}}, @{n='pid';e={[int]$_.OwningProcess}}, @{n='addr';e={[string]$_.LocalAddress}} -Unique)
+$c = @(Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | Where-Object { $_.RemoteAddress -eq '127.0.0.1' -or $_.RemoteAddress -eq '::1' } | Select-Object @{n='pid';e={[int]$_.OwningProcess}}, @{n='rport';e={[int]$_.RemotePort}} -Unique)` : '$l = @(); $c = @()';
     // Windows PowerShell writes in the console code page unless told otherwise; paths and
     // command lines with non-ASCII characters would reach Node garbled
     const ps = `$ErrorActionPreference='Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$l = @(Get-NetTCPConnection -State Listen | Select-Object @{n='port';e={[int]$_.LocalPort}}, @{n='pid';e={[int]$_.OwningProcess}}, @{n='addr';e={[string]$_.LocalAddress}} -Unique)
-$c = @(Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | Where-Object { $_.RemoteAddress -eq '127.0.0.1' -or $_.RemoteAddress -eq '::1' } | Select-Object @{n='pid';e={[int]$_.OwningProcess}}, @{n='rport';e={[int]$_.RemotePort}} -Unique)
+${ports}
 $p = @(Get-CimInstance Win32_Process | Select-Object @{n='pid';e={[int]$_.ProcessId}}, @{n='ppid';e={[int]$_.ParentProcessId}}, @{n='name';e={$_.Name}}, @{n='cmd';e={$_.CommandLine}}, @{n='mem';e={[double]$_.WorkingSetSize}}, @{n='start';e={if ($_.CreationDate) { $_.CreationDate.ToUniversalTime().ToString('o') }}})
 @{ listeners = $l; conns = $c; procs = $p } | ConvertTo-Json -Depth 3 -Compress`;
     const r = sh('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps]);
@@ -103,6 +108,7 @@ $p = @(Get-CimInstance Win32_Process | Select-Object @{n='pid';e={[int]$_.Proces
     return { pid: +m[1], ppid: +m[2], mem: +m[3] * 1024, start: new Date(m[4]).toISOString(), cmd, name: comm.get(+m[1]) || path.basename(cmd.split(' ')[0]) };
   }).filter(Boolean);
   if (!procs.length) throw new Error('ps returned no processes');
+  if (!net) return { listeners: [], conns: [], procs };
   const lsofTcp = (state) => {
     const r = sh('lsof', ['-nP', '-iTCP', `-sTCP:${state}`, '-Fpn']);
     if (r.error) throw new Error(`lsof unavailable: ${r.error.message}`);
@@ -226,7 +232,7 @@ export function registerProcess({ pid, port = null, kind = 'server', purpose = '
 /* Find the browser process launched with a unique marker argument and record it.
    Used by scripts/lib/launch-chrome.mjs, whose Playwright Browser object does not expose a pid. */
 export function registerByMarker(marker, { kind = 'browser', purpose = '', cwd = process.cwd() } = {}) {
-  const proc = snapshot().procs.find((p) => (p.cmd || '').includes(marker) && !/--type=/.test(p.cmd || ''));
+  const proc = snapshot({ net: false }).procs.find((p) => (p.cmd || '').includes(marker) && !/--type=/.test(p.cmd || ''));
   return proc ? registerProcess({ pid: proc.pid, kind, purpose, cwd, procStart: proc.start }) : null;
 }
 

@@ -54,7 +54,7 @@ For example, a light-themed admin app for non-technical staff, whose captures sh
 bash .claude/skills/redesign-concepts/scripts/run-batch.sh <scratch> 3
 ```
 
-It runs three `codex exec` jobs at a time (`-m gpt-6-astra`, medium reasoning, `-c model_provider=openai`, `-s workspace-write`, refs via `-i`, prompt on stdin), logs each to `logs/`, and accepts an output only if it is a PNG of 100 KB or more (smaller means drawn in code or cut short). Invalid outputs are moved to `out/NN-name.rejected.png`; valid ones are skipped on a rerun, so rerunning resumes and retries the failures. If a log shows `401 Unauthorized: Incorrect API key provided` while login status says ChatGPT, check https://status.openai.com before debugging auth; report an outage and stop.
+It runs three `codex exec` jobs at a time (`-m gpt-6.2-astra`, medium reasoning, `-c model_provider=openai`, `-s workspace-write`, refs via `-i`, prompt on stdin), logs each to `logs/`, and accepts an output only if it is a PNG of 100 KB or more (smaller means drawn in code or cut short). Invalid outputs are moved to `out/NN-name.rejected.png`; valid ones are skipped on a rerun, so rerunning resumes and retries the failures. If a log shows `401 Unauthorized: Incorrect API key provided` while login status says ChatGPT, check https://status.openai.com before debugging auth; report an outage and stop.
 
 ## 5. Review and present
 

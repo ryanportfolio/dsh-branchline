@@ -21,7 +21,7 @@ codex --version && codex login status
 ## Recipe
 
 ```bash
-codex exec -m gpt-6-astra -c model_reasoning_effort=medium -c model_provider=openai -s workspace-write -i ref1.png -i ref2.png - <<'PROMPT'
+codex exec -m gpt-6.2-astra -c model_reasoning_effort=medium -c model_provider=openai -s workspace-write -i ref1.png -i ref2.png - <<'PROMPT'
 Use your image generation tool (image_gen) to create ONE image and save it to <scratch-dir>/<name>-raw.png in this workspace. Do nothing else - no code changes. If image_gen is not available, say so and stop; do not draw the image any other way.
 
 The attached images are style references: <name what each one is>.
@@ -39,7 +39,7 @@ Hard rules:
 
 - Prompt goes via stdin (`-`). `-i` is VARIADIC: a trailing prompt argument is swallowed as a filename and codex dies with `No prompt provided via stdin`.
 - `-s workspace-write`: the default read-only sandbox blocks the save.
-- `-m gpt-6-astra -c model_reasoning_effort=medium` pins the agent model that drives `image_gen`, overriding `~/.codex/config.toml`. The image model itself is chosen by Codex's backend.
+- `-m gpt-6.2-astra -c model_reasoning_effort=medium` pins the agent model that drives `image_gen`, overriding `~/.codex/config.toml`. The image model itself is chosen by Codex's backend.
 - `-c model_provider=openai` forces direct ChatGPT login for this run only. A proxy/gateway `model_provider` in `~/.codex/config.toml` (e.g. CLIProxyAPI) does not expose `image_gen`: Codex answers "image_gen is not available" and makes nothing. The config file stays untouched.
 - `Reconnecting... n/5` followed by `401 Unauthorized: Incorrect API key provided: sk-svcac…` on `chatgpt.com/backend-api/codex/responses`, while `codex login status` reports ChatGPT, points to an OpenAI outage rather than local auth. Check https://status.openai.com before debugging auth.json, env vars or config; report the outage and stop.
 - The "do not draw it any other way" line stops Codex from faking the image with System.Drawing or code when the tool is missing. Check the result: a generated PNG is hundreds of KB with visible texture; a few-KB flat file means it was drawn in code.

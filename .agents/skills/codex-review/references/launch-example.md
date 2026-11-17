@@ -10,7 +10,7 @@ RUN=$(mktemp -d .tmp/codex-review-XXXXXXXX)
 git fetch origin main
 BASE=$(git merge-base origin/main HEAD); HEAD_SHA=$(git rev-parse HEAD)
 # External-review path (.agents/skills/external-review/SKILL.md exists):
-codex exec review "Read .agents/skills/external-review/SKILL.md completely and follow it for this review of the branch diff: base $BASE, head $HEAD_SHA. Read the diff with git diff $BASE $HEAD_SHA. Leaf review: no agents, no nested reviews, no edits." -m gpt-6.1-sol -c model_reasoning_effort=high -o "$RUN/report.md" < /dev/null > "$RUN/run.log" 2>&1
+codex exec review "Read .agents/skills/external-review/SKILL.md completely and follow it for this review of the branch diff: base $BASE, head $HEAD_SHA. Read the diff with git diff $BASE $HEAD_SHA. Leaf review: no agents, no nested reviews, no edits." -m gpt-6.2-sol -c model_reasoning_effort=high -o "$RUN/report.md" < /dev/null > "$RUN/run.log" 2>&1
 # Selector path (no external-review skill):
-codex exec review --base origin/main -m gpt-6.1-sol -c model_reasoning_effort=high -o "$RUN/report.md" < /dev/null > "$RUN/run.log" 2>&1
+codex exec review --base origin/main -m gpt-6.2-sol -c model_reasoning_effort=high -o "$RUN/report.md" < /dev/null > "$RUN/run.log" 2>&1
 ```

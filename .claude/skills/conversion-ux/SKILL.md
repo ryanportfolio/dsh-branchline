@@ -1,6 +1,6 @@
 ---
 name: conversion-ux
-description: "Audit, design conversion flows stage by stage (arrive to exit): each element asks easier, honest question. Paywalls, pricing, trials, sign-up, onboarding, checkout, forms, filters, booking. Use: /conversion-ux, 'why doesn't this convert', 'audit this flow'. Visual concepts → redesign-concepts; copy polish → writing."
+description: "Audit, design conversion flows stage by stage (arrive to exit): each element asks easier, honest question. Paywalls, pricing, trials, sign-up, onboarding, checkout, forms, filters, booking. Use: /conversion-ux, 'why doesn't this convert', 'audit this flow'. Visual concepts → redesign-concepts; copy polish → writing; finding a feature, too many clicks → user-walk."
 ---
 
 # Conversion UX
