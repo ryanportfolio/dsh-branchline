@@ -1,6 +1,6 @@
 # codex-fullreview: session-file evidence shapes and counting snippet
 
-Mandatory read from `../SKILL.md` Step 4. The session file is the `rollout-*-<id>.jsonl` named there.
+Mandatory read from `../SKILL.md` Step 4. The session file is `rollout-*-<id>.jsonl`, where `<id>` is the runner's `result.json` `threadId` (the same file as `evidence.rollout`). The runner writes no `run.log`; the snippet passes the `result.json` path as an argument because Git Bash converts `/c/...` paths only in arguments.
 
 In it:
 
@@ -11,7 +11,7 @@ In it:
 This format was confirmed on codex-cli 0.156.0: spawn calls and spawned children matched the shapes above, and the skill load appeared as a `custom_tool_call` exec read, with no injected block. Recheck it when the CLI version changes.
 
 ```bash
-SID=$(sed -n 's/^session id: //p' "$RUN/run.log" | head -n 1)
+SID=$(node -p "require(process.argv[1]).threadId" "$RUN/codex/result.json")
 node -e '
 const fs = require("fs"), path = require("path");
 const [sid, root, rawMarker] = process.argv.slice(1);

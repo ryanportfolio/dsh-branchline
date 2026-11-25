@@ -18,7 +18,7 @@ Neighbors: `wow-loop` = written quality contract, binary checks, own critics, on
 
 - Agree a round cap and a usage budget with the user before the first judge call or eval run; baseline, confirmation and scripted eval runs all count against them. When the round cap or the agreed usage budget is reached, stop, report, and ask the user before any further judge call. Never raise the cap or the budget yourself.
 - Before starting, state seat count × planned rounds; every judge call bills the user's subscriptions.
-- Judges must not edit anything. Codex judges run with `-s read-only`. The Opus judge is an Agent-tool subagent whose tools are not restricted, so it is read-only only because its brief forbids edits and any tool use beyond reading the listed images; say so in the report.
+- Judges must not edit anything. Codex judges run through the runner with `--sandbox read-only` (checked in the rollout). The Opus judge is an Agent-tool subagent whose tools are not restricted, so it is read-only only because its brief forbids edits and any tool use beyond reading the listed images; say so in the report.
 - Never tell a judge the target, gate, round number, prior ranks, builder notes or which letter is ours.
 - Never weaken a check, edit an eval case, or drop a reference to get a pass.
 - If Codex is unavailable, say so and stop the judged hill. Never fill a seat with another Claude subagent and call the council cross-vendor.
@@ -34,31 +34,26 @@ Absolute 1–10 scores drift. Observed in the source run: in-thread judge called
 | Seat | Runs through | Model | Effort |
 |---|---|---|---|
 | Opus | Agent tool, fresh subagent, `model: "opus"`, reads images with Read | Opus | inherited |
-| Sol | `codex exec` (plain, not `review`) | newest Sol, resolved per `codex-review` Step 1 | `high` |
-| Astra | `codex exec` (plain) | Astra id from `astra-review` | `medium` |
+| Sol | runner `codex-run.mjs` (plain exec, no `--review`), `--role sol` | newest Sol pin in `models.json` | `high` (role default) |
+| Astra | runner `codex-run.mjs` (plain exec), `--role astra` | newest Astra pin in `models.json` | `medium` (role default) |
 
-Sol + Astra share a vendor (OpenAI) → their agreement is weaker evidence than Opus + either. Report says so. User names other models → honor, record.
+Sol + Astra share a vendor (OpenAI) → their agreement is weaker evidence than Opus + either. Report says so. User names other models → honor, record (Codex seat: `--model <id>`, plus `--effort` if given).
 
-Preflight, no inference. Codex route: accept a ChatGPT login from `codex login status` or a gateway `model_provider` in `config.toml`, per `codex-review` Step 1; with neither, stop before inference and ask the user to log in. Then `codex --version`, `codex exec --help` shows `-i/--image`, `-s/--sandbox`, `-C/--cd`, `--skip-git-repo-check`, `--ephemeral`, `--output-schema`, `-o`. Do not probe models by spending usage.
+**Launch Codex only through the runner** `node "$RUNNER"`, run from the repo root; resolve `$RUNNER` first per `references/codex-judge.md` (Runner lookup; docs: `README.md` beside it). Never hand-build a `codex exec` line.
 
-**Judge folder.** Per seat per round, make a new empty folder outside the repository (`JUDGE=$(mktemp -d "${TMPDIR:-/tmp}/judge-XXXXXXXX")`). Copy in the filled brief and that seat's captures renamed `<letter>-<view>.png` under that seat's shuffle. Judges see only this folder: no repo, no project name, no slug in any path. Results move to `$RUN` = `.tmp/climb-loop/<slug>/round-<n>/<seat>/` after the call.
+Preflight, no inference: `node "$RUNNER" --preflight` → JSON {cli, login, chatgptLogin, gatewayProvider, ready, roles}. `ready` false (exit 1) → stop before inference and ask the user to log in. `cli` not 0.171.0 → flag check in `references/codex-judge.md` before launch. Do not probe models by spending usage.
 
-Codex judge call. `$MODEL_ID` and `$EFFORT` come from the seat's row in the table. Brief on stdin, so multi-value `-i` cannot swallow it (verified codex-cli 0.166.0). `$SKILL` = absolute path of this skill's folder. Launch in background and poll, per `codex-review` Step 3:
+Model pins live only in `models.json` next to the runner in use (`roles.sol`, `roles.astra`); never write model ids into this skill. `codex debug models` lists a newer Sol or Astra than its pin → tell the user the pin is stale. Update `models.json` only with the user's OK.
 
-```bash
-codex exec -C "$JUDGE" --skip-git-repo-check --ephemeral \
-  -m "$MODEL_ID" -c model_reasoning_effort="$EFFORT" -s read-only \
-  --output-schema "$SKILL/references/rank.schema.json" \
-  -o "$JUDGE/out.json" \
-  -i "$JUDGE/A-sidebar-dark.png" -i "$JUDGE/B-sidebar-dark.png" -i "$JUDGE/C-sidebar-dark.png" \
-  < "$JUDGE/brief.md" > "$JUDGE/run.log" 2>&1
-```
+**Judge folder.** Per seat per call, make a new empty folder outside the repository (`JUDGE=$(mktemp -d "${TMPDIR:-/tmp}/judge-XXXXXXXX")`). Copy in the filled brief and that seat's captures renamed `<letter>-<view>.png` under that seat's shuffle. Judges see only this folder: no repo, no project name, no slug in any path. Results go to `$RUN` = `.tmp/climb-loop/<slug>/round-<n>/<seat>/` (extra calls `$RUN/call-<k>/`): Codex runner writes there directly through `--out`; Opus result written there after the call.
+
+Codex judge call: read `references/codex-judge.md` before the first one (runner command, path rules, `--out` layout, polling, result files, `model_rejected` handling). It persists the run (no `--ephemeral`) so the runner verifies model, effort and sandbox from the rollout; never pass `--keep-hooks`, `--keep-plugins` or `--keep-mcp` to a judge.
 
 Opus seat: Agent tool, same brief, image paths inside `$JUDGE` only, returns the same JSON as its final message. Orchestrator writes that returned message to `$RUN/out.json` right away; never rely on the subagent's transcript file (came back empty in a live run). Effort: record the one the Agent call set, else "inherited, unverified".
 
-Blinding limits to record: the Opus subagent loads project instructions (`CLAUDE.md`); Codex judges load the user's `config.toml` and run user hooks.
+Blinding limits to record: the Opus subagent loads project instructions (`CLAUDE.md`). Codex judges still load the user's `config.toml` (runner adds per-run `-c` overrides only, never edits it); runner turns off user hooks, plugins/apps and user MCP servers per run, so none of those run in a judge. Record a `run.json` MCP warning too (`references/codex-judge.md`).
 
-**Valid result.** Codex seat exit 0; Opus seat's Agent call returned a final message. Same parse for every seat: strip one surrounding code fence, `JSON.parse`, check every key and type in the schema, nested ones included (Codex enforces the schema; Opus does not, so check it), match category names trimmed and case-insensitive. Then completeness: every contracted category exactly once; in each ranking every expected letter exactly once, no other letters, no empty tier; defect labels only expected letters; `unreadable_images` empty. A non-empty `caveat` never invalidates a result; report caveats with the tiers. Top tier = `ranking[0]`. A result that fails any of these is invalid for the round and is never counted toward a pass. Other failures: report once, ask before a retry; never swap model or effort silently.
+**Valid result.** Codex seat: runner exit 0 and `$RUN/codex/result.json` `ok: true` (any `reason` → invalid); parse `$RUN/codex/output.json`. Opus seat's Agent call returned a final message (`$RUN/out.json`). Same parse for every seat: strip one surrounding code fence, `JSON.parse`, check every key and type in the schema, nested ones included (Codex enforces the schema; Opus does not, so check it), match category names trimmed and case-insensitive. Then completeness: every contracted category exactly once; in each ranking every expected letter exactly once, no other letters, no empty tier; defect labels only expected letters; `unreadable_images` empty. A non-empty `caveat` never invalidates a result; report caveats with the tiers. Top tier = `ranking[0]`. A result that fails any of these is invalid for the round and is never counted toward a pass. Other failures: report once, ask before a retry; never swap model or effort silently.
 
 ## 2. Contract (once, then frozen)
 
@@ -104,7 +99,7 @@ If two build rounds in a row bring no tier gain in any category, stop, write one
 
 - PR body (normal prose): history table rounds × seat × category, ours' tier, brief version per round; drift row: changes in reference-only order, ours removed (expected none); noise check result (categories moved on the rerun); gate used (default or strict); caveats seats raised; rig and fixture fix list.
 - Per shipped change: annotated before/after (arrow + one line) so the user can see subtle diffs.
-- Attribution: seats that ran, observed model/effort per seat (or requested, resolution unverified), rounds where a seat sat out and why (staged, quota, failure), blinding limits, total judge calls.
+- Attribution: seats that ran, observed model/effort per seat (Codex: `result.json` `observed`; null → requested, resolution unverified), rounds where a seat sat out and why (staged, quota, failure), blinding limits, total judge calls.
 
 ## 6. Resume
 

@@ -59,6 +59,7 @@
     "wow-animation": "native",
     "climb-loop": "native",
     "untangle": "native",
-    "user-walk": "native"
+    "user-walk": "native",
+    "long-horizon-lite": "disabled"
   }
 }

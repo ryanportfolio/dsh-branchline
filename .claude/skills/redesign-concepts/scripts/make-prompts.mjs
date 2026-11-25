@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Writes one image prompt per redesign concept from <dir>/concepts.json:
-//   <dir>/prompts/NN-name.txt   the prompt, fed to codex exec on stdin
+//   <dir>/prompts/NN-name.txt   the prompt, passed to the codex-run runner with --prompt-file
 //   <dir>/prompts/NN-name.refs  screenshot paths for that concept, one per line, current screen first
 //   <dir>/index.md              numbered list of concepts, problems, ideas, data needs and output paths
 // Run from the workspace root; every path it writes into a prompt is relative to that root,
-// because codex exec resolves the save path from its own working directory.
+// because Codex (started by run-batch.sh from that root) resolves the save path from its own working directory.
 //
 // The script holds only what is true for every project. Everything about this product comes
 // from concepts.json, written from the step 2 critique; no field has a default.

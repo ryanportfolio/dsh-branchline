@@ -1,26 +1,42 @@
 ---
-description: "Cross-vendor second opinion: Codex CLI (codex exec review, gpt-6.2-sol, high) over PR, branch, commit, or uncommitted diff, then each finding verified. Use: /codex-review, 'have Codex/Sol review this'."
+description: "Cross-vendor second opinion: Codex CLI review mode (newest Sol, high) through the shared codex-run runner over PR, branch, commit, or uncommitted diff, then each finding verified. Use: /codex-review, 'have Codex/Sol review this'."
 ---
 
-# Codex review — cross-vendor second opinion
+# Codex review: cross-vendor second opinion
 
-Run one fresh Codex CLI review and verify every finding locally. From Claude this supplies cross-vendor review; from Codex it supplies fresh context, not vendor independence. Keep the model-specific entrypoints separate: this defaults to Sol/high, and `astra-review` supplies Astra/medium. Honor explicit user model and effort choices rather than silently replacing them.
+Run one fresh Codex CLI review and verify every finding locally. From Claude this supplies cross-vendor review; from Codex it supplies fresh context, not vendor independence. Keep the model-specific entrypoints separate: this defaults to runner role `sol` (newest Sol, high), and `astra-review` uses role `astra` (newest Astra, medium). Honor explicit user model and effort choices rather than silently replacing them.
 
 The requested review does not authorize fixes, publication, machine configuration changes, or paid credit purchases.
 
+**Launch Codex only through the trusted runner** `node "$RUNNER"` from Step 0, run from the repository root (docs: `.claude/scripts/codex-run/README.md`). Never hand-build a `codex exec` or `codex exec review` line.
+
+## Step 0: Trusted runner
+
+The reviewed change can edit the runner, and the runner executes with your permissions before Codex's read-only sandbox exists. Never run the reviewed checkout's `.claude/scripts/codex-run/codex-run.mjs` unless the user confirms the change is their own trusted work. Resolve `$RUNNER` first, in this order (commands: [references/launch-example.md](references/launch-example.md)):
+
+1. Default branch: create this invocation's run directory (`RUN=$(mktemp -d .tmp/codex-review-XXXXXXXX)`, new per invocation, never reused), `git fetch origin <default-branch>`, and copy `codex-run.mjs` and `models.json` (the runner reads `models.json` from its own folder) from `origin/<default-branch>`, not HEAD, into `$RUN/runner`. Both copies must be non-empty: Git Bash can mangle the `rev:path` argument and leave an empty file. `RUNNER="$RUN/runner/codex-run.mjs"`; `--out` stays `$RUN/codex`, so the copy sits outside it.
+2. No runner on the default branch (a repo without one, or the change that adds it): the runner installed beside this skill, `<this skill's folder>/../../scripts/codex-run/` (plugin cache or user-level install). Use it only when its resolved absolute path is outside the reviewed checkout (`git rev-parse --show-toplevel`) and both files are non-empty; the check is in the launch example. A skill folder inside the reviewed checkout is the untrusted copy: never use its runner.
+3. Neither: the user's own install, `RUNNER="$HOME/.claude/scripts/codex-run/codex-run.mjs"`, when that file exists.
+4. None of these: stop and tell the user. Only if the user confirms the reviewed change is their own trusted work may the checkout's copy run, and the report must say so.
+
+Record the runner source (default branch with its SHA, installed skill's runner with its path, user install, or reviewed checkout on the user's confirmation) in the manifest and the report. Every runner call, `--preflight` and the selector path included, uses `node "$RUNNER"`.
+
 ## Step 1: Preflight
 
-Inspect `codex --version`, `codex login status`, and `codex exec review --help` locally before inference. Verify current support for the selector, the custom `[PROMPT]` argument, model/effort configuration, and output options used below; examples are not product guarantees. Do not probe models by spending usage.
+Run `node "$RUNNER" --preflight`. It prints JSON {cli, login, chatgptLogin, gatewayProvider, ready, roles} and costs no usage. Do not probe models by spending usage.
 
-**Model: always the newest Sol, named by its exact id.** `-m` takes a literal model id; there is no "latest Sol" alias, so the command pins one. The pin is `gpt-6.2-sol`. Before launch, check the `model` in `~/.codex/config.toml` and the Sol entries at developers.openai.com/api/docs/models. If a newer Sol exists, run with its exact id and tell the user the pin is stale. Do not edit the pins during the review: bumping every copy that pins `gpt-6.2-sol` (this skill's `.claude` and `.agents` copies, `codex-fullreview`, the global copies in `~/.claude/skills/` and `~/.agents/skills/`, and the Codex example in `impartial-review`) is a separate change the user authorizes. An explicit user model choice still wins. `astra-review` is exempt: it stays on Astra.
+- `ready` true means a ChatGPT login, or `config.toml` in `$CODEX_HOME` (default `~/.codex`) sets `model_provider` to a gateway, for example a CLIProxyAPI gateway over subscription accounts. Both are normal; record which one ran in the manifest and add no caveat. When a gateway is set it carries the requests, whatever the login line says.
+- `ready` false (exit 1): stop before inference and ask the user to log in through their own terminal.
+- The gateway is the user's own setup and its billing is their choice; never add, change or switch a provider, key or paid credits yourself, and never print credentials.
+- The runner was checked on codex-cli 0.171.0. When `cli` reports another version, check that `codex exec review --help` still lists the flags the runner passes (`-c`, `-m`, `--base`/`--commit`/`--uncommitted`, `--json`, `-o`, `-`) before launch; examples are not product guarantees.
 
-Accepted routes, either one: `codex login status` reports a ChatGPT login, or `config.toml` in `$CODEX_HOME` (default `~/.codex`) sets `model_provider` to a gateway, for example a CLIProxyAPI gateway over subscription accounts. Both are normal; record which one ran in the run metadata and add no caveat. When a gateway is set it carries the requests, whatever the login line says. Stop before inference only when neither holds (logged out or API-key login, and no gateway): ask the user to log in through their own terminal. The gateway is the user's own setup and its billing is their choice; never add, change or switch a provider, key or paid credits yourself, and never print credentials.
+**Model: always the newest Sol.** Model pins live only in `.claude/scripts/codex-run/models.json` (`roles.sol`, `roles.astra`); `--role sol` takes model and effort from there. Before launch, check `codex debug models` and the Sol entries at developers.openai.com/api/docs/models. If a Sol newer than `roles.sol.model` exists, run with `--model <newer id> --effort high` and tell the user the pin is stale. Update `models.json` only with the user's OK, never during the review. An explicit user model choice still wins: keep `--role sol` and add `--model <id>` (plus `--effort` if given); it stays until the user changes it. `astra-review` is exempt: it stays on Astra.
 
 ## Step 2: Identify scope
 
-Use `$ARGUMENTS` if the user named a scope; otherwise infer from recent work. Resolve it to exact revisions before launch, and keep the matching `codex exec review` selector for the fallback path in Step 3:
+Use `$ARGUMENTS` if the user named a scope; otherwise infer from recent work. Resolve it to exact revisions before launch, and keep the matching runner selector for the selector path in Step 3:
 
-| Scope | Base SHA | Head | Fallback selector |
+| Scope | Base SHA | Head | Runner selector |
 |---|---|---|---|
 | Uncommitted work (staged + unstaged + untracked) | `git rev-parse HEAD` | working tree | `--uncommitted` |
 | Branch / PR diff | `git merge-base origin/<default-branch> HEAD` | `git rev-parse HEAD` | `--base origin/<default-branch>` |
@@ -30,84 +46,76 @@ For a branch diff, fetch first (`git fetch origin <default-branch>`) and use the
 
 ## Step 3: Launch the review
 
-Run from the repository root. Create a new run directory atomically; never reuse one from an earlier invocation. Record the resolved scope in its manifest (below) before choosing the launch path.
+Run from the repository root (or pass `--cd <repo>`). Use the run directory Step 0 created; never reuse one from an earlier invocation. The runner writes into a new subdirectory, `--out "$RUN/codex"`, and refuses a non-empty one; the manifest and prompt live in `$RUN`, outside `--out`. Record the resolved scope in the manifest (below) before choosing the launch path.
 
-**Pick the launch path.** The CLI rejects a scope selector combined with a custom prompt, so each run uses exactly one of these:
+**Pick the launch path.** The CLI rejects a scope selector combined with a custom prompt, and the runner enforces it (a selector means no prompt), so each run uses exactly one of these:
 
-- **External-review path**, when the reviewed repository has `.agents/skills/external-review/SKILL.md`: review mode with a custom prompt and no selector. The prompt tells the reviewer to read that file completely and follow it, states the exact scope, and restates the leaf rules in one line. Name the file, not `$external-review`: on codex-cli 0.156.0 a `$skill` mention in a `codex exec review` prompt is not injected, and the skill's `allow_implicit_invocation: false` policy (kept so ordinary sessions never pick it up) hides it from the reviewer's skills list, so a mention alone never loads it. Review mode exposes no agent-spawning tools; with a bare selector the reviewer can auto-load a multi-agent review skill, fail to spawn agents, and report that as a gap. The external-review file pins it to a single-context leaf review of the recorded scope.
-- **Selector path**, when that file is absent: the selector from Step 2 and Codex's built-in review rubric, unchanged.
+- **External-review path**, when the reviewed repository has `.agents/skills/external-review/SKILL.md`: `--review` with the prompt passed by `--prompt-file` and no selector. The prompt tells the reviewer to read that file completely and follow it, states the exact scope, and restates the leaf rules in one line. Name the file, not `$external-review`: on codex-cli 0.156.0 a `$skill` mention in a review prompt is not injected, and the skill's `allow_implicit_invocation: false` policy (kept so ordinary sessions never pick it up) hides it from the reviewer's skills list, so a mention alone never loads it. Review mode exposes no agent-spawning tools; with a bare selector the reviewer can auto-load a multi-agent review skill, fail to spawn agents, and report that as a gap. The external-review file pins it to a single-context leaf review of the recorded scope. Add `--expect-read .agents/skills/external-review/SKILL.md`.
+- **Selector path**, when that file is absent: `--review` plus the selector from Step 2 and Codex's built-in review rubric, unchanged.
+- Both paths: always `--expect-diff "<base> <head>"` (uncommitted work: `--expect-diff "<head>"`).
 
-Mandatory read before launching: [references/launch-example.md](references/launch-example.md), the full command for both paths; it sets `$RUN`, `$BASE`, `$HEAD_SHA` for the Step 4 snippet.
+Mandatory read before launching: [references/launch-example.md](references/launch-example.md), the commands for both paths, the complete prompt for each scope, and the background launch with polling.
 
-On the external-review path each scope has its own complete prompt. Substitute the resolved SHAs; append only a focus the user requests (below):
+Runner defaults: sandbox `read-only` (passed explicitly and checked in the rollout), user hooks, plugins, apps and MCP servers off for the run, `--timeout-min 30`, and the `--json` event stream. Preserve least privilege; do not bypass approvals or sandbox protections for a reviewer. The one exception is auto-approving a user-approved browser MCP server (below).
 
-- Branch diff: `Read .agents/skills/external-review/SKILL.md completely and follow it for this review of the branch diff: base <base-sha>, head <head-sha>. Read the diff with git diff <base-sha> <head-sha>. Leaf review: no agents, no nested reviews, no edits.`
-- Single commit, where base is the parent or, for a root commit, the empty tree from Step 2: `Read .agents/skills/external-review/SKILL.md completely and follow it for this review of commit <head-sha>: base <base-sha>, head <head-sha>. Read the diff with git diff <base-sha> <head-sha>. Leaf review: no agents, no nested reviews, no edits.`
-- Uncommitted work: `Read .agents/skills/external-review/SKILL.md completely and follow it for this review of the uncommitted working tree (staged, unstaged, untracked) against head <head-sha>. Read tracked changes with git diff <head-sha>, list files with git status --porcelain --untracked-files=all, and read each untracked file's contents. Leaf review: no agents, no nested reviews, no edits.`
+**Launch in the background only.** A foreground tool call is killed at the harness ceiling (10 minutes for the Claude Code Bash tool) and takes the review with it. Run the runner through Bash `run_in_background` and poll `$RUN/codex/status.json` (first written after 30 s; `running`, then `done` or `failed`) with bounded waits. Log silence alone does not prove a stall. If the run stalls past the agreed timeout, kill only this run's process tree (pid in `$RUN/codex/pid`), preserve its partial output, and report the failed attempt; the runner's own `--timeout-min` does the same and sets `reason: timeout`. The one automatic retry described below then applies; any further run needs user agreement.
 
-The prompts need no literal `$`; if you add one, escape it (`\$` in bash, `` `$ `` in PowerShell) or the shell expands it.
+Before launch, write the manifest (`$RUN/manifest.md`): run ID, absolute workspace, requested scope, resolved base/head SHAs, launch path (external-review or selector), requested role/model/effort, and start time. The runner adds `$RUN/codex/run.json` (exact command, requested model/effort/sandbox, selector, disabled MCP names). For uncommitted work, add staged/unstaged diff identities and relevant untracked path/content hashes; a HEAD SHA alone does not identify that content. For a branch or commit scope the working tree is out of scope: record the dirty path count from `git status --porcelain --untracked-files=all` and note those paths as excluded, without hashing them. Exclude task-owned report artifacts from the requested review. Use an isolated snapshot if concurrent writers cannot stop. Do not silently expand scope to unrelated changes.
 
-Launch it as a background or detached process and poll its log and exit status; a foreground tool call is killed at the harness ceiling (10 minutes for the Claude Code Bash tool) and takes the review with it, while a background call is not (verified 2026-09-19 with a 20 s job under a 3 s cap). Adapt shell quoting and stdin closure to the active runtime. On PowerShell, create a GUID-named directory and use supported process redirection or `cmd /c` for `< NUL`; PowerShell does not support `<` redirection. Keep report/log paths inside that unique directory. Redirect complete output to a file, never through `head` or `tail`.
-
-Before launch, write run metadata: run ID, absolute workspace, requested scope, resolved base/head SHAs, CLI version, launch path (external-review or selector), command, requested model/effort, and start time. For uncommitted work, add staged/unstaged diff identities and relevant untracked path/content hashes; a HEAD SHA alone does not identify that content. For a branch or commit scope the working tree is out of scope: record the dirty path count from `git status --porcelain --untracked-files=all` and note those paths as excluded, without hashing them. Exclude task-owned report artifacts from the requested review. Use an isolated snapshot if concurrent writers cannot stop. Do not silently expand scope to unrelated changes.
-
-The two paths supply different rubrics: `external-review` on one, the CLI's built-in review rubric on the other. For a special focus the user requests, append it to the external-review prompt; on the selector path, replace the selector with a prompt-only invocation that states the exact scope. Describe which rubric was actually supplied. Preserve least privilege; do not bypass approvals or sandbox protections for a reviewer. The one exception is auto-approving a user-approved browser MCP server (below).
+The two paths supply different rubrics: `external-review` on one, the CLI's built-in review rubric on the other. For a special focus the user requests, append it to the external-review prompt; on the selector path, drop the selector and run `--review` with a prompt that states the exact scope and the focus. Describe which rubric was actually supplied.
 
 **Live browser, when the user asks for or approves one.** Mandatory read before such a run: [references/live-browser.md](references/live-browser.md). Give the reviewer a fresh throwaway profile on local or test URLs only, never a signed-in or production app, and say in the prompt not to submit forms or change data.
 
 Default effort is `high`; for a broad diff, `medium` is a planning option only when the user did not explicitly select effort. Astra retains its own medium default. State the selected setting before launch; runtime duration is not predictable from file count alone.
 
-Monitor the task-owned process and logs with bounded waits. Log silence alone does not prove a stall. Record observed process status, elapsed time, and the agreed timeout; if stalled or timed out, terminate only this review process, preserve its partial output, and report the failed attempt. The one automatic retry described below then applies; any further run needs user agreement.
-
 ## Step 4: Collect and bind evidence
 
-Accept a report only after this process exits successfully, the report is non-empty in this run's newly created directory, and the source manifest still matches the reviewed state. Record exit code, end time, report hash, and the model, effort, and session id from the `run.log` header (its `model:`, `reasoning effort:`, and `session id:` lines). The reviewer rollout's `turn_context` repeats them, and the snippet below prints them as a cross-check: disclose a mismatch with the header. If the header does not reveal model resolution, label the model as requested but unverified; never infer a resolved model from the entrypoint title.
+Accept a report only after the runner exits, `$RUN/codex/result.json` has `ok: true`, the report is non-empty in this run's newly created directory, and the source manifest still matches the reviewed state. Mandatory read at this step: [references/rollout-evidence.md](references/rollout-evidence.md) (the `result.json` field map). Record in the manifest: `exitCode`, `durationSec`, `threadId`, report hash, `observed` {model, effort, sandbox}, and the `evidence` counts.
 
-**Read the session files, not `run.log`, for tool-call evidence.** `run.log` echoes the prompt and the diff, so a grep there for the skill path proves nothing. Skill reads, spawn calls, and diff reads come from the rollouts only; model, effort, and session id come from the `run.log` header. Mandatory read at this step: [references/rollout-evidence.md](references/rollout-evidence.md); run its snippet and record the output in the manifest.
+- **Model resolution**: `observed` comes from the rollout's `turn_context`. When it is null (no rollout found), label the model as requested but unverified; never infer a resolved model from the entrypoint title. The runner itself fails a run on `model_mismatch` or `sandbox_mismatch`.
+- **Skill not loaded** (external-review path, `evidence.expectedReads` is 0): attribute the run as a plain custom-prompt review, never as external-review. Check that each `expectedReadSamples` entry actually reads the file. Review mode forces its own output schema, so external-review's `Scope:`, `Unavailable checks`, and `Verdict:` lines never reach `last.md`. They are not a load signal on this path, and their absence is not a failure.
+- **Findings**: `$RUN/codex/review-output.json` (`ExitedReviewMode.review_output`: `findings`, `overall_correctness`, `overall_explanation`, `overall_confidence_score`). `last.md` can hold only `overall_explanation`. In review mode, no `ExitedReviewMode` means the review did not finish (`reason: review_not_finished`); a plain `codex exec` browser run never has one, so take its evidence as [references/live-browser.md](references/live-browser.md) describes (mandatory re-read at this step).
+- **Nonzero `evidence.spawnCalls`** contradicts the leaf rules: disclose it.
+- In review mode, `evidence.rollout` null or `evidence.reviewSiblings` other than 1 leaves skill load, spawn count, and scope identity unverified; say so, never report them as zero.
 
-- **Skill not loaded** (zero `skillReads` on the external-review path): attribute the run as a plain custom-prompt review, never as external-review. Review mode forces its own output schema, so external-review's `Scope:`, `Unavailable checks`, and `Verdict:` lines never reach the `-o` report. They are not a load signal on this path, and their absence is not a failure.
-- **Findings**: on 0.156.0 the `-o` report can hold only `overall_explanation`. When it lacks per-finding detail, take the findings from `review_output` in the parent's `ExitedReviewMode`, which the snippet prints. In review mode, no `ExitedReviewMode` means the review did not finish; a plain `codex exec` browser run never has one (Step 3).
-- **Nonzero `spawnCalls`** contradicts the leaf rules: disclose it.
-- A plain `codex exec` browser run (Step 3) has no review sibling, so this snippet does not apply: take its evidence from the run's own rollout as the last paragraph of [references/live-browser.md](references/live-browser.md) describes; mandatory re-read at this step. The sibling requirements below are review-mode only.
-- In review mode, a missing parent, not exactly one review sibling, or records that do not match these shapes leave skill load, spawn count, and scope identity unverified; say so, never report them as zero.
+Scope identity is verified only when `evidence.diffReads` is at least 1 and, for uncommitted work, `evidence.untrackedListed` is true and the manifest's dirty paths and hashes still match the working tree. Otherwise scope identity is unverified and the attribution says so. On the selector path the CLI builds the diff from the selector (the selector reviewer may read the change with `git show <sha>`); treat scope identity as unverified when the reviewer's commands show no diff read against the recorded SHAs.
 
-Check scope identity from the reviewer's commands. It is verified only when `diffReads` is at least 1 for the recorded SHAs (`git diff <base> <head>` or `git diff <base>..<head>`), and, for uncommitted work, `untrackedListed` is true and the manifest's dirty paths and hashes still match the working tree. Otherwise scope identity is unverified and the attribution says so. On the selector path the CLI builds the diff from the selector, and the parent and sibling layout was confirmed only for the custom-prompt path; run the same snippet with the resolved base and head, and treat scope identity as unverified when the reviewer's commands show no diff read against the recorded SHAs.
+A failed `ok`, an empty report, or changed source means the review is failed or stale, not clean. Surface `errors` and `stderr.log` with secrets redacted. A successful process that could not inspect code or run required checks has an incomplete review: retain useful findings but disclose missing coverage. Sandbox or network failures do not by themselves establish a code defect or a passing gate.
 
-Nonzero exit, missing/empty report, or changed source means the review is failed or stale, not clean. Surface the relevant error with secrets redacted. A successful process that could not inspect code or run required checks has an incomplete review: retain useful findings but disclose missing coverage. Sandbox or network failures do not by themselves establish a code defect or a passing gate.
+A failed run gets one automatic retry before you ask. The retry needs no further permission, runs in a new run directory with a new `--out`, and depends on the `reason` in `result.json`:
 
-A failed run gets one automatic retry before you ask. Failed means a model rejection (for example `model_not_found` or `unknown provider for model <id>`), a nonzero exit, a missing or empty report, or a stall or timeout. The retry needs no further permission, runs in a new run directory, and depends on the cause:
-
-- Model rejection: never drop `-m`/`-c`. Without `-m` the run inherits the `model` in `~/.codex/config.toml`, which can be a different reviewer family (Astra, say) than the one requested. Run `codex debug models` and look for a newer Sol slug; the catalog can still list a retired id, so a listed slug is a candidate, not proof of availability. When the rejected id is this skill's default pin and exactly one newer Sol appears, retry on it and tell the user the pin is stale. When the user chose the model, or no single newer Sol appears, skip the retry and ask which model to use; an explicit user model choice stays until the user changes it.
-- Any other failure: retry the same command unchanged.
+- `model_rejected`: never drop `--role` or `--model`. Without one the runner refuses, and a hand-built run would inherit the `model` in `~/.codex/config.toml`, which can be a different reviewer family (Astra, say) than the one requested. Run `codex debug models` and look for a newer Sol slug; the catalog can still list a retired id, so a listed slug is a candidate, not proof of availability. When the rejected id is the default pin and exactly one newer Sol appears, retry with `--model <id>` and tell the user the pin is stale. When the user chose the model, or no single newer Sol appears, skip the retry and ask which model to use; an explicit user model choice stays until the user changes it.
+- `timeout`, `nonzero_exit`, `empty_report`, `review_not_finished`, `model_mismatch`, `sandbox_mismatch`, `effort_mismatch`: retry the same command once with a new `--out`.
 - Changed source: no retry. The reviewed content moved, so report the run as stale.
 
-If the retry fails too, stop, report both attempts with their errors, and ask. Attribute the result to the model on the `run.log` header's `model:` line, or state that resolution remains unverified.
+If the retry fails too, stop, report both attempts with their `reason` and errors, and ask. Attribute the result to `observed.model`, or state that resolution remains unverified.
 
 ## Step 5: Verify every finding (precision stage)
 
-Cross-vendor does not mean correct — Codex hallucinates too, and it reviewed without this session's context. Before surfacing, run a real check (`grep` call sites, read the cited lines) on **every** finding, all severities. Each one gets:
+Cross-vendor does not mean correct: Codex hallucinates too, and it reviewed without this session's context. Before surfacing, run a real check (`grep` call sites, read the cited lines) on **every** finding, all severities. Each one gets:
 
-- **Confirmed** — evidence found, pass it through
-- **Refuted** — checked and not real, drop it (optionally note under "checked and fine")
-- **Kept with caveat** — one-line note on the residual uncertainty
+- **Confirmed**: evidence found, pass it through
+- **Refuted**: checked and not real, drop it (optionally note under "checked and fine")
+- **Kept with caveat**: one-line note on the residual uncertainty
 
-Drop only on evidence, never because a finding "seems minor". Treat BLOCKING findings adversarially — try to refute each before accepting.
+Drop only on evidence, never because a finding "seems minor". Treat BLOCKING findings adversarially: try to refute each before accepting.
 
 ## Step 6: Present
 
-Use the `impartial-review` presentation format: findings severity-ordered globally (🔴 BLOCKING, 🟡 SHOULD-FIX, 🟢 NITPICK), each with `path:line`, concrete description, and a specific fix. Map Codex's native labels onto that scheme during verification (e.g. P0/P1/critical → 🔴, P2/major → 🟡, P3/minor → 🟢), re-ranking where your verification disagrees. Grade against the change's goal: a finding limited to another code path, a rare input, a small performance cost, or extra compatibility is 🟢 whatever Codex labeled it, unless it breaks the goal; security, auth, and data-loss findings keep their impact severity. Then "Things I checked and verified fine" (merge Codex's list with your verification results); then a "Recommendation" that is concrete about merge readiness. Attribute the source using recorded run metadata: "Codex (<observed model and effort, or requested setting with resolution unverified>) reviewed <scope at source identity> via <external-review (skill read verified) | built-in rubric with `--base`/`--commit`/`--uncommitted` | custom prompt>, scope identity <verified | unverified>; N of M findings survived verification." Include material unavailable checks and the run evidence path.
+Use the `impartial-review` presentation format: findings severity-ordered globally (🔴 BLOCKING, 🟡 SHOULD-FIX, 🟢 NITPICK), each with `path:line`, concrete description, and a specific fix. Map Codex's native labels onto that scheme during verification (e.g. P0/P1/critical → 🔴, P2/major → 🟡, P3/minor → 🟢), re-ranking where your verification disagrees. Grade against the change's goal: a finding limited to another code path, a rare input, a small performance cost, or extra compatibility is 🟢 whatever Codex labeled it, unless it breaks the goal; security, auth, and data-loss findings keep their impact severity. Then "Things I checked and verified fine" (merge Codex's list with your verification results); then a "Recommendation" that is concrete about merge readiness. Attribute the source using recorded run metadata: "Codex (<observed model and effort, or requested setting with resolution unverified>) reviewed <scope at source identity> via <external-review (skill read verified) | built-in rubric with `--base`/`--commit`/`--uncommitted` | custom prompt>, scope identity <verified | unverified>; N of M findings survived verification." Include material unavailable checks and the `$RUN` path.
 
 Zero findings plus verified coverage and local checks supports a clean review of that scope. State merge readiness only when the relevant project gates and exact source identity also support it; the review itself does not authorize merging.
 
 ## Common mistakes
 
-- A stale report from a previous attempt is not this process's result; unique directories plus process/source identity are required.
-- Authentication, model aliases, flags, sandbox behavior, and billing may change; inspect local evidence instead of applying a historical machine repair automatically.
+- Hand-building `codex exec` or `codex exec review` instead of the runner loses the explicit sandbox, hook and MCP isolation, the timeout, and the model check.
+- A stale report from a previous attempt is not this process's result; a new run directory per attempt is required, and never read a previous attempt's `result.json`.
+- Authentication, model ids, flags, sandbox behavior, and billing may change; inspect local evidence instead of applying a historical machine repair automatically.
 - A fresh same-vendor reviewer is independent context, not a cross-vendor opinion.
 - A selector plus a custom prompt is rejected by the CLI. Where `.agents/skills/external-review/SKILL.md` exists, a bare selector is the wrong path, not the safer default: the reviewer may load a multi-agent skill it cannot run and report a gap instead of reviewing.
 - Invoking `$external-review` by name instead of naming its file: on codex-cli 0.156.0 the mention is not injected and the skill is hidden from the reviewer's list, so it never loads.
-- Taking evidence from the parent rollout alone: in review mode the reviewer's tool calls live in the sibling rollout, and the findings array lives in `ExitedReviewMode.review_output`.
-- Do not pass findings through unchecked, treat review agreement as proof, or hide missing evidence behind exit code 0.
-- Dropping `-m` after a model rejection: the run inherits the `~/.codex/config.toml` default, a different model than requested, and the attribution then names the wrong reviewer.
-- Loosening the sandbox so a reviewer can run a browser. Give it the Playwright MCP server over CDP (Step 3) and keep `sandbox_mode` read-only.
+- Taking `last.md` as the findings list: the findings live in `review-output.json`.
+- Do not pass findings through unchecked, treat review agreement as proof, or hide missing evidence behind `ok: true`.
+- Editing model pins anywhere but `.claude/scripts/codex-run/models.json`, or editing it without the user's OK.
+- Loosening the sandbox so a reviewer can run a browser. Give it the Playwright MCP server over CDP (Step 3) and keep the sandbox read-only.
 - Do not widen scope, retry more than once, downgrade a requested model, repair machine-global configuration, or publish under review-only authorization.

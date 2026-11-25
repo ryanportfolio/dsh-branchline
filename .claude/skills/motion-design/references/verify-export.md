@@ -99,7 +99,7 @@ Do not add `fixed_frame_rate_flag=1` to `h264_metadata`. On a stream whose SPS c
 - `ffprobe -count_frames`: codec, profile, level, `yuv420p`, colour tags, no B-frames, frame count equal to duration x fps.
 - **Neighbour-T stills.** During the export, at a set of frame indices spread across every beat, screenshot the wrapper's crop at device scale for T, T minus one frame and T plus one frame. Decode the same frame from the MP4 (BT.709 limited to full-range RGB) and compare 8x8 patch means. Each frame must match its own T and beat both neighbours wherever the picture moves; an off-by-one frame matches a neighbour better. CORE+: 21 stills per layout, patch mean 0.55 to 1.14 levels, own T won in all 42.
 - **Flash check.** Split each decoded frame into a 6x4 grid of relative luminance and fail any cell with more than 3 flashes in a 1 s window (a flash is a pair of opposing changes of 0.1 or more, the darker state below 0.8). Prove the detector first: it must fail a synthetic 5 Hz flash. It is a smoke test; the Harding note below still applies.
-- Count black frames, capture retries and page errors (all 0 here), and cut a 1 fps contact sheet for a pacing review.
+- Count black frames, capture retries and page errors (all 0 here), run the stray-frame check (Delivery and encoding checks below), and cut a 1 fps contact sheet for a pacing review.
 
 ### Live pages: a virtual clock instead of seek (new-user intro, 2026-10-28)
 
@@ -140,6 +140,19 @@ Both segments need the same encoder config. Check the join twice: a still both r
 **Audio offset.** A Remotion MP4 had audio 42.7 ms late because an AAC stream went through ADTS and lost its 2048-sample encoder delay ([Remotion issue](https://github.com/remotion-dev/remotion/issues/11688)). Run `ffprobe -select_streams a:0 -show_packets` and check that the first packet carries `skip_samples`.
 
 **Loudness.** Measure integrated LUFS and true peak before shipping (for example `ffmpeg -i out.mp4 -af ebur128=peak=true -f null -`). Targets are in [sound.md](sound.md).
+
+**Stray frames.** Every export path (in-page canvas, tab capture, live page) gets this check on the decoded MP4. Flag any run of 1 or 2 frames whose mean luma (0 to 1) differs by 0.25 or more from both the frame before and the frame after, while those two agree within 0.08. A cut (brightness moves and stays) and a fade pass. Compare each flagged frame with the frame the piece intended: a planned impact flash passes this check but stays inside the flash budget in [accessibility.md](accessibility.md); an unplanned one fails. Report black runs of any length separately, since a 3-frame gap has no matching neighbours inside it. Prove the detector first on a planted single black frame.
+
+**Sound defects.** Skip these when the piece is meant to be silent and the MP4 has no audio stream (ffmpeg stops with `Output file does not contain any stream`); a missing track on a piece that should have sound is a defect. Otherwise run them on two inputs: the final pre-encode mix, and the delivered MP4 decoded per channel at its native rate (`ffmpeg -i out.mp4 -vn -acodec pcm_f32le -f f32le out.f32`, then split channels). Run every check per channel, never on a downmix, which hides a defect in one channel. Fail on any of these; no script ships for them, so prove each detector on planted cases before trusting it, including cuts at several offsets inside a window and a clipped signal sent through AAC:
+
+- **Clipping:** 3 or more samples in a row at |x| 0.999 or more, or 4 or more bit-identical samples at |x| 0.05 or more (a limiter's flat top). A second with 3 or more such runs is a finding. AAC erases flat tops but keeps the distortion, so the flat-top rule is only reliable on the pre-encode mix; on the MP4, rely on full-scale runs and true peak.
+- **Levels:** measure RMS in 10 ms windows stepped every 5 ms. A cut lands inside some window, so compare the last window wholly before it with the first wholly after it, at most 3 steps apart.
+- **Dropout:** the level falls from -45 dBFS or louder to under -80 dBFS within those 3 steps and returns, within 3 steps, to within 10 dB of where it was, 50 ms to 3 s after the drop. A pause with a fade either side passes.
+- **Dead stop:** a steady bed (the 1 s before it, ending 20 ms before the drop, varies by under 3 dB) falls 24 dB or more under its level within those 3 steps and stays down. A music or ambience bed ends with a fade of 100 ms or more, or on a cut, never mid-note.
+
+**A failed check: export or source?** Before exporting again for a finding, find the step that added it by checking each stage's output: for a picture finding, the frame the page meant to draw (a seek still), the frame the capture handed the encoder (tab capture only), then the decoded MP4; for a sound finding, the final pre-encode mix, then the MP4. A finding already in the page's frame or the mix is the composition's, and no new export fixes it; one that first appears in the captured frame is the capture step's. A finding an earlier export had at the same moment, unchanged by the edit since, will not move by repeating that edit. Only a finding the encode adds is fixed by an encoder or mux change. A source clip on its own (a take, a download) is not held to delivery loudness. raea logged nine renders on two projects, five of them for findings no render could move (`apps/check/cause`, read 2026-11-21).
+
+The stray-frame and sound-defect thresholds come from raea's `raea check` (`apps/check/src/defects.rs`, `sound.rs`, read 2026-11-21).
 
 **Caption contrast.** For each caption, find the brightest pixel under its box across its frames, composite the scrim over it, and require 4.5:1 (3:1 for large text).
 

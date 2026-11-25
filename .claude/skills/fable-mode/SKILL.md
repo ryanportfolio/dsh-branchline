@@ -5,63 +5,57 @@ description: "Hard multi-step work, uncertain diagnoses, repeated failures, 'did
 
 # Evidence-led execution
 
-Scope the outcome, investigate the important unknowns, challenge the proposed answer,
-verify at the claimed layer, and report what the evidence establishes. Apply this discipline
-inside the current task; it does not require a separate document, agent, or ceremony.
+Scope outcome → investigate unknowns that matter → challenge proposed answer → verify at claimed layer → report what evidence establishes. Runs inside current task: no separate doc, agent, or ceremony.
+
+This method does not authorize delegation, publication, installation, or unrelated edits. Follow current scope and authorization, and keep technical artifacts in normal prose and code.
 
 ## Scope and investigate
 
-Read the applicable Claude instructions and relevant project facts. Define the output and
-how completion will be established. Separate observed facts from assumptions that could
-change the solution. For a defect that once worked, establish what changed since the last known-good state (a commit,
-a dependency, a config, an input) before hypothesising about the code; with no known working
-state, say so and reproduce first. Run the cheapest useful probe before asking the user for
-an observable fact. Ask for missing preferences or consequential decisions when needed; continue work
-that either answer would preserve. Do not repeat approval already given within its scope.
+- Read applicable instructions, relevant project facts. Define output, how completion gets established.
+- Separate observed facts from assumptions that could change solution.
+- Defect that once worked → find what changed since last known-good state (commit, dependency, config, input) before hypothesising about code. No known-good state → say so, reproduce first.
+- Observable fact → cheapest useful probe before asking user.
+- Missing preference or consequential decision → ask when needed; continue work either answer would preserve. Do not repeat approval already given within its scope.
+- Lightweight plan when dependencies warrant. Thin working path before scaling unproven approach. Result contradicts plan → keep goal, update steps.
 
-Use a lightweight plan when dependencies warrant one. Build a thin working path before
-scaling an unproven approach. A result can change the plan; preserve the goal and update
-the steps instead of continuing through contradicted assumptions.
+## Challenge
 
-## Challenge and verify
+- Explain existing design's purpose before changing it.
+- Seek concrete inputs or conditions that refute proposed change; exercise where useful.
+- Hypothesis ruled out only when refuting probe is named.
+- Two fixes in a row fail on same failure → stop. Name in one sentence the assumption both share, test it before a third; build that fix on what is ruled out and what is true. Never switch to a weaker check to get a pass.
+- Finding no defect is valid.
 
-Explain the purpose of the existing design before changing it. Look for concrete inputs or
-conditions that refute the proposed change and exercise them where useful. A hypothesis is
-ruled out only when the probe that refuted it is named. After two failed fixes, revisit the
-diagnosis from what was ruled out rather than repeating the same patch. Finding no defect
-is valid.
+## Verify
 
-Classify a claim before collecting evidence. Current state ("it works") needs the output
-observed against the criterion, with no baseline. Change ("it fixed X", "it is faster")
-needs a before measurement that can be reproduced: check out the commit from before the
-change or rebuild the old failing repro, and run exactly the same steps both times. Cause
-("X did it") also needs X isolated by reverting and reapplying it or by a controlled
-change; a before/after gap alone shows change only. Verify at the layer of the claim:
-command success, generated content, visible behavior, performance, and live integration
-require different evidence. Rendered evidence first confirms the page serves the current
-build. Reopen outputs, inspect relevant edge cases, and check the original
-acceptance criteria. Preserve exact commands, exit codes, artifact paths, or screenshots
-when they support a consequential claim. A visual observation can be evidence without
-textual output; a passing low-level check does not establish the behavior above it.
+Classify claim before collecting evidence:
 
-Use checks appropriate to the change. Avoid tests that merely restate implementation.
-Once required checks pass, broaden or repeat them only after relevant changes, failures,
-or unresolved concerns justify more verification; otherwise continue toward completion.
-Do not mark unavailable required checks passed or discard them to claim completion.
-Complete independent authorized work while resolving a blocker. Revalidate evidence after
-relevant source changes; remove speculative fixes when evidence refutes their premise.
+| Claim | Evidence needed |
+|---|---|
+| Current state ("it works") | Output observed against criterion; no baseline |
+| Change ("it fixed X", "it is faster") | Reproducible before measurement, exactly the same steps after |
+| Cause ("X did it") | Change evidence, plus X isolated by revert and reapply or controlled change; before/after gap alone shows change only |
+
+- Change or cause claim ahead → measure before first edit. Missed → check out pre-change commit or rebuild old failing repro.
+- Verify at claim's layer: command success, generated content, visible behavior, performance, live integration need different evidence. Passing low-level check does not establish behavior above it. Visual observation counts without textual output.
+- Rendered evidence → first confirm page serves current build.
+- Reopen outputs, inspect relevant edge cases, check original acceptance criteria.
+- Consequential claim → keep exact commands, exit codes, artifact paths, or screenshots.
+- Checks fit the change. Check you wrote or never saw fail → run once on the failure it guards against (missing or empty output; planted bad case for a check that looks for something absent), watch it fail. No tests that merely restate implementation.
+- Required checks pass → broaden or repeat only after relevant changes, failures, or unresolved concerns; else continue toward completion.
+- Do not mark unavailable required checks passed or discard them to claim completion.
+- Blocker → finish independent authorized work meanwhile.
+- Relevant source changed → revalidate evidence. Evidence refutes fix's premise → remove speculative fix.
 
 ## Report and hand off
 
-Lead with the result, then the evidence needed to assess it. Answer "did it work" with
-VERIFIED, NOT VERIFIED, or INCONCLUSIVE; for several items, give the count ("2 of 12 fixed")
-and list the rest as open. Contradicting evidence is NOT VERIFIED, stated plainly. Absent
-evidence is INCONCLUSIVE, never a failure; name what would decide it. A defect fix names its tier: mitigation, root cause, or prevention. Summarize
-routine checks; link detailed evidence when useful. Name material uncertainty and
-unfinished requirements.
-Use labels or checklists only when they improve clarity; no empty assumptions section or
-verbatim copy of another skill's workflow is required.
-
-For long work, persist decisions and next actions before a context boundary. This method
-does not authorize delegation, publication, installation, or unrelated edits. Follow
-current scope and authorization, and keep technical artifacts in normal prose and code.
+- Result first, then evidence needed to assess it.
+- "Did it work" → VERIFIED, NOT VERIFIED, or INCONCLUSIVE, one per material claim. Several items → count ("2 of 12 fixed"), rest listed open.
+- VERIFIED: valid evidence (valid check or direct observation) establishes claim.
+- NOT VERIFIED: valid evidence (valid check, direct observation, or report) contradicts claim, including required output a valid check found missing or empty. State plainly.
+- INCONCLUSIVE: no valid evidence establishes or refutes claim (checks unavailable, stale, or one you wrote or never saw fail that has not yet failed on its must-reject case; nothing observed either way; or run-to-run variation unmeasured on a noisy check, or too wide to decide claim). Never a failure; name what would decide it.
+- No before measurement, before-state cannot be rebuilt → split: current state judged on its own evidence ("works now" can still be VERIFIED); change or cause ("the patch fixed it") INCONCLUSIVE unless valid current evidence contradicts it (still fails → NOT VERIFIED).
+- Defect fix names tier: mitigation, root cause, or prevention.
+- Summarize routine checks; link detailed evidence when useful. Name material uncertainty, unfinished requirements.
+- Labels or checklists only when they aid clarity; no empty assumptions section, no verbatim copy of another skill's workflow.
+- Long work → persist decisions, next actions before context boundary.

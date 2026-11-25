@@ -28,6 +28,6 @@ Judge only what the images show. List an image in unreadable_images only if it i
 <For the Opus seat only, add: "Return only JSON matching this schema, with no text before or after it:" followed by the full contents of rank.schema.json.>
 ```
 
-Return format: `rank.schema.json`. Codex seats get it through `--output-schema`; the Opus seat gets it inline in the brief (line above), which works for both the Agent-tool subagent and `claude -p`. `claude -p --json-schema` exists but its output wrapping is untested here; keep the inline schema until it is verified. Validate every seat's output the same way, including the completeness check in SKILL.md section 1.
+Return format: `rank.schema.json`. Codex seats get it through the runner's `--schema` (passed to Codex as `--output-schema`); the Opus seat gets it inline in the brief (line above), which works for both the Agent-tool subagent and `claude -p`. `claude -p --json-schema` exists but its output wrapping is untested here; keep the inline schema until it is verified. Validate every seat's output the same way, including the completeness check in SKILL.md section 1.
 
 Brief version: any change during a run to this template's wording (letter, image order and path substitutions excluded), the categories or the schema is a new brief version (SKILL.md section 3).

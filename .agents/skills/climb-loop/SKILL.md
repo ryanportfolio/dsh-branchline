@@ -18,7 +18,7 @@ Invocation input: target (app, screens or eval) plus optional references and rou
 
 - Agree a round cap and a usage budget with the user before the first judge call or eval run; baseline, confirmation and scripted eval runs all count against them. When the round cap or the agreed usage budget is reached, stop, report, and ask the user before any further judge call. Never raise the cap or the budget yourself.
 - Before starting, state seat count × planned rounds; every judge call bills the user's subscriptions.
-- Judges must not edit anything. Codex judges run with `-s read-only`. The Opus judge runs with `--tools "Read"`, `--restricted` and `--permission-mode plan`, and its brief forbids edits.
+- Judges must not edit anything. Codex judges run through the runner with `--sandbox read-only` (checked in the rollout). The Opus judge runs with `--tools "Read"`, `--restricted` and `--permission-mode plan`, and its brief forbids edits.
 - Never tell a judge the target, gate, round number, prior ranks, builder notes or which letter is ours.
 - Never weaken a check, edit an eval case, or drop a reference to get a pass.
 - If the Opus seat preflight fails or Opus stops mid-loop, say so and ask the user before continuing with Sol and Astra only. A council without Opus shares this session's vendor; report its gate as "Sol + Astra only" and never call it cross-vendor.
@@ -33,32 +33,25 @@ Absolute 1–10 scores drift. Observed in the source run: in-thread judge called
 | Seat | Runs through | Model | Effort |
 |---|---|---|---|
 | Opus | `claude -p` child process, Claude subscription | `opus` alias | `high` |
-| Sol | `codex exec` child process (plain, not `review`) | newest Sol, resolved per `$codex-review` | `high` |
-| Astra | `codex exec` child process (plain) | Astra id from `$astra-review` | `medium` |
+| Sol | runner `codex-run.mjs` child process (plain exec, no `--review`), `--role sol` | newest Sol pin in `models.json` | `high` (role default) |
+| Astra | runner `codex-run.mjs` child process (plain exec), `--role astra` | newest Astra pin in `models.json` | `medium` (role default) |
 
-From Codex, Sol and Astra share this session's vendor; each child is still a fresh context. Opus is the only cross-vendor seat. Report says so. User names other models → honor, record.
+From Codex, Sol and Astra share this session's vendor; each child is still a fresh context. Opus is the only cross-vendor seat. Report says so. User names other models → honor, record (Codex seat: `--model <id>`, plus `--effort` if given).
+
+Launch Codex seats only through the runner `node "$RUNNER"`, run from the repo root; resolve `$RUNNER` first per `references/codex-judge.md` (Runner lookup). Never hand-build a `codex exec` line. Model pins live only in `models.json` next to the runner in use (`roles.sol`, `roles.astra`); never write model ids into this skill. `codex debug models` lists a newer Sol or Astra than its pin → tell the user the pin is stale; update `models.json` only with the user's OK.
 
 Preflight, no inference:
 
-- Codex route: accept a ChatGPT login from `codex login status` or a gateway `model_provider` in `config.toml`, per `$codex-review`; with neither, stop before inference and ask the user to log in.
-- `codex --version`, `codex exec --help` shows `-i/--image`, `-s/--sandbox`, `-C/--cd`, `--skip-git-repo-check`, `--ephemeral`, `--output-schema`, `-o`.
+- `node "$RUNNER" --preflight` → JSON {cli, login, chatgptLogin, gatewayProvider, ready, roles}. `ready` false (exit 1) → stop before inference and ask the user to log in.
+- `cli` not 0.171.0 → flag check in `references/codex-judge.md` before launch.
 - Opus seat: run the fail-closed preflight from `$claude-review` section 1 (subscription route proven, no API or provider variables), and also require `ANTHROPIC_DEFAULT_OPUS_MODEL` to be absent from the child environment (check presence only, never print the value). Stop the Opus seat if any check fails. Never accept or enable paid credits for the user.
 - Do not probe models by spending usage.
 
-**Judge folder.** Per seat per round, make a new empty folder outside the repository (`JUDGE=$(mktemp -d "${TMPDIR:-/tmp}/judge-XXXXXXXX")`; on Windows a GUID-named folder under `%TEMP%`). Copy in the filled brief and that seat's captures renamed `<letter>-<view>.png` under that seat's shuffle. Judges see only this folder: no repo, no project name, no slug in any path. Results move to `$RUN` = `.tmp/climb-loop/<slug>/round-<n>/<seat>/` after the call. User-level instructions still load in each child, and Codex children also load the user's `config.toml` and run user hooks; record these as blinding limits.
+**Judge folder.** Per seat per call, make a new empty folder outside the repository (`JUDGE=$(mktemp -d "${TMPDIR:-/tmp}/judge-XXXXXXXX")`; on Windows a GUID-named folder under `%TEMP%`). Copy in the filled brief and that seat's captures renamed `<letter>-<view>.png` under that seat's shuffle. Judges see only this folder: no repo, no project name, no slug in any path. Results go to `$RUN` = `.tmp/climb-loop/<slug>/round-<n>/<seat>/` (extra calls `$RUN/call-<k>/`): the Codex runner writes there directly through `--out`; Opus results move there after the call. User-level instructions still load in each child. Codex children still load the user's `config.toml` (runner adds per-run `-c` overrides only, never edits it); runner turns off user hooks, plugins/apps and user MCP servers per run. Record all of these as blinding limits.
 
-Commands below are POSIX. PowerShell does not support `<` input redirection: on native Windows, launch each judge through a Node launcher that writes the brief to the spawned child's stdin (as `$opus-fullreview` does) and redirects its output to the judge folder. Launch every judge in the background and poll, per `$codex-review`. `$SKILL` = absolute path of this skill's folder.
+Commands below are POSIX. PowerShell does not support `<` input redirection: on native Windows, give Codex seats the brief through the runner's `--prompt-file`, and launch the Opus seat through a Node launcher that writes the brief to the spawned child's stdin (as `$opus-fullreview` does) and redirects its output to the judge folder. Launch every judge in the background (a foreground call can die at 10 minutes) and poll.
 
-Codex judge call. `$MODEL_ID` and `$EFFORT` come from the seat's row in the table. Brief on stdin, so multi-value `-i` cannot swallow it (verified codex-cli 0.166.0):
-
-```bash
-codex exec -C "$JUDGE" --skip-git-repo-check --ephemeral \
-  -m "$MODEL_ID" -c model_reasoning_effort="$EFFORT" -s read-only \
-  --output-schema "$SKILL/references/rank.schema.json" \
-  -o "$JUDGE/out.json" \
-  -i "$JUDGE/A-sidebar-dark.png" -i "$JUDGE/B-sidebar-dark.png" -i "$JUDGE/C-sidebar-dark.png" \
-  < "$JUDGE/brief.md" > "$JUDGE/run.log" 2>&1
-```
+Codex judge call: read `references/codex-judge.md` before the first one (runner command, path rules, `--out` layout, polling, result files, `model_rejected` handling). It persists the run (no `--ephemeral`) so the runner verifies model, effort and sandbox from the rollout; never pass `--keep-hooks`, `--keep-plugins` or `--keep-mcp` to a judge.
 
 Opus judge call. Runs from the judge folder: `--restricted` confines file tools to working directories, so the captures must sit there. Brief lists images as paths inside `$JUDGE`:
 
@@ -72,7 +65,7 @@ cd "$JUDGE" && claude -p --model opus --effort high \
 
 Judge JSON = `result.json` `.result` text; `is_error` must be false. Attribute the model from `modelUsage`; if absent, mark the seat "requested opus, resolution unverified". A billing prompt or plan-limit message stops the Opus seat.
 
-**Valid result.** Exit 0 (Opus: `is_error` false, above). Same parse for every seat: strip one surrounding code fence, `JSON.parse`, check every key and type in the schema, nested ones included (Codex enforces the schema; Opus does not, so check it), match category names trimmed and case-insensitive. Then completeness: every contracted category exactly once; in each ranking every expected letter exactly once, no other letters, no empty tier; defect labels only expected letters; `unreadable_images` empty. A non-empty `caveat` never invalidates a result; report caveats with the tiers. Top tier = `ranking[0]`. A result that fails any of these is invalid for the round and is never counted toward a pass. Other failures: report once, ask before a retry; never swap model or effort silently.
+**Valid result.** Codex seat: runner exit 0 and `$RUN/codex/result.json` `ok: true` (any `reason` → invalid); parse `$RUN/codex/output.json`. Opus seat: exit 0 and `is_error` false (above). Same parse for every seat: strip one surrounding code fence, `JSON.parse`, check every key and type in the schema, nested ones included (Codex enforces the schema; Opus does not, so check it), match category names trimmed and case-insensitive. Then completeness: every contracted category exactly once; in each ranking every expected letter exactly once, no other letters, no empty tier; defect labels only expected letters; `unreadable_images` empty. A non-empty `caveat` never invalidates a result; report caveats with the tiers. Top tier = `ranking[0]`. A result that fails any of these is invalid for the round and is never counted toward a pass. Other failures: report once, ask before a retry; never swap model or effort silently.
 
 ## 2. Contract (once, then frozen)
 

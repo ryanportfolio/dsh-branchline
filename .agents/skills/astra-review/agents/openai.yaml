@@ -1,5 +1,5 @@
 interface:
   display_name: "Astra Review"
-  short_description: "Cross-vendor review on gpt-6.2-astra"
+  short_description: "Codex CLI review on newest Astra"
 policy:
   allow_implicit_invocation: false

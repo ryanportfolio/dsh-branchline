@@ -10,7 +10,7 @@ Skip it for "arena" meaning a game level or map, work whose shape is obvious, tu
 
 ## Before starting
 
-Every candidate and the judge run with fresh context: agents spawned through the exposed multi-agent tools with `fork_turns: "none"`, separate `codex exec` processes, or Claude CLI workers as described under Workers. Inspect actual tool exposure; config flags are not proof. If no fresh-context route exists, tell the user and stop. The parent never builds a candidate itself.
+Every candidate and the judge run with fresh context: agents spawned through the exposed multi-agent tools with `fork_turns: "none"`, separate Codex processes launched through the shared runner (`.claude/scripts/codex-run/codex-run.mjs`), or Claude CLI workers as described under Workers. Inspect actual tool exposure; config flags are not proof. If no fresh-context route exists, tell the user and stop. The parent never builds a candidate itself.
 
 Arena permits work in scratch only. Commit, push, PR, merge, deploy, and installs each need their own authorization.
 
@@ -30,13 +30,29 @@ No two workers share a writable path. The parent holds the letter-to-candidate m
 
 ## Workers
 
-**Candidates.** Three by default; more on request or when the options are many. Each brief names a different angle, such as minimal change, failure-proof, or end-user-first. Codex workers use the configured model. Claude workers run on Opus, the latest Fable, or higher, never `sonnet` or `haiku`. A user-chosen model that meets that floor wins.
+**Candidates.** Three by default; more on request or when the options are many. Each brief names a different angle, such as minimal change, failure-proof, or end-user-first. Spawned Codex agents use the session's model; runner workers use role `sol`, pinned in `models.json` next to the runner in use (a user-chosen model goes in as `--model <id>`). Claude workers run on Opus, the latest Fable, or higher, never `sonnet` or `haiku`. A user-chosen model that meets that floor wins.
 
 Mix vendors without asking. One candidate and the judge run through the Claude CLI only when the `$claude-review` preflight proves subscription routing; never use API billing. Take flags from local `claude --help`, and never bypass permission checks. If the preflight fails, those workers run on Codex, noted.
 
+A Codex worker started as a separate process goes only through the runner, never a hand-built `codex exec` line, and never bypasses approvals or the sandbox. `node "$RUNNER" --preflight` (runner lookup below) must report `ready` first. Run it from the repo root; it resolves `--out`, `--prompt-file`, `--schema` and `--image` against that cwd, not `--cd`. Start each run in the background, poll `<out>/status.json`, then read `<out>/result.json`. `--out` must be a new folder outside every `cN/` and `judge/`, for example `.tmp/arena/<slug>/runs/<worker>`.
+
+```bash
+# Resolve $RUNNER in the same shell call as each launch: repo runner, then the one shipped beside this skill, then the user install
+for RUNNER in .claude/scripts/codex-run/codex-run.mjs "<this skill's folder>/../../../.claude/scripts/codex-run/codex-run.mjs" "$HOME/.claude/scripts/codex-run/codex-run.mjs" ""; do [ -f "$RUNNER" ] && break; done
+test -n "$RUNNER" || echo "codex-run runner not found: stop and tell the user"
+# Codex candidate: writes only inside its own folder or worktree (the sandbox enforces it)
+node "$RUNNER" --out ".tmp/arena/<slug>/runs/cN" --role sol --sandbox workspace-write \
+  --cd "<cN folder or worktree, absolute>" --prompt-file ".tmp/arena/<slug>/runs/cN-brief.md" --timeout-min 60 --label "arena cN"
+# Codex judge: read-only; its prompt file holds criteria.md plus the instruction to read only judge/
+node "$RUNNER" --out ".tmp/arena/<slug>/runs/judge" --role sol --sandbox read-only \
+  --cd "<absolute path to .tmp/arena/<slug>/judge>" --prompt-file ".tmp/arena/<slug>/runs/judge-prompt.md" --timeout-min 30 --label "arena judge"
+```
+
+The candidate's prompt file is `brief.md` plus its angle; it never contains `criteria.md`. A runner worker counts only when `result.json` says `ok: true`; record its `observed` model in the worker table. The 60 and 30 minute caps are choices, not measurements; raise them with `--timeout-min` for large tasks. The runner turns off the user's Codex hooks, plugins and MCP servers for each run. The judge's read-only sandbox blocks writes, not reads outside `judge/`: say in its prompt to read nothing else, and record that limit under blinding.
+
 For browser-rendered artifacts, each candidate brief includes the browser rule from `AGENTS.md` or `CLAUDE.md`, whichever the repo uses.
 
-A candidate that returns nothing is a dropout. Record it and continue with the rest.
+A candidate that returns nothing, or a runner worker that fails (`result.json` `ok: false`: sandbox block, `timeout`, `model_rejected`, any other `reason`), is a dropout. Record it with its `reason` and continue with the rest. Never rerun a rejected model on a different one without the user's OK.
 
 **Baseline.** When the task improves an artifact that already exists, copy the current version unchanged into `c0/` with no `rationale.md`. It goes to the judge under a neutral letter like any candidate, and picking it is a valid outcome. A new artifact has no baseline; never build a stand-in. If its style or history would identify it to the judge, record that as a blinding limit.
 

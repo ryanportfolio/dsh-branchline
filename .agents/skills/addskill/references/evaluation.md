@@ -9,8 +9,8 @@ Use fresh validation context when available; report the limit when it is unavail
 Use the existing verification semantics directly, without requiring another skill:
 
 - `VERIFIED`: the valid comparison meets the claimed improvement threshold without an evident confound.
-- `NOT VERIFIED`: behavior is unchanged, worsens, or misses the threshold.
-- `INCONCLUSIVE`: a missing baseline, failed measurement, noise, or mismatched conditions prevents a valid comparison.
+- `NOT VERIFIED`: the valid comparison shows behavior unchanged, worse, or below the threshold, with run-to-run variation small enough to rule out meeting it.
+- `INCONCLUSIVE`: a missing baseline, failed measurement, mismatched conditions, or run-to-run variation wide enough (or unmeasured on a noisy check) that the result could meet or miss the threshold prevents a valid comparison.
 
 Local acceptance can rest on scoped correctness or regression checks even when benefit is unmeasured. Give that decision its own reason and rollback reference; preserve negative and inconclusive results. Later use remains `pending` until another task supplies evidence. Invocation alone establishes use, not benefit. Neither retention nor a complete record authorizes publication, global copying, or broader scope.
 

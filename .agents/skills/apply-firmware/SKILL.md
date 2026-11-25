@@ -15,7 +15,7 @@ Template: `ryanportfolio/Harness-Firmware`, default branch `main`. Read it from 
 
 The template's `.agents/template-manifest.json` defines the firmware layer: `projectPaths` is what a project gets (`CLAUDE.md`, `AGENTS.md`, `.claude/`, `.agents/`, `.mcp.json`, `.gitignore`, `.gitattributes`, `docs/codex-skills.md`, `scripts/lib/` at the time of writing), and `templateOnly` is what stays in the template (README, GUIDE, LICENSE, CHANGELOG, `bootstrap/`, `docs/specs/` and the other showcase and design files). `detect.mjs` reads both, so the scope follows the template. Its `skills` block holds the groups, the required skills, which skills need which (`dependencies`) and the `minimal` preset.
 
-Out of scope unless the user asks: everything in `templateOnly`. Never touch `.claude/settings.local.json`, `.claude/worktrees/`, or app code, manifests, and build config.
+Out of scope unless the user asks: everything in `templateOnly`. A first-build brief that `$init-project` writes under `docs/specs/` from the user's own answers counts as asked. Never touch `.claude/settings.local.json`, `.claude/worktrees/`, or app code, manifests, and build config.
 
 ## Preflight (stop conditions)
 

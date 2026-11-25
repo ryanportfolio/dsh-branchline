@@ -4,8 +4,10 @@ Cross-vendor review of a draft Step and Done-check before briefs freeze them. Re
 
 Hours-long execution or done-check (browser work, GPU timing, long batches) → draft
 review after Current round block written, before briefs freeze it. One fresh read-only
-peer, prefer other model family (custom-prompt `codex exec -s read-only` run, preflight +
-CLI mechanics per `codex-review` skill; else fresh Claude subagent outside round script),
+peer, prefer other model family (custom-prompt Codex run through shared runner,
+`--sandbox read-only`, preflight + launch + accept per
+[supervisor-consult.md](supervisor-consult.md) Launch, run dir
+`evidence/round-<N>/draft-review-<K>`; else fresh Claude subagent outside round script),
 reads draft Step, Done-check + code the check exercises. One question: can check pass while
 work wrong, fail while right, or not run as written? Concrete findings only: wrong impl
 that passes (stub returning expected value, test never reaching changed path, check

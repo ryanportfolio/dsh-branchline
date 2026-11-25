@@ -192,7 +192,7 @@ Count both triggers from Audit log, never memory; recovery round = attempt. The 
 stage is the arena for a stuck step; a standalone `arena` run is unnecessary and would start
 its worktrees from HEAD, losing earlier rounds' uncommitted edits.
 
-Either trigger may escalate to a cross-vendor supervisor: read [supervisor-consult.md](references/supervisor-consult.md) first. Its answer = opinion: check vs current contract version + acceptance checks before it rewrites Remaining.
+Either trigger may escalate to a cross-vendor supervisor: read [supervisor-consult.md](references/supervisor-consult.md) first. Codex runs launch only through the shared runner (`$RUNNER`, resolved per that file's Launch); never hand-build `codex exec`. Its answer = opinion: check vs current contract version + acceptance checks before it rewrites Remaining.
 
 One consult per trigger. Each run bills user's Codex subscription → stagnation-triggered
 only, not every round.

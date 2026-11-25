@@ -15,7 +15,7 @@ Preserve the site's established identity unless a redesign is requested. Keep ex
 
 ## Generate alternatives
 
-Use the image-generation capability actually exposed in the current runtime and follow its applicable instructions. In Codex, prefer the built-in image-generation tool. Claude Code has no image tool of its own; there, use the `codex-image-gen` skill, which drives Codex's image tool through `codex exec`. If no image generator is available, explain the gap and offer copy-ready prompts or an available authorized image workflow. Do not claim images were generated or silently substitute code mockups or a paid API.
+Use the image-generation capability actually exposed in the current runtime and follow its applicable instructions. In Codex, prefer the built-in image-generation tool. Claude Code has no image tool of its own; there, use the `codex-image-gen` skill, which drives Codex's image tool through the shared codex-run runner. If no image generator is available, explain the gap and offer copy-ready prompts or an available authorized image workflow. Do not claim images were generated or silently substitute code mockups or a paid API.
 
 Choose concepts that differ in composition, visual metaphor, hierarchy, or interaction, rather than three recolors of the same layout. Keep content and viewport comparable so the user can judge the design itself.
 

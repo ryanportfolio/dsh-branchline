@@ -105,7 +105,7 @@ Round count alone can't resolve stalled run. Watch repeated failures directly:
 
 Count both triggers from Audit log, never memory; recovery round = attempt. Remaining rewrite may route stuck step through `arena` (parallel candidates, pick, graft); arena then runs inside executor subagent: Manager never reads candidates, picks, grafts; auditor sees only workspace result. Candidates need state file's Contract + Dead ends copied in. Worktree starts from HEAD → use `.tmp/arena-*` copies or commit WIP first; else earlier rounds' uncommitted edits lost.
 
-Either trigger may escalate to cross-vendor supervisor (Codex): read `references/codex-consult.md` first. Its answer = opinion: check vs current contract version + acceptance checks before it rewrites Remaining.
+Either trigger may escalate to cross-vendor supervisor (Codex): read `references/codex-consult.md` first. Codex runs launch only through the shared runner (`$RUNNER`, resolved per that file's Launch); never hand-build `codex exec`. Its answer = opinion: check vs current contract version + acceptance checks before it rewrites Remaining.
 
 One consult per trigger. Each run bills user's Codex subscription → tied to stagnation trigger, not every round.
 

@@ -9,9 +9,10 @@ Critique an existing build from real screenshots and get generated redesigns of 
 
 Script paths are from the repository root; in a personal install, use the `scripts/` folder in this skill's directory. Either way, run them from the workspace root, because every path they write is relative to it.
 
-## 0. Preflight
+## 0. Preflight and cost
 
 - Needs an image generation tool exposed in this session (built-in `image_gen`) that accepts reference images, and a way to capture screenshots. Missing either: say so and stop; never draw concepts in code or call a paid API.
+- Each image costs about 60-70k tokens on the user's subscription, so 10 images is roughly 700k. Say so before starting the batch.
 - Use a fresh scratch dir inside the workspace that git ignores, for example `.tmp/redesign-<n>/`; the sandbox reads and writes only inside the workspace.
 - Load the project's own UI or art-direction skill or reference first, if it has one, and carry its constraints into the identity line.
 
@@ -29,11 +30,11 @@ Write `<scratch>/concepts.json` (format in the header of `scripts/make-prompts.m
 
 ## 4. Generate
 
-For each prompt without a valid `out/NN-name.png` (a PNG of 100 KB or more), call the image tool with that prompt and its refs as input images, and save to the exact path. Skipping valid outputs lets a rerun resume. `scripts/run-batch.sh <scratch> 3` drives separate `codex exec` processes three at a time instead; use it only when nested Codex runs are permitted here. A generated screen is hundreds of KB or more; a few-KB file was drawn some other way and does not count.
+For each prompt without a valid `out/NN-name.png` (a PNG of 100 KB or more), call the image tool with that prompt and its refs as input images, and save to the exact path. Skipping valid outputs lets a rerun resume. `bash .agents/skills/redesign-concepts/scripts/run-batch.sh <scratch> 3` drives separate Codex runs three at a time instead, through the repo's shared runner `.claude/scripts/codex-run/codex-run.mjs`, found from the git root (`--role astra` = model pin in its `models.json`, `--config model_provider=openai`, `--sandbox workspace-write`; checks `"chatgptLogin": true` with `--preflight` first; per-attempt run dirs in `runs/`, runner output in `logs/`, failure lines name the runner's `reason`; on a rerun it skips only images it accepted, marked by `out/NN-name.png.ok`, and moves an unmarked PNG to `out/NN-name.unconfirmed.png` and regenerates it). Use it only when nested Codex runs are permitted here. A `model_rejected` failure means the pin is stale: tell the user, and edit `models.json` only with the user's OK. A generated screen is hundreds of KB or more; a few-KB file was drawn some other way and does not count.
 
 ## 5. Review and present
 
-Look at every image and note real flaws (invented labels, internal names in lists, garbled text, a copy of the screenshot). Regenerate only clear failures and say what changed. Show all images together with stable numbers, a one-line summary each, which need new data, and a recommended set with a concrete reason tied to the step 2 problems.
+Look at every image and note real flaws (invented labels, internal names in lists, garbled text, a copy of the screenshot). Regenerate only clear failures and say what changed. Always show the images inline, all in one reply, never only as paths or links: use the runtime's image output or attachment mechanism when it has one; otherwise embed each with markdown image syntax, `![NN name](<path>)`, under a bold numbered heading (if the chat renders images only from the workspace, copy outputs from elsewhere into a git-ignored workspace folder first). If the images still do not show, say so and give the paths. Show all images together with stable numbers, a one-line summary each, which need new data, and a recommended set with a concrete reason tied to the step 2 problems.
 
 ## 6. Fold picks into the build
 
